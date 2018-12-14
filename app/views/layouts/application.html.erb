@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= ENV['site_name_title'].downcase %></title>
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= stylesheet_link_tag    'application', media: 'all', 'data-turbolinks-track': 'reload' %>
+    <%= javascript_include_tag 'application', 'data-turbolinks-track': 'reload' %>
+
+  </head>
+
+  <body>
+    <% if user_signed_in? %>
+      <%= react_component("Navigation", user: current_user, type:current_user.user_groups, siteName: ENV['site_name_nav']) %>
+    <% end %>
+    <div class="main_content">
+      <%= yield %>
+    </div>
+  </body>
+</html>
