@@ -1,10 +1,4 @@
 Rails.application.routes.draw do
-  root 'home#dashboard'
-  get '/Invites' => 'home#invites'
-  get '/MyAccount' => 'home#myAccount'
-  get '/Contact' => 'home#contact'
-  get '/Admin' => 'home#admin'
-  get '/View/:id' => 'home#viewUser'
   devise_for :users,
              path: '',
              path_names: {
