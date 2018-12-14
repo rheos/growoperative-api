@@ -38,7 +38,6 @@ gem 'bootsnap', '>= 1.1.0', require: false
 # gem 'devise_token_auth'
 # gem 'omniauth'
 gem 'active_model_serializers'
-gem 'react-rails'
 gem "font-awesome-rails"
 gem 'jquery-rails'
 gem 'devise',           '~> 4.2'
