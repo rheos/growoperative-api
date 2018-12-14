@@ -28,9 +28,6 @@
 .byebug_history
 
 # Ignore master key for decrypting credentials and more.
-/config/master.key
 #gemset
 .ruby-gemset
 .env.local
-/config/database.yml
-/config/initializers/devise.rb
