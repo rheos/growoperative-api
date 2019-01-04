@@ -12,7 +12,7 @@ module Api::V1
       if relationships.count > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         @items = Item.where("user_id IN (?)", users)
-        step = params[:range_degree] ? params[:range_degree] : GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)
+        step = (params[:range_degree] ? params[:range_degree].to_i : (GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)))
         # step = 3
         @items.each do |item|
           item.target_user_id = item.user_id
