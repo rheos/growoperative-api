@@ -31,3 +31,5 @@
 #gemset
 .ruby-gemset
 .env.local
+/Gemfile.lock
+/config/database.yml
