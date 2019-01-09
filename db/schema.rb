@@ -19,6 +19,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "default_node_price", precision: 10, scale: 2
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "price", precision: 10
   end
 
   create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -33,6 +34,20 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "value"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "inventories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "item_id"
+    t.bigint "item_request_id"
+    t.float "quantity"
+    t.decimal "price", precision: 10
+    t.integer "status"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_id"], name: "index_inventories_on_item_id"
+    t.index ["item_request_id"], name: "index_inventories_on_item_request_id"
+    t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
   create_table "invitations", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -249,6 +264,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_name"], name: "index_users_on_user_name", unique: true
   end
 
+  add_foreign_key "inventories", "item_requests"
+  add_foreign_key "inventories", "items"
+  add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
   add_foreign_key "item_names", "categories"
   add_foreign_key "item_relatiohships", "items"
