@@ -45,11 +45,12 @@ class Item < ApplicationRecord
 
   def update_inventory    
     inventory = self.inventory.find_by(user_id: self.user_id)
-    inventory.quantity = self.quantity
-    inventory.price = self.price
-    inventory.save
-
-    # reload inventory
-    self.inventory.reload
+    unless inventory.nil?
+      inventory.quantity = self.quantity
+      inventory.price = self.price
+      inventory.save
+      # reload inventory
+      self.inventory.reload
+    end
   end
 end
