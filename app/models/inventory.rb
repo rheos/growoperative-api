@@ -3,5 +3,5 @@ class Inventory < ApplicationRecord
   belongs_to :item
   belongs_to :item_request, optional: true
 
-  enum status: [ :available, :reserved, :in_order ]
+  enum status: [ :unavailable, :available, :reserved, :in_order ]
 end

@@ -15,6 +15,7 @@ class Item < ApplicationRecord
   before_create :set_item_name
   before_save :set_item_unit
   after_create :add_inventory
+  after_update :update_inventory
   # This method will set item_name in item if not present
   def set_item_name
     if self.item_name_id.nil?
@@ -40,5 +41,15 @@ class Item < ApplicationRecord
       m.status = :available
       m.save
     end
+  end
+
+  def update_inventory    
+    inventory = self.inventory.find_by(user_id: self.user_id)
+    inventory.quantity = self.quantity
+    inventory.price = self.price
+    inventory.save
+
+    # reload inventory
+    self.inventory.reload
   end
 end

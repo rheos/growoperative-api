@@ -134,7 +134,14 @@ module Api::V1
     end
 
     def destroy
-      @item.destroy!
+      # check if there is a user using this item
+      # destory if there is only owner, else destory owner's inventory only
+      if @item.inventory.size > 1
+        @item.inventory.where(user_id: @item.user_id).destroy_all
+      else
+        @item.destroy!
+      end 
+      
       render json: {
         message: "Item delete successfully."
       }, staus: 200
