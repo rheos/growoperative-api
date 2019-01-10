@@ -5,7 +5,7 @@ module Api::V1
     # This method will return all item which posted by contact of current user
     # url : /v1/items
     # method : GET
-    def index
+    def get_items
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
       # @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price").value
       @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price") ? GlobalSetting.find_by(setting: "user_category_relationship_price").value : (ENV['user_category_relationship_price'] ? ENV['user_category_relationship_price'].to_f : 1)
@@ -57,6 +57,13 @@ module Api::V1
         @items = current_user.items
       end
       @items = @items.sort_by{ |item| item.total_price }.uniq{ |item| item.id}
+    end
+
+    # This method will return all item which posted by contact of current user
+    # url : /v1/items
+    # method : GET
+    def index
+      get_items
       render json: @items, status: 200
     end
 
@@ -147,6 +154,29 @@ module Api::V1
       }, staus: 200
     end
 
+    #This method will create item request
+    #url /v1/items/:id/create_request
+    #method : POST
+    #parameter
+    def create_request
+      # item = get_items.find_by(id: params[:id])
+      
+      # if item.nil
+      #   render json: {
+      #     message: "Item is not available"
+      #   }, staus: 404
+      # end
+
+      # request = item.item_requests.new do |m|
+      #   m.user_id = current_user.id
+      #   m.price = item.price
+      #   m.quantity = request_params[:quantity]
+      #   m.save
+      # end
+
+      render json: {:a => 'ok'}, staus: 200
+    end
+
     private
     def set_item
       @item = current_user.items.find_by(id: params[:id])
@@ -159,6 +189,10 @@ module Api::V1
 
     def item_params
       params.require(:item).permit(:user_id,:quantity, :category_id,:item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+    end
+
+    def request_params
+      params.require(:request).permit(:quantity)
     end
 
     def check_user_type

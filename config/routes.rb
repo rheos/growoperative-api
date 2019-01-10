@@ -43,7 +43,9 @@ Rails.application.routes.draw do
       resources :categories, only: [:index]
       resources :grades, only: [:index]
       resources :item_names, only: [:index]
-      resources :items, only: [:index, :create, :update, :destroy]
+      resources :items, only: [:index, :create, :update, :destroy] do
+        post 'create_request'
+      end
       resources :user_category_prices, only: [:create]
       resources :user_relationship_prices,            only: [:index, :create]
       resources :user_relationship_request_prices,    only: [:create]
