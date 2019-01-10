@@ -10,4 +10,13 @@ RSpec.describe Item, type: :model do
     expect(subject.inventory[0].quantity).to be(1.0)
     expect(subject.inventory[0].price).to be(2)
   end
+
+  it 'should update inventory as item is updated' do
+    subject.save
+    expect(subject.inventory.size).to be(1)
+    expect(subject.inventory[0].quantity).to be(1.0)
+
+    subject.update(quantity: 3)
+    expect(subject.inventory[0].quantity).to be(3.0)
+  end
 end
