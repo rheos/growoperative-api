@@ -129,7 +129,7 @@ module Api::V1
 
       # check if item exists
       if item.nil?
-        render json: { message: 'not available' }, 404
+        render json: { message: 'not available' }, status: 404
         return
       end
       
@@ -144,7 +144,7 @@ module Api::V1
         checked_contacts[contact[:user_id]] = contact[:total];
 
         # check if selected user is current user, it means item is available
-        if contact[:user_id] == current_user.id
+        if contact[:user_id] == current_user.id 
           if contact[:total] < shortest[:total]
             shortest = contact
           end
