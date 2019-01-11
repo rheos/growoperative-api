@@ -44,6 +44,7 @@ module Api::V1
 				render json: @invitation.errors, status: 422
 			end
 		end
+		
 		# This api will update user_type
 		# url : v1/invitations/:id/set_user_type
 		# method : PUT

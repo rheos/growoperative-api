@@ -132,64 +132,65 @@ module Api::V1
 		# parameter : invited_code
 		# method : POST
 		def accept_invition
-			if params[:invited_code].present?
-				invitation = Invitation.find_by(invitation_code: params[:invited_code])
-				if invitation
-					relationship = Relationship.where("user_id IN (?) AND friend_id IN (?)", [invitation.user.id, current_user.id],[invitation.user.id, current_user.id])
-					if invitation.user == current_user
-						render json: {
-							message: "You can not accept your own invitation."
-						}, status: 422
-						return
-					end
-					if relationship.count > 0
-						render json: {
-							message: "Already has relationship "
-						}, status: 422
-						return
-					end
-					if invitation.pending?
-						if current_user.id < invitation.user_id
-							user_id = current_user.id
-							friend_id = invitation.user_id
-						else
-							user_id = invitation.user_id
-							friend_id = current_user.id
-						end
-						relationship = Relationship.new(user_id: user_id, friend_id: friend_id, status: 1, action_user_id: current_user.id)
-						if current_user.id > invitation.user_id
-							relationship.friend_label = invitation.note_label
-							relationship.user_label = invitation.label
-						else
-							relationship.user_label = invitation.note_label
-							relationship.friend_label = invitation.label
-						end
-						if relationship.save!
-							invitation.update(status: 1, accepted_id: current_user.id)
-							current_user.user_groups.create(group_label: invitation.user_type)
-							render json:{
-								message: "Invitation accepted."
-							}, status: 200
-						else
-							render json: {
-							message: "Please try again"
-						}, status: 422
-						end
-					elsif invitation.accepted?
-						render json: {
-							message: "Invitation code is already used"
-						}, status: 422
-					end
-				else
-					render json: {
-						message: "Invalid invitation code."
-					}
-				end
-			else
+			unless params[:invited_code].present?
 				render json: {
 					message: "Invitation code can't be blanck."
 				}, status: 422
+				return
 			end
+
+			invitation = Invitation.find_by(invitation_code: params[:invited_code])
+			if invitation.nil?
+				render json: {
+					message: "Invalid invitation code."
+				}
+				return
+			end
+			
+			if invitation.user_id == current_user.id
+				render json: {
+					message: "You can not accept your own invitation."
+				}, status: 422
+				return
+			end
+			
+			unless invitation.pending?
+				render json: {
+					message: "Invitation code is already used"
+				}, status: 422
+				return
+			end
+			
+			# create a relationship if not exists
+			relationship = Relationship.where("(user_id = #{invitation.user.id} AND friend_id = #{current_user.id}) 
+																						OR (user_id = #{current_user.id} AND friend_id = #{invitation.user.id})")
+			if relationship.size == 0
+				relationship = Relationship.new
+
+				if current_user.id < invitation.user_id
+					relationship.user_id = current_user.id
+					relationship.friend_id = invitation.user_id
+					relationship.user_label = invitation.note_label
+					relationship.friend_label = invitation.label
+				else
+					relationship.user_id = invitation.user_id
+					relationship.friend_id = current_user.id
+					relationship.user_label = invitation.label
+					relationship.friend_label = invitation.note_label
+				end
+
+				relationship.save
+			end
+
+			# add the invitiation group if the user doesn't have it
+			current_user.user_groups.find_or_create_by(group_label: invitation.user_type)
+
+			# update status
+			invitation.update(status: :accepted, accepted_id: current_user.id)
+
+			render json:{
+				message: "Invitation accepted."
+			}, status: 200
 		end
 
 		# Update password
