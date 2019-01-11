@@ -111,11 +111,11 @@ module Api::V1
     def destroy
       # check if there is a user using this item
       # destory if there is only owner, else destory owner's inventory only
-      if @item.inventory.size > 1
-        @item.inventory.where(user_id: @item.user_id).destroy_all
-      else
+      if current_user.is_admin? || @item.inventory.where("user_id <> #{@item.user_id}").size == 0
         @item.destroy!
-      end 
+      else
+        @item.inventory.where(user_id: @item.user_id).destroy_all
+      end
       
       render json: {
         message: "Item delete successfully."
@@ -193,7 +193,7 @@ module Api::V1
 
     private
     def set_item
-      @item = current_user.items.find_by(id: params[:id])
+      @item = current_user.is_admin? ? Item.find(params[:id]) : current_user.items.find_by(id: params[:id])
       unless @item
         render json: {
           message: "You are not authorised to access."
