@@ -2,10 +2,13 @@ module Api::V1
   class ItemsController < ApiController
     before_action :authenticate_user!, :check_user_type
     before_action :set_item, only: [:update, :destroy]
+
+    MAX_DEPTH = 5
+
     # This method will return all item which posted by contact of current user
     # url : /v1/items
     # method : GET
-    def get_items
+    def index
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
       # @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price").value
       @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price") ? GlobalSetting.find_by(setting: "user_category_relationship_price").value : (ENV['user_category_relationship_price'] ? ENV['user_category_relationship_price'].to_f : 1)
@@ -33,23 +36,8 @@ module Api::V1
         if step > 1 
           users.delete(current_user.id)
           users.each do |user|    
-            route_price = 0
-            # route_price
-            if UserRelationshipPrice.where("user_id = #{user} AND friend_id = #{current_user.id}").first
-              relPrice = UserRelationshipPrice.where("user_id = #{user} AND friend_id = #{current_user.id}").first.price
-              if relPrice
-                route_price += relPrice
-              end
-            else
-              if User.find(user).user_category_prices.find_by(user_id: user)
-                route_price += User.find(user).user_category_prices.find_by(user_id: user).price
-
-              elsif Category.first.default_node_price
-                route_price += Category.first.default_node_price
-              else
-                route_price += @global_node_price
-              end
-            end
+            route_price = get_relation_price(user, current_user.id)
+           
             all_items(step - 1, user, current_user.id, user, route_price)
           end
         end
@@ -57,13 +45,7 @@ module Api::V1
         @items = current_user.items
       end
       @items = @items.sort_by{ |item| item.total_price }.uniq{ |item| item.id}
-    end
 
-    # This method will return all item which posted by contact of current user
-    # url : /v1/items
-    # method : GET
-    def index
-      get_items
       render json: @items, status: 200
     end
 
@@ -97,21 +79,7 @@ module Api::V1
       if(step > 1)
         users.each do |user|
           next_route_price = route_price
-          # route_price
-          if UserRelationshipPrice.where("user_id = #{user} AND friend_id = #{related_user}").first
-            relPrice = UserRelationshipPrice.where("user_id = #{user} AND friend_id = #{related_user}").first.price
-            if relPrice
-              next_route_price += relPrice
-            end
-          else
-            if User.find(user).user_category_prices.find_by(user_id: user)
-              next_route_price += User.find(user).user_category_prices.find_by(user_id: user).price
-            elsif Category.first.default_node_price
-              next_route_price += Category.first.default_node_price
-            else
-              next_route_price += @global_node_price
-            end
-          end
+          next_route_price += get_relation_price(user, related_user)
 
           # binding.pry
           all_items(step - 1, user, related_user, target_user_id, next_route_price)
@@ -154,27 +122,73 @@ module Api::V1
       }, staus: 200
     end
 
-    #This method will create item request
-    #url /v1/items/:id/create_request
-    #method : POST
-    #parameter
+    # url: /v1/items/:item_id/create_request
+    # method : POST
     def create_request
-      # item = get_items.find_by(id: params[:id])
+      item = Item.find(params[:item_id])
+
+      # check if item exists
+      if item.nil?
+        render json: { message: 'not available' }, 404
+        return
+      end
       
-      # if item.nil
-      #   render json: {
-      #     message: "Item is not available"
-      #   }, staus: 404
-      # end
+      # check if item is available
+      contacts = [{ :user_id => item.user_id, :path => [], :prices => [], :total => 0 }]
+      shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
+      checked_contacts = {}
 
-      # request = item.item_requests.new do |m|
-      #   m.user_id = current_user.id
-      #   m.price = item.price
-      #   m.quantity = request_params[:quantity]
-      #   m.save
-      # end
+      while contacts.size > 0 do
+        contact = contacts.shift
+        # mark as checked
+        checked_contacts[contact[:user_id]] = contact[:total];
 
-      render json: {:a => 'ok'}, staus: 200
+        # check if selected user is current user, it means item is available
+        if contact[:user_id] == current_user.id
+          if contact[:total] < shortest[:total]
+            shortest = contact
+          end
+        elsif contact[:path].size < MAX_DEPTH && 
+          (relationships = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")).size > 0
+          # find from contacts
+          relationships.pluck(:user_id, :friend_id).flatten!.uniq.each do |relation_id|
+            next if relation_id == contact[:user_id]
+
+            price = contact[:total] + get_relation_price(contact[:user_id], relation_id)
+            if price < shortest[:total] && (checked_contacts[:relation_id].nil? || price < checked_contacts[:relation_id])
+              contacts.push({
+                :user_id => relation_id,
+                :path => contact[:path] + [contact[:user_id]],
+                :prices => contact[:prices] + [price],
+                :total => price,
+              })
+            end
+          end          
+        end
+      end
+
+      # check if find a path
+      if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
+        render json: { message: 'not available' }, staus: 400
+        return
+      end
+
+      # add source user id
+      shortest[:path] << current_user.id
+
+      # create requests
+      shortest[:prices].each_with_index do |price, index|
+        request = ItemRequest.new
+        request.item_id = item.id
+        request.friend_id = shortest[:path][index]
+        request.user_id = shortest[:path][index + 1]
+        request.price = price
+        request.quantity = request_params[:quantity]
+        request.status = :pending
+        request.save
+      end
+
+      render json: { message: 'Item has been requested successfully' }, staus: 200
     end
 
     private
@@ -202,5 +216,25 @@ module Api::V1
       #   }, status: 422
       # end
     end
+
+    # get price of relationship between user and friend
+    def get_relation_price(user_id, friend_id)
+      # get relationship price first
+      relation_price = UserRelationshipPrice.find_by(user_id: user_id, friend_id: friend_id)
+      if (!relation_price.nil? && relation_price.price)
+        return relation_price.price
+      end
+
+      # get default price
+      category_price = UserCategoryPrice.find_by(user_id: user_id)
+      if !category_price.nil?
+        return category_price.price
+      elsif Category.first.default_node_price
+        return Category.first.default_node_price
+      else
+        return @global_node_price
+      end
+    end
+
   end
 end

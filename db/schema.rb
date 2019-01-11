@@ -19,7 +19,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "default_node_price", precision: 10, scale: 2
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.decimal "price", precision: 10
   end
 
   create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -91,6 +90,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "friend_id"
     t.index ["item_id"], name: "index_item_requests_on_item_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
