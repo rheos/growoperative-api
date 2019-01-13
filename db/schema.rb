@@ -172,6 +172,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.decimal "quantity", precision: 10
+    t.decimal "price", precision: 10
     t.integer "status", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
