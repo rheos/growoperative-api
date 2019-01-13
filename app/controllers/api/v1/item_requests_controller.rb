@@ -74,6 +74,7 @@ module Api::V1
       request_contract.user_id = current_user.id
       request_contract.item_id = item.id
       request_contract.quantity = request_params[:quantity]
+      request_contract.price = request_params[:price]
       request_contract.save
 
       # add source user id
@@ -112,7 +113,7 @@ module Api::V1
 
     private
     def request_params
-      params.require(:request).permit(:quantity)
+      params.require(:request).permit(:quantity, :price)
     end
 
     def set_request
