@@ -1,6 +1,7 @@
 module Api::V1
   class ItemRequestsController < ApiController
     before_action :authenticate_user!
+    before_action :set_request, only: [:accept]
    
     MAX_DEPTH = 5
     
@@ -19,6 +20,12 @@ module Api::V1
       # check if item exists
       if item.nil?
         render json: { message: 'not available' }, status: 404
+        return
+      end
+
+      # check if item quanity is enough as much as requests
+      if item.quanity < params[:quanity]
+        render json: { message: 'not enough stock' }, status: 400
         return
       end
       
@@ -62,12 +69,20 @@ module Api::V1
         return
       end
 
+      # create request contract
+      request_contract = RequestContract.new
+      request_contract.user_id = current_user.id
+      request_contract.item_id = item.id
+      request_contract.quantity = request_params[:quantity]
+      request_contract.save
+
       # add source user id
       shortest[:path] << current_user.id
 
       # create requests
       shortest[:prices].each_with_index do |price, index|
         request = ItemRequest.new
+        request.request_contract_id = request_contract.id
         request.item_id = item.id
         request.friend_id = shortest[:path][index]
         request.user_id = shortest[:path][index + 1]
@@ -80,9 +95,33 @@ module Api::V1
       render json: { message: 'Item has been requested successfully' }, staus: 200
     end
 
+    # URL: /v1/items/requests/:id/accept
+    def accept
+      if @request.status == 'accepted'
+        render json: { message: 'Request has been accepted already' }, staus: 400
+        return
+      end
+
+      @request.status = :accepted
+      if @request.save!
+        render json: { message: 'Request has been accepted' }, staus: 200
+      else
+        render json: { message: 'Something is wrong' }, staus: 500
+      end
+    end
+
     private
     def request_params
       params.require(:request).permit(:quantity)
+    end
+
+    def set_request
+      @request = current_user.is_admin? ? ItemRequest.find(params[:id]) : ItemRequest.find_by(id: params[:id], friend_id: current_user.id)
+      if @request.nil?
+        render json: {
+          message: "The request does not exist"
+        }, status: 404
+      end
     end
 
   end

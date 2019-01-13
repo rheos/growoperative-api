@@ -38,14 +38,13 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   create_table "inventories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
-    t.bigint "item_request_id"
     t.float "quantity"
     t.decimal "price", precision: 10
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "ref_id"
     t.index ["item_id"], name: "index_inventories_on_item_id"
-    t.index ["item_request_id"], name: "index_inventories_on_item_request_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
@@ -60,6 +59,13 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "note_label"
     t.integer "accepted_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"
+  end
+
+  create_table "item_galleries", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.bigint "item_id"
+    t.string "image"
+    t.integer "order", default: 0
+    t.index ["item_id"], name: "index_item_galleries_on_item_id"
   end
 
   create_table "item_names", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -91,7 +97,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "friend_id"
+    t.bigint "request_contract_id"
     t.index ["item_id"], name: "index_item_requests_on_item_id"
+    t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
 
@@ -158,6 +166,17 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "user_label"
     t.string "friend_label"
     t.index ["user_id"], name: "index_relationships_on_user_id"
+  end
+
+  create_table "request_contracts", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.bigint "user_id"
+    t.bigint "item_id"
+    t.decimal "quantity", precision: 10
+    t.integer "status", default: 0
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["item_id"], name: "index_request_contracts_on_item_id"
+    t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
 
   create_table "request_list_relationship_statuses", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -264,14 +283,15 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_name"], name: "index_users_on_user_name", unique: true
   end
 
-  add_foreign_key "inventories", "item_requests"
   add_foreign_key "inventories", "items"
   add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
+  add_foreign_key "item_galleries", "items"
   add_foreign_key "item_names", "categories"
   add_foreign_key "item_relatiohships", "items"
   add_foreign_key "item_relatiohships", "relationships"
   add_foreign_key "item_requests", "items"
+  add_foreign_key "item_requests", "request_contracts"
   add_foreign_key "item_requests", "users"
   add_foreign_key "items", "categories"
   add_foreign_key "items", "grades"
@@ -282,6 +302,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "order_contents", "orders"
   add_foreign_key "orders", "relationships"
   add_foreign_key "relationships", "users"
+  add_foreign_key "request_contracts", "items"
+  add_foreign_key "request_contracts", "users"
   add_foreign_key "request_list_relationship_statuses", "item_requests"
   add_foreign_key "request_list_relationship_statuses", "relationships"
   add_foreign_key "reviews", "item_names"
