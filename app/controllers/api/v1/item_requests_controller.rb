@@ -7,13 +7,14 @@ module Api::V1
     
     # URL: /v1/items/:item_id/requests
     def index
-      requests = ItemRequest.where("item_id=#{params[:item_id]} AND user_id=#{current_user.id}")
+      requests = ItemRequest.joins(:request_contract)
+        .select("item_requests.*, request_contracts.status AS contract_status")
+        .where("item_requests.item_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
 
       render json: requests, status: 200
     end
 
-    # url: /v1/items/:item_id/requests
-    # method : POST
+    # GET: /v1/items/:item_id/requests
     def create
       item = Item.find(params[:item_id])
 
@@ -24,7 +25,7 @@ module Api::V1
       end
 
       # check if item quanity is enough as much as requests
-      if item.quanity < params[:quanity]
+      if request_params[:quantity].nil? || item.quantity < request_params[:quantity].to_f
         render json: { message: 'not enough stock' }, status: 400
         return
       end
@@ -75,7 +76,7 @@ module Api::V1
       request_contract.item_id = item.id
       request_contract.quantity = request_params[:quantity]
       request_contract.price = request_params[:price]
-      request_contract.save
+      request_contract.save!
 
       # add source user id
       shortest[:path] << current_user.id
@@ -90,13 +91,14 @@ module Api::V1
         request.price = price
         request.quantity = request_params[:quantity]
         request.status = :pending
-        request.save
+        request.save!
       end
 
       render json: { message: 'Item has been requested successfully' }, staus: 200
     end
 
-    # URL: /v1/items/requests/:id/accept
+    # POST: /v1/items/requests/:request_id/accept
+    # Return 200 response if success
     def accept
       if @request.status == 'accepted'
         render json: { message: 'Request has been accepted already' }, staus: 400
