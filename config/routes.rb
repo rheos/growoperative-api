@@ -45,6 +45,9 @@ Rails.application.routes.draw do
       resources :item_names, only: [:index]
       resources :items, only: [:index, :create, :update, :destroy] do
         resources :item_requests, path: 'requests', only: [:index, :create]
+        collection do
+          post 'requests/:id/accept' => 'item_requests#accept'
+        end
       end
       resources :user_category_prices, only: [:create]
       resources :user_relationship_prices,            only: [:index, :create]
