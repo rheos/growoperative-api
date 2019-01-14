@@ -10,7 +10,7 @@ class ItemRequest < ApplicationRecord
   after_update :update_inventory
 
   #attribs
-  enum status: [ :pending, :accepted ]
+  enum status: [ :pending, :accepted, :cancelled ]
 
   # update inventory after all requests are accepted
   def update_inventory

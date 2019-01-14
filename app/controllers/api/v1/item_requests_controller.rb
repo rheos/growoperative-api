@@ -1,7 +1,7 @@
 module Api::V1
   class ItemRequestsController < ApiController
     before_action :authenticate_user!
-    before_action :set_request, only: [:accept]
+    before_action :set_request, only: [:accept, :cancel]
    
     MAX_DEPTH = 5
     
@@ -16,7 +16,7 @@ module Api::V1
 
     # GET: /v1/items/:item_id/requests
     def create
-      item = Item.find(params[:item_id])
+      item = Item.find_by(id: params[:item_id])
 
       # check if item exists
       if item.nil?
@@ -100,8 +100,21 @@ module Api::V1
     # POST: /v1/items/requests/:request_id/accept
     # Return 200 response if success
     def accept
-      if @request.status == 'accepted'
-        render json: { message: 'Request has been accepted already' }, staus: 400
+      # check permission
+      unless current_user.is_admin? || @request.friend_id != current_user.id
+        render json: { message: 'Not accessable' }, staus: 403
+        return
+      end
+
+      # check if request is pending
+      unless @request.status == 'pending'
+        render json: { message: 'Request is not pending' }, staus: 406
+        return
+      end
+
+      # check if the contract was accepted or cancelled already
+      unless @request.request_contract.status == 'pending'
+        render json: { message: 'The request chain is not available' }, staus: 406
         return
       end
 
@@ -113,13 +126,45 @@ module Api::V1
       end
     end
 
+    # POST: /v1/items/requests/:request_id/cancel
+    # Return 200 response if success
+    def cancel
+      # check permission
+      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.user_id != current_user.id
+        render json: { message: 'Not accessable' }, staus: 403
+        return
+      end
+
+      unless @request.request_contract.status == 'pending'
+        render json: { message: 'Request chain is not pending already' }, staus: 406
+        return
+      end
+
+      if @request.friend_id == current_user.id
+        unless @request.status == 'pending'
+          render json: { message: 'Request is not pending' }, staus: 406
+          return
+        end
+  
+        # cancel the user's request
+        @request.status = :cancelled
+        @request.save!
+      end
+
+      # cancel the request contract
+      @request.request_contract.status = :cancelled
+      @request.request_contract.save
+
+      render json: { message: 'Request has been cancelled' }, staus: 200
+    end
+
     private
     def request_params
       params.require(:request).permit(:quantity, :price)
     end
 
     def set_request
-      @request = current_user.is_admin? ? ItemRequest.find(params[:id]) : ItemRequest.find_by(id: params[:id], friend_id: current_user.id)
+      @request = ItemRequest.find_by(id: params[:id])
       if @request.nil?
         render json: {
           message: "The request does not exist"
