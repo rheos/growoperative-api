@@ -1,7 +1,7 @@
 module Api::V1
   class ItemRequestsController < ApiController
     before_action :authenticate_user!
-    before_action :set_request, only: [:accept, :cancel]
+    before_action :set_request, only: [:accept, :cancel, :settle]
    
     MAX_DEPTH = 5
     
@@ -165,6 +165,40 @@ module Api::V1
       @request.request_contract.save
 
       render json: { message: 'Request has been cancelled' }, status: 200
+    end
+
+    # POST: /v1/items/requests/:request_id/settle
+    # Return 200 response if success
+    def settle
+      # check permission
+      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.item.user_id != current_user.id
+        render json: { message: 'Not accessable' }, status: 403
+        return
+      end
+
+      # check if all requests are accepted
+      unless @request.request_contract.status == 'accepted'
+        render json: { message: 'The request chain was not accepted' }, status: 406
+        return
+      end
+
+      # find the inventory
+      inventory = Inventory.find_by(item_id: @request.item_id, user_id: @request.item.user_id, ref_id: @request.request_contract_id)
+      if inventory.nil? || inventory.status != 'reserved'
+        render json: { message: 'Not availabe to settle the inventory' }, status: 406
+        return
+      end
+
+      # change inventory ownership
+      inventory.user_id = @request.request_contract.user_id
+      inventory.status = :available
+      inventory.save!
+
+      # update contract
+      @request.request_contract.status = :settled
+      @request.request_contract.save!
+
+      render json: { message: 'Request has been settled' }, status: 200
     end
 
     private
