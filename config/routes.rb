@@ -47,6 +47,7 @@ Rails.application.routes.draw do
         resources :item_requests, path: 'requests', only: [:index, :create]
         collection do
           post 'requests/:id/accept' => 'item_requests#accept'
+          post 'requests/:id/cancel' => 'item_requests#cancel'
         end
       end
       resources :user_category_prices, only: [:create]
