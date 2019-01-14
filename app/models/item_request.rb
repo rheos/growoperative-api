@@ -1,5 +1,6 @@
 class ItemRequest < ApplicationRecord
   belongs_to :user
+  belongs_to :friend, :class_name => 'User'
   belongs_to :item
   belongs_to :request_contract
   has_many   :user_relationship_request_prices, dependent: :destroy
