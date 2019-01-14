@@ -66,7 +66,7 @@ module Api::V1
 
       # check if find a path
       if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
-        render json: { message: 'not available' }, staus: 400
+        render json: { message: 'not available' }, status: 400
         return
       end
 
@@ -94,7 +94,7 @@ module Api::V1
         request.save!
       end
 
-      render json: { message: 'Item has been requested successfully' }, staus: 200
+      render json: { message: 'Item has been requested successfully' }, status: 200
     end
 
     # POST: /v1/items/requests/:request_id/accept
@@ -102,27 +102,27 @@ module Api::V1
     def accept
       # check permission
       unless current_user.is_admin? || @request.friend_id != current_user.id
-        render json: { message: 'Not accessable' }, staus: 403
+        render json: { message: 'Not accessable' }, status: 403
         return
       end
 
       # check if request is pending
       unless @request.status == 'pending'
-        render json: { message: 'Request is not pending' }, staus: 406
+        render json: { message: 'Request is not pending' }, status: 406
         return
       end
 
       # check if the contract was accepted or cancelled already
       unless @request.request_contract.status == 'pending'
-        render json: { message: 'The request chain is not available' }, staus: 406
+        render json: { message: 'The request chain is not available' }, status: 406
         return
       end
 
       @request.status = :accepted
       if @request.save!
-        render json: { message: 'Request has been accepted' }, staus: 200
+        render json: { message: 'Request has been accepted' }, status: 200
       else
-        render json: { message: 'Something is wrong' }, staus: 500
+        render json: { message: 'Something is wrong' }, status: 500
       end
     end
 
@@ -131,18 +131,18 @@ module Api::V1
     def cancel
       # check permission
       unless current_user.is_admin? || @request.friend_id != current_user.id || @request.user_id != current_user.id
-        render json: { message: 'Not accessable' }, staus: 403
+        render json: { message: 'Not accessable' }, status: 403
         return
       end
 
       unless @request.request_contract.status == 'pending'
-        render json: { message: 'Request chain is not pending already' }, staus: 406
+        render json: { message: 'Request chain is not pending already' }, status: 406
         return
       end
 
       if @request.friend_id == current_user.id
         unless @request.status == 'pending'
-          render json: { message: 'Request is not pending' }, staus: 406
+          render json: { message: 'Request is not pending' }, status: 406
           return
         end
   
@@ -155,7 +155,7 @@ module Api::V1
       @request.request_contract.status = :cancelled
       @request.request_contract.save
 
-      render json: { message: 'Request has been cancelled' }, staus: 200
+      render json: { message: 'Request has been cancelled' }, status: 200
     end
 
     private
