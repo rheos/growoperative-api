@@ -7,11 +7,20 @@ module Api::V1
     
     # URL: /v1/items/:item_id/requests
     def index
-      requests = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS contract_status")
+      sent = ItemRequest.joins(:request_contract)
+        .joins(:friend)
+        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
         .where("item_requests.item_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
+      
+      received = ItemRequest.joins(:request_contract)
+        .joins(:user)
+        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
+        .where("item_requests.item_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
 
-      render json: requests, status: 200
+      render json: {
+        :sent => sent,
+        :received => received,
+      }, status: 200
     end
 
     # GET: /v1/items/:item_id/requests
