@@ -3,14 +3,14 @@ module Api::V1
     before_action :authenticate_user!, :check_user_type
     before_action :set_item, only: [:update, :destroy]
 
+    # GET : /v1/items?range_degree=:integer 
     # This method will return all item which posted by contact of current user
-    # url : /v1/items
-    # method : GET
     def index
+      range_degree = params[:range_degree] ? [5, params[:range_degree].to_i].min : 5
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
-      # @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price").value
       @global_node_price = GlobalSetting.find_by(setting: "user_category_relationship_price") ? GlobalSetting.find_by(setting: "user_category_relationship_price").value : (ENV['user_category_relationship_price'] ? ENV['user_category_relationship_price'].to_f : 1)
-      if relationships.count > 0
+      
+      if relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         @items = Item.where("user_id IN (?)", users)
         step = (params[:range_degree] ? params[:range_degree].to_i : (GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)))
