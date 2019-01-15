@@ -46,6 +46,7 @@ Rails.application.routes.draw do
       resources :items, only: [:index, :create, :update, :destroy] do
         resources :item_requests, path: 'requests', only: [:index, :create]
         collection do
+          get 'around'
           post 'requests/:id/accept' => 'item_requests#accept'
           post 'requests/:id/cancel' => 'item_requests#cancel'
           post 'requests/:id/settle' => 'item_requests#settle'
