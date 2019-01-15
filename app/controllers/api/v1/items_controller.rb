@@ -53,6 +53,7 @@ module Api::V1
 
       @items = @items.as_json
       @items = @items.sort_by{ |item| item.key?('total_price') ? item['total_price'] : item['price'] }.uniq{ |item| item['id']}
+      # @items = @items.sort_by{ |item| item.total_price }.uniq{ |item| item.id}
 
       # get pending requests
       pending_requests = {}
@@ -65,8 +66,13 @@ module Api::V1
         end
       
       # assign count
-      @items.collect do |item|
+      @items = @items.map do |item|
         item[:action_request] = pending_requests.key?(item['id']) ? pending_requests[item['id']] : 0
+        {
+          :id => item['id'],
+          :type => 'items',
+          :attributes => item,
+        }
       end
 
       render json: @items, status: 200
