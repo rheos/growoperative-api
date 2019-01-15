@@ -53,6 +53,14 @@ class User < ApplicationRecord
     end
   end
 
+  def has_role?(role)
+    if self.user_groups.pluck(:group_label).include?(role)
+      true
+    else
+      false
+    end
+  end
+
   # This method will use to set parent id
   def set_parent
     find_invitation
