@@ -7,6 +7,11 @@ module ItemHelper
     end
 
     # get default price
+    return get_user_markup(user_id)
+  end
+
+  def get_user_markup(user_id)
+    # get default price
     category_price = UserCategoryPrice.find_by(user_id: user_id)
     if !category_price.nil?
       return category_price.price

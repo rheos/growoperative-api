@@ -42,7 +42,8 @@ class Item < ApplicationRecord
     inventory = self.inventory.new do |m|
       m.user_id = self.user_id      
       m.quantity = self.quantity
-      m.price = self.price
+      # If Item owner is not the producer add markup
+      m.price = self.user.has_role?('producer') ? self.price : self.price + ApplicationController.helpers.get_user_markup(self.user_id)
       m.status = :available
       m.save
     end
@@ -52,7 +53,8 @@ class Item < ApplicationRecord
     inventory = self.inventory.find_by(user_id: self.user_id)
     unless inventory.nil?
       inventory.quantity = self.quantity
-      inventory.price = self.price
+      # If Item owner is not the producer add markup
+      inventory.price = self.user.has_role?('producer') ? self.price : self.price + ApplicationController.helpers.get_user_markup(self.user_id)
       inventory.save
       # reload inventory
       self.inventory.reload
