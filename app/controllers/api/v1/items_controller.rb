@@ -50,7 +50,24 @@ module Api::V1
           @items = (@items + request_items)
         end
       end
-      @items = @items.sort_by{ |item| item.total_price }.uniq{ |item| item.id}
+
+      @items = @items.as_json
+      @items = @items.sort_by{ |item| item.key?('total_price') ? item['total_price'] : item['price'] }.uniq{ |item| item['id']}
+
+      # get pending requests
+      pending_requests = {}
+      ItemRequest.joins(:request_contract)
+        .where("request_contracts.status = 0 AND item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
+        .group("item_requests.item_id")
+        .select("item_requests.item_id, COUNT(item_requests.id) AS action_request")
+        .each do |request|
+          pending_requests[request.item_id] = request.action_request
+        end
+      
+      # assign count
+      @items.collect do |item|
+        item[:action_request] = pending_requests.key?(item['id']) ? pending_requests[item['id']] : 0
+      end
 
       render json: @items, status: 200
     end
