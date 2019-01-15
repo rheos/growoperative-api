@@ -143,7 +143,47 @@ module Api::V1
       render json: {
         message: "Item delete successfully."
       }, staus: 200
-    end    
+    end
+
+    # GET: /v1/items/around
+    # Return around items
+    def around
+      depth_limit = 4
+      max_items = 16
+      queue_ids = [current_user.id]
+      user_ids = [current_user.id]
+
+      (1..depth_limit).each do |step|
+        queue_ids = Relationship.where("user_id IN (#{user_ids.join(',')}) OR friend_id IN(#{user_ids.join(',')})")
+          .pluck(:user_id, :friend_id)
+          .flatten!.uniq
+        
+        # remove checked users
+        queue_ids = queue_ids - user_ids
+
+        # add users
+        user_ids = user_ids + queue_ids
+      end
+
+      queue_ids.delete(current_user.id)
+
+      # Recursive SQL is availbe on Mysql 8
+      # sql = "
+      #   WITH RECURSIVE get_friends(obj_user_id, depth, cycle) AS (
+      #     SELECT IF(user_id = #{current_user.id}, friend_id, user_id), 1, false
+      #     FROM relationships
+      #     WHERE user_id = #{current_user.id} OR friend_id = #{current_user.id}
+      #   UNION ALL
+      #     SELECT IF(user_id = obj_user_id, friend_id, user_id), get_friends.depth + 1, user_id = ANY(obj_user_id)
+      #     FROM relationships
+      #     WHERE NOT cycle AND (depth < #{depth_limit}) AND (user_id = obj_user_id OR friend_id = obj_user_id)
+      #   )
+      #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
+      # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
+      items = Item.where("user_id IN(#{user_ids.join(',')})").limit(max_items)
+
+      render json: items, status: 200
+    end
 
     private
     def set_item
