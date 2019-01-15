@@ -53,6 +53,15 @@ class User < ApplicationRecord
     end
   end
 
+  def is_producer?
+    group_labels = self.user_groups.pluck(:group_label)
+    if group_labels.size == 1 && group_labels.include?("producer")
+      true
+    else
+      false
+    end
+  end
+
   def has_role?(role)
     if self.user_groups.pluck(:group_label).include?(role)
       true
