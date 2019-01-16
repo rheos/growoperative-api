@@ -58,7 +58,9 @@ module Api::V1
         format_inventory(item)
       end
 
-      render json: result, status: 200
+      render json: {
+        data: result
+      }, status: 200
     end
 
     def all_items(step, related_user, before_user, target_user_id, route_price)
@@ -93,7 +95,9 @@ module Api::V1
     def create
       @item = current_user.items.new(item_params)
       if @item.save
-        render json: format_inventory(@item.inventory[0]), status: 200
+        render json: {
+          data: format_inventory(@item.inventory[0])
+        }, status: 200
       else
         render :json=> @item.errors, :status=>422
       end
@@ -101,7 +105,9 @@ module Api::V1
 
     def update
       if @inventory.update(inventory_params) && @inventory.item.update(item_params)
-        render json: @item, status: 200
+        render json: {
+          data: format_inventory(@inventory)
+        }, status: 200
       else
         render :json=> @item.errors, :status=>422
       end
@@ -158,7 +164,9 @@ module Api::V1
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       items = Inventory.where("user_id IN(#{user_ids.join(',')})").limit(max_items)
 
-      render json: items, status: 200
+      render json: {
+        data: format_inventory(items)
+      }, status: 200
     end
 
     private
