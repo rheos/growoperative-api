@@ -11,6 +11,8 @@ class Item < ApplicationRecord
   attr_accessor :unit
   attr_accessor :target_user_id
   attr_accessor :total_price
+  attr_accessor :action_request
+  
   # callbacks
   before_create :set_item_name
   before_save :set_item_unit

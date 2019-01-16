@@ -1,7 +1,7 @@
 class ItemSerializer < ActiveModel::Serializer
   attributes :id, :user_id, :quantity, :category_id, :name, :grade_id,
     :price, :item_unit_id, :item_name_id, :date_available, :unit_name,
-    :created_at, :target_user_id, :target_user_name, :total_price, :organic
+    :created_at, :target_user_id, :target_user_name, :total_price, :organic, :action_request
 
   def unit_name
     object.item_unit.unit_name
