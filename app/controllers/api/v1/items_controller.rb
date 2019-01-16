@@ -53,11 +53,12 @@ module Api::V1
         end
       
       # assign count
-      @items.each do |item|
+      result = @items.map do |item|
         item.action_request = pending_requests.key?(item.id) ? pending_requests[item.id] : 0
+        format_inventory(item)
       end
 
-      render json: @items, status: 200
+      render json: result, status: 200
     end
 
     def all_items(step, related_user, before_user, target_user_id, route_price)
@@ -99,8 +100,7 @@ module Api::V1
     end
 
     def update
-      if @inventory.update(inventory_params)
-        @inventory.item.update(item_params)!
+      if @inventory.update(inventory_params) && @inventory.item.update(item_params)
         render json: @item, status: 200
       else
         render :json=> @item.errors, :status=>422
@@ -177,6 +177,30 @@ module Api::V1
 
     def inventory_params
       params.require(:item).permit(:quantity, :price)
+    end
+
+    def format_inventory(inventory)
+      {
+        :id => inventory.id, 
+        :attributes => {
+          :user_id => inventory.user_id, 
+          :quantity => inventory.quantity, 
+          :price => inventory.price, 
+          :total_price => inventory.total_price, 
+          :target_user_id => inventory.target_user_id, 
+          :target_user_name => inventory.target_user_name(current_user),
+          :action_request => inventory.action_request,
+          :category_id => inventory.item.category_id, 
+          :name => inventory.item.name, 
+          :grade_id => inventory.item.grade_id,
+          :item_unit_id => inventory.item.item_unit_id, 
+          :unit_name => inventory.item.item_unit.unit_name, 
+          :unit_name => inventory.item.item_name_id, 
+          :date_available => inventory.item.date_available, 
+          :organic => inventory.item.organic, 
+          :created_at => inventory.created_at, 
+        }
+      }
     end
 
     def check_user_type
