@@ -5,17 +5,17 @@ module Api::V1
    
     MAX_DEPTH = 5
     
-    # URL: /v1/items/:item_id/requests
+    # URL: /v1/items/:inventory_id/requests
     def index
       sent = ItemRequest.joins(:request_contract)
         .joins(:friend)
         .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
-        .where("item_requests.item_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
       
       received = ItemRequest.joins(:request_contract)
         .joins(:user)
         .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
-        .where("item_requests.item_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
 
       render json: {
         :sent => sent,
@@ -23,24 +23,24 @@ module Api::V1
       }, status: 200
     end
 
-    # GET: /v1/items/:item_id/requests
+    # POST: /v1/items/:inventory_id/requests
     def create
-      item = Item.find_by(id: params[:item_id])
+      inventory = Inventory.find_by(id: params[:item_id])
 
-      # check if item exists
-      if item.nil?
+      # check if inventory exists
+      if inventory.nil? || inventory.status != 'available'
         render json: { message: 'not available' }, status: 404
         return
       end
 
-      # check if item quanity is enough as much as requests
-      if request_params[:quantity].nil? || item.quantity < request_params[:quantity].to_f
+      # check if inventory quanity is enough as much as requests
+      if request_params[:quantity].nil? || inventory.quantity < request_params[:quantity].to_f
         render json: { message: 'not enough stock' }, status: 400
         return
       end
       
-      # check if item is available
-      contacts = [{ :user_id => item.user_id, :path => [], :prices => [], :total => 0 }]
+      # check if inventory is available
+      contacts = [{ :user_id => inventory.user_id, :path => [], :prices => [], :total => 0 }]
       shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
       checked_contacts = {}
 
@@ -49,7 +49,7 @@ module Api::V1
         # mark as checked
         checked_contacts[contact[:user_id]] = contact[:total];
 
-        # check if selected user is current user, it means item is available
+        # check if selected user is current user, it means inventory is available
         if contact[:user_id] == current_user.id 
           if contact[:total] < shortest[:total]
             shortest = contact
@@ -60,7 +60,7 @@ module Api::V1
           relationships.pluck(:user_id, :friend_id).flatten!.uniq.each do |relation_id|
             next if relation_id == contact[:user_id]
 
-            price = contact[:total] + helpers.get_relation_price(contact[:user_id], relation_id)
+            price = contact[:total] + helpers.get_relation_price(relation_id, contact[:user_id])
             if price < shortest[:total] && (checked_contacts[:relation_id].nil? || price < checked_contacts[:relation_id])
               contacts.push({
                 :user_id => relation_id,
@@ -82,9 +82,10 @@ module Api::V1
       # create request contract
       request_contract = RequestContract.new
       request_contract.user_id = current_user.id
-      request_contract.item_id = item.id
+      request_contract.inventory_id = inventory.id
+      request_contract.item_id = inventory.item_id
       request_contract.quantity = request_params[:quantity]
-      request_contract.price = request_params[:price]
+      request_contract.price = shortest[:prices].last
       request_contract.save!
 
       # add source user id
@@ -94,9 +95,9 @@ module Api::V1
       shortest[:prices].each_with_index do |price, index|
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
-        request.item_id = item.id
-        request.friend_id = shortest[:path][index]
+        request.inventory_id = inventory.id
         request.user_id = shortest[:path][index + 1]
+        request.friend_id = shortest[:path][index]
         request.price = price
         request.quantity = request_params[:quantity]
         request.status = :pending
@@ -171,32 +172,34 @@ module Api::V1
     # Return 200 response if success
     def settle
       # check permission
-      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.item.user_id != current_user.id
+      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.inventory.user_id != current_user.id
         render json: { message: 'Not accessable' }, status: 403
         return
       end
 
       # check if all requests are accepted
-      unless @request.request_contract.status == 'accepted'
+      request_contract = @request.request_contract
+      unless request_contract.status == 'accepted'
         render json: { message: 'The request chain was not accepted' }, status: 406
         return
       end
 
       # find the inventory
-      inventory = Inventory.find_by(item_id: @request.item_id, user_id: @request.item.user_id, ref_id: @request.request_contract_id)
+      inventory = Inventory.find_by(ref_id: @request.request_contract_id)
       if inventory.nil? || inventory.status != 'reserved'
         render json: { message: 'Not availabe to settle the inventory' }, status: 406
         return
       end
 
       # change inventory ownership
-      inventory.user_id = @request.request_contract.user_id
+      inventory.user_id = request_contract.user_id
+      inventory.price = request_contract.price
       inventory.status = :available
       inventory.save!
 
       # update contract
-      @request.request_contract.status = :settled
-      @request.request_contract.save!
+      request_contract.status = :settled
+      request_contract.save!
 
       render json: { message: 'Request has been settled' }, status: 200
     end

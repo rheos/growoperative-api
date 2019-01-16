@@ -16,6 +16,7 @@ class User < ApplicationRecord
   has_many   :friends, through: :relationships, source: 'friend',:foreign_key => 'friend_id'
   has_many   :user_groups, dependent: :destroy
   has_many   :items, dependent: :destroy
+  has_many   :inventories, dependent: :destroy
   has_many   :item_requests, dependent: :destroy
   has_many   :user_category_prices, dependent: :destroy
   has_many   :user_relationship_prices, dependent: :destroy
