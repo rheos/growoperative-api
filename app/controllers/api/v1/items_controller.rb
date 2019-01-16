@@ -68,13 +68,15 @@ module Api::V1
       users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
       users.delete(before_user)
       users.delete(related_user)
-      newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 0", users)
+
+      newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1", users)
       newitems.each do |item|
         item.target_user_id = target_user_id
         item.total_price = route_price + item.price
       end
 
       @items = (@items + newitems)
+
       # binding.pry
       if(step > 1)
         users.each do |user|
