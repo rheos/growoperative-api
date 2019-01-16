@@ -93,7 +93,7 @@ module Api::V1
     def create
       @item = current_user.items.new(item_params)
       if @item.save
-        render json: @item.inventory, status: 200
+        render json: format_inventory(@item.inventory[0]), status: 200
       else
         render :json=> @item.errors, :status=>422
       end
