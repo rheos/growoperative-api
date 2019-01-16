@@ -4,20 +4,15 @@ class Item < ApplicationRecord
   belongs_to :item_name, optional: true
   belongs_to :grade
   belongs_to :item_unit, optional: true
-  has_many   :item_requests, dependent: :destroy
   has_many   :reviews, dependent: :destroy
   has_many   :inventory, dependent: :destroy
 
-  attr_accessor :unit
-  attr_accessor :target_user_id
-  attr_accessor :total_price
-  attr_accessor :action_request
+  attr_accessor :unit  
   
   # callbacks
   before_create :set_item_name
   before_save :set_item_unit
   after_create :add_inventory
-  after_update :update_inventory
   # This method will set item_name in item if not present
   def set_item_name
     if self.item_name_id.nil?
@@ -48,18 +43,6 @@ class Item < ApplicationRecord
       m.price = self.user.has_role?('producer') ? self.price : self.price + ApplicationController.helpers.get_user_markup(self.user_id)
       m.status = :available
       m.save
-    end
-  end
-
-  def update_inventory    
-    inventory = self.inventory.find_by(user_id: self.user_id)
-    unless inventory.nil?
-      inventory.quantity = self.quantity
-      # If Item owner is not the producer add markup
-      inventory.price = self.user.has_role?('producer') ? self.price : self.price + ApplicationController.helpers.get_user_markup(self.user_id)
-      inventory.save
-      # reload inventory
-      self.inventory.reload
     end
   end
 end

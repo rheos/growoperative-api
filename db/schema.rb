@@ -89,7 +89,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.bigint "user_id"
-    t.bigint "item_id"
+    t.bigint "inventory_id"
     t.integer "quantity"
     t.string "units"
     t.decimal "price", precision: 10
@@ -98,7 +98,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
     t.integer "friend_id"
     t.bigint "request_contract_id"
-    t.index ["item_id"], name: "index_item_requests_on_item_id"
+    t.index ["inventory_id"], name: "index_item_requests_on_inventory_id"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
@@ -177,6 +177,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "status", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "inventory_id"
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
@@ -292,7 +293,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "item_names", "categories"
   add_foreign_key "item_relatiohships", "items"
   add_foreign_key "item_relatiohships", "relationships"
-  add_foreign_key "item_requests", "items"
+  add_foreign_key "item_requests", "items", column: "inventory_id"
   add_foreign_key "item_requests", "request_contracts"
   add_foreign_key "item_requests", "users"
   add_foreign_key "items", "categories"
