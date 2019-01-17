@@ -165,9 +165,52 @@ module Api::V1
       #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       items = Inventory.where("user_id IN(#{user_ids.join(',')})").limit(max_items)
+      items = items.map do |item|
+        format_inventory(item)
+      end
 
       render json: {
-        data: format_inventory(items)
+        data: items
+      }, status: 200
+    end
+
+    def requested
+      items = Inventory.select("inventories.*, item_requests.friend_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
+        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
+        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
+        .where("item_requests.user_id = #{current_user.id}")
+      
+      items = items.map do |item|
+        item.target_user_id  = item[:target_user_id]
+        item.total_price  = item[:total_price]
+        json = format_inventory(item)
+        json[:attributes]['request-status'] = item[:request_status]
+        json[:attributes]['chain-status'] = item[:chain_status]
+        json
+      end
+
+      render json: {
+        data: items
+      }, status: 200
+    end
+
+    def received
+      items = Inventory.select("inventories.*, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
+        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
+        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
+        .where("item_requests.friend_id = #{current_user.id}")
+      
+      items = items.map do |item|
+        item.target_user_id  = item[:target_user_id]
+        item.total_price  = item[:total_price]
+        json = format_inventory(item)
+        json[:attributes]['request-status'] = item[:request_status]
+        json[:attributes]['chain-status'] = item[:chain_status]
+        json
+      end
+
+      render json: {
+        data: items
       }, status: 200
     end
 
@@ -193,11 +236,9 @@ module Api::V1
       {
         :id => inventory.id, 
         :attributes => {
-          'user-id': inventory.user_id, 
           'quantity' => inventory.quantity, 
-          'price' => inventory.price, 
-          'total-price' => inventory.total_price, 
-          'target-user_id' => inventory.target_user_id, 
+          'total-price' => inventory.total_price.nil? ? inventory.price: inventory.total_price, 
+          'target-user-id' => inventory.target_user_id, 
           'target-user-name' => inventory.target_user_name(current_user),
           'action-request' => inventory.action_request,
           'category-id' => inventory.item.category_id, 
