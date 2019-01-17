@@ -29,7 +29,7 @@ module Api::V1
 
       # check if inventory exists
       if inventory.nil? || inventory.status != 'available'
-        render json: { message: 'not available' }, status: 404
+        render json: { message: 'inventory is not available' }, status: 404
         return
       end
 
@@ -75,7 +75,7 @@ module Api::V1
 
       # check if find a path
       if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
-        render json: { message: 'not available' }, status: 400
+        render json: { message: 'path not found' }, status: 400
         return
       end
 

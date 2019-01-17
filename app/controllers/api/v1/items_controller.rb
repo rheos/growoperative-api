@@ -33,8 +33,8 @@ module Api::V1
         # add items requested through user
         if current_user.is_producer?
           request_items = Inventory.joins(:item_request)
-            .where("friend_id = #{current_user.id}")
-            .select("items.*, item_requests.price AS total_price")
+            .where("inventories.status = 1 AND inventories.quantity > 0 AND friend_id = #{current_user.id}")
+            .select("inventories.*, item_requests.price AS total_price")
 
           @items = (@items + request_items)
         end
