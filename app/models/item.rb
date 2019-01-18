@@ -28,19 +28,13 @@ class Item < ApplicationRecord
       item_unit.save
       self.item_unit_id = item_unit.id
     end
-
-    # set producer_id if user is a producer
-    if self.user.has_role?("producer")
-      self.producer_id = self.user_id
-    end
   end
 
   def add_inventory
     inventory = self.inventory.new do |m|
       m.user_id = self.user_id      
       m.quantity = self.quantity
-      # If Item owner is not the producer add markup
-      m.price = self.user.has_role?('producer') ? self.price : self.price + ApplicationController.helpers.get_user_markup(self.user_id)
+      m.price = self.price
       m.status = :available
       m.save
     end

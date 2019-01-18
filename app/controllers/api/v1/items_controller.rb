@@ -96,7 +96,16 @@ module Api::V1
     #method : POST
     #parameter
     def create
-      @item = current_user.items.new(item_params)
+      data = item_params
+
+      # add mark up price if item is producer's
+      if params[:item][:dashboard_type] == 'producer'
+        data[:producer_id] = current_user.id
+      elsif 
+        data[:price] = data[:price].to_f + helpers.get_user_markup(current_user.id)
+      end
+
+      @item = current_user.items.new(data)
       if @item.save
         render json: {
           data: @item.inventory[0].to_json(current_user)
@@ -107,7 +116,14 @@ module Api::V1
     end
 
     def update
-      if @inventory.update(inventory_params) && @inventory.item.update(item_params)
+      data = item_params
+
+      # add mark up price if item is producer's
+      if @inventory.item.producer_id != current_user.id
+        data[:price] = data[:price].to_f + helpers.get_user_markup(current_user.id)
+      end
+
+      if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -228,7 +244,7 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id,:quantity, :category_id,:item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+      params.require(:item).permit(:user_id, :quantity, :category_id,:item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
     end
 
     def inventory_params
