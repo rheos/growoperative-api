@@ -7,33 +7,15 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      sent = Inventory.select("inventories.*, item_requests.friend_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
-        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
-        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
-        .where("item_requests.inventory_id = #{params[:item_id]} AND item_requests.user_id = #{current_user.id}")
+      sent = ItemRequest.joins(:request_contract)
+        .joins(:friend)
+        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
       
-      sent = sent.map do |item|
-        item.target_user_id  = item[:target_user_id]
-        item.total_price  = item[:total_price]
-        json = item.to_json(current_user)
-        json[:attributes]['request-status'] = item[:request_status]
-        json[:attributes]['chain-status'] = item[:chain_status]
-        json
-      end
-      
-      received = Inventory.select("inventories.*, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
-        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
-        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
-        .where("item_requests.inventory_id = #{params[:item_id]} AND item_requests.friend_id = #{current_user.id}")
-
-      received = received.map do |item|
-        item.target_user_id  = item[:target_user_id]
-        item.total_price  = item[:total_price]
-        json = item.to_json(current_user)
-        json[:attributes]['request-status'] = item[:request_status]
-        json[:attributes]['chain-status'] = item[:chain_status]
-        json
-      end
+      received = ItemRequest.joins(:request_contract)
+        .joins(:user)
+        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
 
       render json: {
         :sent => sent,
