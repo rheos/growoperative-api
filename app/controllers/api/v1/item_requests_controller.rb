@@ -8,14 +8,22 @@ module Api::V1
     # URL: /v1/items/:inventory_id/requests
     def index
       sent = ItemRequest.joins(:request_contract)
-        .joins(:friend)
-        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
+        .select("item_requests.*, request_contracts.status AS contract_status")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
+        .as_json
+      
+      sent.each do |request|
+        request[:contract_name] = helpers.target_user_name(current_user.id, request['friend_id'])
+      end
       
       received = ItemRequest.joins(:request_contract)
-        .joins(:user)
-        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
+        .select("item_requests.*, request_contracts.status AS contract_status")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
+        .as_json
+
+      received.each do |request|
+        request[:contract_name] = helpers.target_user_name(current_user.id, request['user_id'])
+      end
 
       render json: {
         :sent => sent,
