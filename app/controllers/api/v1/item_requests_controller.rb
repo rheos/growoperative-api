@@ -127,7 +127,7 @@ module Api::V1
     # Return 200 response if success
     def accept
       # check permission
-      unless current_user.is_admin? || @request.friend_id != current_user.id
+      unless current_user.is_admin? || @request.friend_id == current_user.id
         render json: { message: 'Not accessable' }, status: 403
         return
       end
@@ -156,7 +156,7 @@ module Api::V1
     # Return 200 response if success
     def cancel
       # check permission
-      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.user_id != current_user.id
+      unless current_user.is_admin? || @request.friend_id == current_user.id || @request.user_id == current_user.id
         render json: { message: 'Not accessable' }, status: 403
         return
       end
@@ -188,7 +188,7 @@ module Api::V1
     # Return 200 response if success
     def settle
       # check permission
-      unless current_user.is_admin? || @request.friend_id != current_user.id || @request.inventory.user_id != current_user.id
+      unless current_user.is_admin? || @request.friend_id == current_user.id || @request.inventory.user_id == current_user.id
         render json: { message: 'Not accessable' }, status: 403
         return
       end
