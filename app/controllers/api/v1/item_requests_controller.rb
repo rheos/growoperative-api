@@ -7,15 +7,33 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      sent = ItemRequest.joins(:request_contract)
-        .joins(:friend)
-        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id}")
+      sent = Inventory.select("inventories.*, item_requests.friend_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
+        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
+        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
+        .where("item_requests.inventory_id = #{params[:item_id]} AND item_requests.user_id = #{current_user.id}")
       
-      received = ItemRequest.joins(:request_contract)
-        .joins(:user)
-        .select("item_requests.*, users.user_name AS contract_name, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id}")
+      sent = sent.map do |item|
+        item.target_user_id  = item[:target_user_id]
+        item.total_price  = item[:total_price]
+        json = item.to_json(current_user)
+        json[:attributes]['request-status'] = item[:request_status]
+        json[:attributes]['chain-status'] = item[:chain_status]
+        json
+      end
+      
+      received = Inventory.select("inventories.*, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
+        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
+        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
+        .where("item_requests.inventory_id = #{params[:item_id]} AND item_requests.friend_id = #{current_user.id}")
+
+      received = received.map do |item|
+        item.target_user_id  = item[:target_user_id]
+        item.total_price  = item[:total_price]
+        json = item.to_json(current_user)
+        json[:attributes]['request-status'] = item[:request_status]
+        json[:attributes]['chain-status'] = item[:chain_status]
+        json
+      end
 
       render json: {
         :sent => sent,
@@ -38,9 +56,14 @@ module Api::V1
         render json: { message: 'not enough stock' }, status: 400
         return
       end
+
+      if inventory.user_id == current_user.id
+        render json: { message: 'can not request own item' }, status: 400
+        return
+      end
       
       # check if inventory is available
-      contacts = [{ :user_id => inventory.user_id, :path => [], :prices => [], :total => 0 }]
+      contacts = [{ :user_id => current_user.id, :path => [], :prices => [], :total => 0, :route_price => 0 }]
       shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
       checked_contacts = {}
 
@@ -50,8 +73,8 @@ module Api::V1
         checked_contacts[contact[:user_id]] = contact[:total];
 
         # check if selected user is current user, it means inventory is available
-        if contact[:user_id] == current_user.id 
-          if contact[:total] < shortest[:total]
+        if contact[:user_id] == inventory.user_id 
+          if contact[:total] < shortest[:total]            
             shortest = contact
           end
         elsif contact[:path].size < MAX_DEPTH && 
@@ -60,16 +83,19 @@ module Api::V1
           relationships.pluck(:user_id, :friend_id).flatten!.uniq.each do |relation_id|
             next if relation_id == contact[:user_id]
 
-            price = contact[:total] + helpers.get_relation_price(relation_id, contact[:user_id])
-            if price < shortest[:total] && (checked_contacts[:relation_id].nil? || price < checked_contacts[:relation_id])
+            total = contact[:total] + contact[:route_price]
+            if total < shortest[:total] && 
+              (checked_contacts[:relation_id].nil? || total < checked_contacts[:relation_id])
+
               contacts.push({
                 :user_id => relation_id,
                 :path => contact[:path] + [contact[:user_id]],
-                :prices => contact[:prices] + [price],
-                :total => price,
+                :prices => contact[:prices] + [total],
+                :total => total,
+                :route_price => helpers.get_relation_price(relation_id, contact[:user_id]),
               })
             end
-          end          
+          end
         end
       end
 
@@ -85,20 +111,20 @@ module Api::V1
       request_contract.inventory_id = inventory.id
       request_contract.item_id = inventory.item_id
       request_contract.quantity = request_params[:quantity]
-      request_contract.price = shortest[:prices].last
+      request_contract.price = inventory.price + shortest[:total]
       request_contract.save!
 
       # add source user id
-      shortest[:path] << current_user.id
+      shortest[:path] << inventory.user_id
 
       # create requests
       shortest[:prices].each_with_index do |price, index|
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
         request.inventory_id = inventory.id
-        request.user_id = shortest[:path][index + 1]
-        request.friend_id = shortest[:path][index]
-        request.price = price
+        request.user_id = shortest[:path][index]
+        request.friend_id = shortest[:path][index + 1]
+        request.price = request_contract.price - price
         request.quantity = request_params[:quantity]
         request.status = :pending
         request.save!

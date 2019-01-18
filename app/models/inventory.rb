@@ -23,4 +23,26 @@ class Inventory < ApplicationRecord
       end
     end
   end 
+
+  def to_json(current_user)
+    {
+      :id => self.id, 
+      :attributes => {
+        'quantity' => self.quantity, 
+        'total-price' => self.total_price.nil? ? self.price: self.total_price, 
+        'target-user-id' => self.target_user_id.nil? ? self.user_id : self.target_user_id, 
+        'target-user-name' => self.target_user_name(current_user),
+        'action-request' => self.action_request,
+        'category-id' => self.item.category_id, 
+        'name' => self.item.name, 
+        'grade-id' => self.item.grade_id,
+        'item-unit-id' => self.item.item_unit_id, 
+        'unit-name' => self.item.item_unit.unit_name, 
+        'item-name-id' => self.item.item_name_id, 
+        'date-available' => self.item.date_available, 
+        'organic' => self.item.organic, 
+        'created-at' => self.created_at, 
+      }
+    }
+  end
 end

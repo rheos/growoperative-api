@@ -6,10 +6,11 @@ module Api::V1
     # GET : /v1/items?range_degree=:integer 
     # This method will return all item which posted by contact of current user
     def index
-      range_degree = (params[:range_degree] ? params[:range_degree].to_i : (GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)))
+      range_degree = (params[:range_degree] ? params[:range_degree].to_i : (GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)))      
 
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
-      if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
+
+      if true || !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         
         @items = Inventory.where("inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1", users)
@@ -55,7 +56,7 @@ module Api::V1
       # assign count
       result = @items.map do |item|
         item.action_request = pending_requests.key?(item.id) ? pending_requests[item.id] : 0
-        format_inventory(item)
+        item.to_json(current_user)
       end
 
       render json: {
@@ -98,7 +99,7 @@ module Api::V1
       @item = current_user.items.new(item_params)
       if @item.save
         render json: {
-          data: format_inventory(@item.inventory[0])
+          data: @item.inventory[0].to_json(current_user)
         }, status: 200
       else
         render :json=> @item.errors, :status=>422
@@ -108,7 +109,7 @@ module Api::V1
     def update
       if @inventory.update(inventory_params) && @inventory.item.update(item_params)
         render json: {
-          data: format_inventory(@inventory)
+          data: @inventory.to_json(current_user)
         }, status: 200
       else
         render :json=> @item.errors, :status=>422
@@ -166,7 +167,7 @@ module Api::V1
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       items = Inventory.where("user_id IN(#{user_ids.join(',')})").limit(max_items)
       items = items.map do |item|
-        format_inventory(item)
+        item.to_json(current_user)
       end
 
       render json: {
@@ -174,6 +175,7 @@ module Api::V1
       }, status: 200
     end
 
+    # GET: /v1/items/requested
     def requested
       items = Inventory.select("inventories.*, item_requests.friend_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
         .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
@@ -183,7 +185,7 @@ module Api::V1
       items = items.map do |item|
         item.target_user_id  = item[:target_user_id]
         item.total_price  = item[:total_price]
-        json = format_inventory(item)
+        json = item.to_json(current_user)
         json[:attributes]['request-status'] = item[:request_status]
         json[:attributes]['chain-status'] = item[:chain_status]
         json
@@ -194,6 +196,7 @@ module Api::V1
       }, status: 200
     end
 
+    # GET: /v1/items/received
     def received
       items = Inventory.select("inventories.*, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
         .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
@@ -203,7 +206,7 @@ module Api::V1
       items = items.map do |item|
         item.target_user_id  = item[:target_user_id]
         item.total_price  = item[:total_price]
-        json = format_inventory(item)
+        json = item.to_json(current_user)
         json[:attributes]['request-status'] = item[:request_status]
         json[:attributes]['chain-status'] = item[:chain_status]
         json
@@ -230,28 +233,6 @@ module Api::V1
 
     def inventory_params
       params.require(:item).permit(:quantity, :price)
-    end
-
-    def format_inventory(inventory)
-      {
-        :id => inventory.id, 
-        :attributes => {
-          'quantity' => inventory.quantity, 
-          'total-price' => inventory.total_price.nil? ? inventory.price: inventory.total_price, 
-          'target-user-id' => inventory.target_user_id, 
-          'target-user-name' => inventory.target_user_name(current_user),
-          'action-request' => inventory.action_request,
-          'category-id' => inventory.item.category_id, 
-          'name' => inventory.item.name, 
-          'grade-id' => inventory.item.grade_id,
-          'item-unit-id' => inventory.item.item_unit_id, 
-          'unit-name' => inventory.item.item_unit.unit_name, 
-          'item-name-id' => inventory.item.item_name_id, 
-          'date-available' => inventory.item.date_available, 
-          'organic' => inventory.item.organic, 
-          'created-at' => inventory.created_at, 
-        }
-      }
     end
 
     def check_user_type

@@ -25,4 +25,5 @@ module ItemHelper
       return @global_node_price
     end
   end
+    
 end
