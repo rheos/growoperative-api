@@ -17,7 +17,11 @@ module Api::V1
 
         @items.each do |item|
           item.target_user_id = item.user_id
-          item.total_price = item.price
+          unless item.producer_id.nil?
+            item.total_price = item.price
+          else
+            item.total_price = item.price + helpers.get_relation_price(item.user_id, current_user.id)
+          end
         end
 
         if range_degree > 1 
@@ -73,7 +77,11 @@ module Api::V1
       newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1", users)
       newitems.each do |item|
         item.target_user_id = target_user_id
-        item.total_price = route_price + item.price
+        unless item.producer_id.nil?
+          item.total_price = item.price
+        else
+          item.total_price = item.price + helpers.get_relation_price(item.user_id, related_user)
+        end
       end
 
       @items = (@items + newitems)
@@ -99,10 +107,8 @@ module Api::V1
       data = item_params
 
       # add mark up price if item is producer's
-      if params[:item][:dashboard_type] == 'producer'
+      if params[:item][:dashboard_type] != 'broker'
         data[:producer_id] = current_user.id
-      elsif 
-        data[:price] = data[:price].to_f + helpers.get_user_markup(current_user.id)
       end
 
       @item = current_user.items.new(data)
@@ -119,8 +125,8 @@ module Api::V1
       data = item_params
 
       # add mark up price if item is producer's
-      if @inventory.item.producer_id != current_user.id
-        data[:price] = data[:price].to_f + helpers.get_user_markup(current_user.id)
+      if params[:item][:dashboard_type] != 'broker'
+        data[:producer_id] = current_user.id
       end
 
       if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
