@@ -63,7 +63,12 @@ module Api::V1
         checked_contacts[contact[:user_id]] = contact[:total];
 
         # check if selected user is current user, it means inventory is available
-        if contact[:user_id] == inventory.user_id 
+        if contact[:user_id] == inventory.user_id
+          # add user mark up if he is not owner
+          if inventory.producer_id.nil?
+            contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
+          end
+
           if contact[:total] < shortest[:total]            
             shortest = contact
           end

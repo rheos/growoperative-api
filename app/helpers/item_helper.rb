@@ -1,5 +1,8 @@
 module ItemHelper
   def get_relation_price(user_id, friend_id)
+    if user_id == friend_id
+      return 0
+    end
     # get relationship price first
     relation_price = UserRelationshipPrice.find_by(user_id: user_id, friend_id: friend_id)
     if (!relation_price.nil? && relation_price.price)

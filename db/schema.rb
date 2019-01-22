@@ -44,6 +44,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "ref_id"
+    t.integer "producer_id"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -59,13 +60,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "note_label"
     t.integer "accepted_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"
-  end
-
-  create_table "item_galleries", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
-    t.bigint "item_id"
-    t.string "image"
-    t.integer "order", default: 0
-    t.index ["item_id"], name: "index_item_galleries_on_item_id"
   end
 
   create_table "item_names", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -89,7 +83,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.bigint "user_id"
-    t.bigint "inventory_id"
     t.integer "quantity"
     t.string "units"
     t.decimal "price", precision: 10
@@ -98,6 +91,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
     t.integer "friend_id"
     t.bigint "request_contract_id"
+    t.bigint "inventory_id"
     t.index ["inventory_id"], name: "index_item_requests_on_inventory_id"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
@@ -289,11 +283,10 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "inventories", "items"
   add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
-  add_foreign_key "item_galleries", "items"
   add_foreign_key "item_names", "categories"
   add_foreign_key "item_relatiohships", "items"
   add_foreign_key "item_relatiohships", "relationships"
-  add_foreign_key "item_requests", "items", column: "inventory_id"
+  add_foreign_key "item_requests", "inventories"
   add_foreign_key "item_requests", "request_contracts"
   add_foreign_key "item_requests", "users"
   add_foreign_key "items", "categories"
