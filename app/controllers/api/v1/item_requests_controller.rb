@@ -9,7 +9,7 @@ module Api::V1
     def index
       sent = ItemRequest.joins(:request_contract)
         .select("item_requests.*, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 2")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status <> 2")
         .as_json
       
       sent.each do |request|
@@ -18,7 +18,7 @@ module Api::V1
       
       received = ItemRequest.joins(:request_contract)
         .select("item_requests.*, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 2")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status <> 2")
         .as_json
 
       received.each do |request|
