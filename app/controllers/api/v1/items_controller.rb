@@ -196,7 +196,7 @@ module Api::V1
       items = Inventory.select("inventories.*, item_requests.friend_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
         .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
         .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
-        .where("item_requests.user_id = #{current_user.id} AND item_requests.status < 2")
+        .where("item_requests.user_id = #{current_user.id} AND request_contracts.status = 0")
       
       items = items.map do |item|
         item.target_user_id  = item[:target_user_id]
@@ -217,8 +217,31 @@ module Api::V1
       items = Inventory.select("inventories.*, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
         .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
         .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
-        .where("item_requests.friend_id = #{current_user.id} AND item_requests.status < 2")
+        .where("item_requests.friend_id = #{current_user.id} AND request_contracts.status = 0")
       
+      items = items.map do |item|
+        item.target_user_id  = item[:target_user_id]
+        item.total_price  = item[:total_price]
+        json = item.to_json(current_user)
+        json[:attributes]['request-status'] = item[:request_status]
+        json[:attributes]['chain-status'] = item[:chain_status]
+        json
+      end
+
+      render json: {
+        data: items
+      }, status: 200
+    end
+
+    # GET: /v1/items/reserved
+    def reserved
+      items = Inventory.select("inventories.*, item_requests.request_contract_id, item_requests.user_id AS target_user_id, item_requests.price AS total_price, item_requests.status AS request_status, request_contracts.status AS chain_status")
+        .joins("RIGHT JOIN item_requests ON item_requests.inventory_id = inventories.id")
+        .joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id")
+        .where("(item_requests.user_id = #{current_user.id} OR item_requests.friend_id = #{current_user.id}) AND request_contracts.status = 1")
+      
+      items = items.uniq{ |item| item.request_contract_id}
+
       items = items.map do |item|
         item.target_user_id  = item[:target_user_id]
         item.total_price  = item[:total_price]
