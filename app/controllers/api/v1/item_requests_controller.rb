@@ -9,7 +9,7 @@ module Api::V1
     def index
       sent = ItemRequest.joins(:request_contract)
         .select("item_requests.*, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status <> 2")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 2")
         .as_json
       
       sent.each do |request|
@@ -18,7 +18,7 @@ module Api::V1
       
       received = ItemRequest.joins(:request_contract)
         .select("item_requests.*, request_contracts.status AS contract_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status <> 2")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 2")
         .as_json
 
       received.each do |request|
@@ -138,13 +138,13 @@ module Api::V1
       end
 
       # check if request is pending
-      unless @request.status == 'pending'
+      unless @request.pending?
         render json: { message: 'Request is not pending' }, status: 406
         return
       end
 
       # check if the contract was accepted or cancelled already
-      unless @request.request_contract.status == 'pending'
+      unless @request.request_contract.pending?
         render json: { message: 'The request chain is not available' }, status: 406
         return
       end
@@ -166,7 +166,7 @@ module Api::V1
         return
       end
 
-      unless @request.request_contract.status == 'pending'
+      unless @request.request_contract.pending?
         render json: { message: 'Request chain is not pending already' }, status: 406
         return
       end
@@ -181,10 +181,6 @@ module Api::V1
         @request.status = :cancelled
         @request.save!
       end
-
-      #mark others requests as cancelled
-      ItemRequest.where("request_contract_id = #{@request.request_contract_id}")
-        .update_all(status: :cancelled)
 
       # cancel the request contract
       @request.request_contract.status = :cancelled
@@ -204,7 +200,7 @@ module Api::V1
 
       # check if all requests are accepted
       request_contract = @request.request_contract
-      unless request_contract.status == 'accepted'
+      unless request_contract.reserved?
         render json: { message: 'The request chain was not accepted' }, status: 406
         return
       end
