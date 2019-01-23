@@ -50,6 +50,7 @@ Rails.application.routes.draw do
           get 'requested'
           get 'received'
           get 'reserved'
+          get 'settled'
           post 'requests/:id/accept' => 'item_requests#accept'
           post 'requests/:id/cancel' => 'item_requests#cancel'
           post 'requests/:id/settle' => 'item_requests#settle'

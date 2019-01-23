@@ -41,7 +41,7 @@ class ItemRequest < ApplicationRecord
     end
 
     # mark request contract as accepted
-    self.request_contract.status = :accepted
+    self.request_contract.status = :reserved
     self.request_contract.save
 
   end
