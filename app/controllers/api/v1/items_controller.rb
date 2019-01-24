@@ -77,10 +77,9 @@ module Api::V1
       newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1", users)
       newitems.each do |item|
         item.target_user_id = target_user_id
-        unless item.producer_id.nil?
-          item.total_price = item.price
-        else
-          item.total_price = item.price + helpers.get_relation_price(item.user_id, related_user)
+        item.total_price = item.price + route_price
+        if item.producer_id.nil?
+          item.total_price += helpers.get_relation_price(item.user_id, related_user)
         end
       end
 
