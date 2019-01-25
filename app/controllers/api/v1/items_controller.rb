@@ -164,7 +164,7 @@ module Api::V1
       user_ids = [current_user.id]
 
       (1..depth_limit).each do |step|
-        queue_ids = Relationship.where("user_id IN (#{user_ids.join(',')}) OR friend_id IN(#{user_ids.join(',')})")
+        queue_ids = Relationship.where("user_id IN (#{queue_ids.join(',')}) OR friend_id IN(#{queue_ids.join(',')})")
           .pluck(:user_id, :friend_id)
           .flatten!.uniq
         
@@ -175,7 +175,7 @@ module Api::V1
         user_ids = user_ids + queue_ids
       end
 
-      queue_ids.delete(current_user.id)
+      user_ids.delete(current_user.id)
 
       # Recursive SQL is availbe on Mysql 8
       # sql = "
@@ -190,7 +190,7 @@ module Api::V1
       #   )
       #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
-      items = Inventory.where("user_id IN(#{user_ids.join(',')})").limit(max_items)
+      items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1").limit(max_items)
       items = items.map do |item|
         item.to_json(current_user)
       end
