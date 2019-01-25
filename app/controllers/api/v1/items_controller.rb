@@ -264,6 +264,29 @@ module Api::V1
       }, status: 200
     end
 
+    # GET: /v1/items/reset
+    def reset
+      unless current_user.is_admin?
+        render json: {
+          message: "You are not authorised to access."
+        }, status: 422
+        return
+      end
+
+      ItemRequest.destroy_all
+      RequestContract.destroy_all
+      Inventory.destroy_all
+      
+      sql = "INSERT INTO inventories (item_id, user_id, quantity, price, status, producer_id, created_at, updated_at)  
+        SELECT id, user_id, quantity, price, 1, user_id, NOW(), NOW()
+        FROM items"
+      ActiveRecord::Base.connection.execute(sql)
+
+      render json: {
+        message: "Success"
+      }, status: 200
+    end
+
     private
     def set_inventory
       @inventory = current_user.is_admin? ? Inventory.find(params[:id]) : Inventory.find_by(id: params[:id], user_id: current_user.id)
