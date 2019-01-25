@@ -10,7 +10,7 @@ module Api::V1
 
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
 
-      if true || !current_user.is_producer? && relationships.count > 0 && range_degree > 0
+      if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         
         @items = Inventory.where("inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1", users)
