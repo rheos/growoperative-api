@@ -38,14 +38,18 @@ module Api::V1
         # add items requested through user
         if current_user.is_producer?
           request_items = Inventory.joins(:item_request)
-            .where("inventories.status = 1 AND inventories.quantity > 0 AND friend_id = #{current_user.id}")
-            .select("inventories.*, item_requests.price AS total_price")
+            .where("inventories.status = 1 AND inventories.quantity > 0 AND item_requests.user_id = #{current_user.id}")
+            .select("inventories.*, item_requests.price AS total_price, item_requests.friend_id AS target_user_id")
+            .each do |item|
+              item.total_price = item[:total_price]
+              item.target_user_id = item[:target_user_id]
+            end
 
           @items = (@items + request_items)
         end
       end
 
-      @items = @items.sort_by{ |item| item.total_price }.uniq{ |item| item.id}
+      @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}
 
       # get pending requests
       pending_requests = {}
