@@ -45,4 +45,26 @@ class ItemRequest < ApplicationRecord
     self.request_contract.save
 
   end
+
+  def to_json(current_user)
+    target_user_id = self.user_id == current_user.id ? self.friend_id : self.user_id
+    {
+      :id => self.id, 
+      :attributes => {
+        'quantity' => self.quantity, 
+        'total-price' => self.price, 
+        'target-user-id' => target_user_id, 
+        'target-user-name' => ApplicationController.helpers.target_user_name(current_user.id, target_user_id),
+        'category-id' => self.inventory.item.category_id, 
+        'name' => self.inventory.item.name, 
+        'grade-id' => self.inventory.item.grade_id,
+        'item-unit-id' => self.inventory.item.item_unit_id, 
+        'unit-name' => self.inventory.item.item_unit.unit_name, 
+        'item-name-id' => self.inventory.item.item_name_id, 
+        'date-available' => self.inventory.item.date_available, 
+        'organic' => self.inventory.item.organic, 
+        'created-at' => self.created_at, 
+      }
+    }
+  end
 end
