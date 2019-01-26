@@ -30,7 +30,7 @@ class Inventory < ApplicationRecord
       :attributes => {
         'quantity' => self.quantity, 
         'total-price' => self.total_price.nil? ? self.price: self.total_price, 
-        # 'user-id' => self.user_id,
+        'user-id' => self.target_user_id.nil? ? self.user_id : self.target_user_id,
         'target-user-id' => self.target_user_id.nil? ? self.user_id : self.target_user_id, 
         'target-user-name' => self.target_user_name(current_user),
         'action-request' => self.action_request,

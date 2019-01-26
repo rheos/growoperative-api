@@ -53,6 +53,7 @@ class ItemRequest < ApplicationRecord
       :attributes => {
         'quantity' => self.quantity, 
         'total-price' => self.price, 
+        'user-id' => target_user_id,
         'target-user-id' => target_user_id, 
         'target-user-name' => ApplicationController.helpers.target_user_name(current_user.id, target_user_id),
         'category-id' => self.inventory.item.category_id, 
