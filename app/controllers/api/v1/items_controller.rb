@@ -190,7 +190,7 @@ module Api::V1
       #   )
       #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
-      items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1").limit(max_items)
+      items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1 AND producer_id IS NOT NULL").limit(max_items)
       items = items.map do |item|
         item.to_json(current_user)
       end
