@@ -198,71 +198,7 @@ module Api::V1
       render json: {
         data: items
       }, status: 200
-    end
-
-    # GET: /v1/items/requested
-    def requested
-      items = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("item_requests.user_id = #{current_user.id} AND request_contracts.status < 2")
-
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        json[:attributes]['chain-status'] = item[:chain_status]
-        json
-      end
-
-      render json: {
-        data: items
-      }, status: 200
-    end
-
-    # GET: /v1/items/received
-    def received
-      items = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("item_requests.friend_id = #{current_user.id} AND request_contracts.status < 2")
-
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        json[:attributes]['chain-status'] = item[:chain_status]
-        json
-      end
-
-      render json: {
-        data: items
-      }, status: 200
-    end
-
-    # GET: /v1/items/reserved
-    def reserved
-      items = ItemRequest.where("(user_id = #{current_user.id} OR friend_id = #{current_user.id}) AND status = 3")
-      items = items.uniq{ |item| item.request_contract_id}
-
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        json
-      end
-
-      render json: {
-        data: items
-      }, status: 200
-    end
-
-    # GET: /v1/items/settled
-    def settled
-      items = ItemRequest.where("(user_id = #{current_user.id} OR friend_id = #{current_user.id}) AND status = 4")
-      items = items.uniq{ |item| item.request_contract_id}
-
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        json
-      end
-
-      render json: {
-        data: items
-      }, status: 200
-    end
+    end    
 
     # GET: /v1/items/reset
     def reset

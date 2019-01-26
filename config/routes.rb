@@ -47,11 +47,11 @@ Rails.application.routes.draw do
         resources :item_requests, path: 'requests', only: [:index, :create]
         collection do
           get 'around'
-          get 'requested'
-          get 'received'
-          get 'reserved'
-          get 'settled'
           get 'reset'
+          get 'requested' => 'item_requests#requested'
+          get 'received' => 'item_requests#received'
+          get 'reserved' => 'item_requests#reserved'
+          get 'settled' => 'item_requests#settled'
           post 'requests/:id/accept' => 'item_requests#accept'
           post 'requests/:id/cancel' => 'item_requests#cancel'
           post 'requests/:id/settle' => 'item_requests#settle'

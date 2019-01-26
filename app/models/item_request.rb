@@ -65,6 +65,7 @@ class ItemRequest < ApplicationRecord
         'date-available' => self.inventory.item.date_available, 
         'organic' => self.inventory.item.organic, 
         'created-at' => self.created_at, 
+        'sent' => self.user_id == current_user.id,
       }
     }
   end
