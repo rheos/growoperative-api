@@ -49,7 +49,6 @@ Rails.application.routes.draw do
           get 'around'
           get 'reset'
           get 'requested' => 'item_requests#requested'
-          get 'received' => 'item_requests#received'
           get 'reserved' => 'item_requests#reserved'
           get 'settled' => 'item_requests#settled'
           post 'requests/:id/accept' => 'item_requests#accept'
