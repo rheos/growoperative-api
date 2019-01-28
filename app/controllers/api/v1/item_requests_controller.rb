@@ -16,7 +16,6 @@ module Api::V1
       end
       
       received = ItemRequest.joins(:request_contract)
-        .select("item_requests")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
 
