@@ -8,6 +8,7 @@ module Api::V1
     # URL: /v1/items/:inventory_id/requests
     def index
       sent = ItemRequest.joins(:request_contract)
+        .select("item_requests.*, request_contracts.status AS chain_status")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
       
@@ -16,6 +17,7 @@ module Api::V1
       end
       
       received = ItemRequest.joins(:request_contract)
+        .select("item_requests.*, request_contracts.status AS chain_status")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
 
