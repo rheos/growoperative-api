@@ -227,16 +227,12 @@ module Api::V1
 
     # GET: /v1/items/requested
     def requested
-      items = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("
-          (item_requests.friend_id = #{current_user.id} OR (item_requests.user_id = #{current_user.id} AND request_contracts.user_id = #{current_user.id}))
-          AND request_contracts.status < 2
-        ")
-
+      items = ItemRequest.joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id 
+          LEFT JOIN item_requests AS t2 ON t2.request_contract_id = item_requests.request_contract_id AND t2.friend_id=#{current_user.id}")
+        .where("request_contracts.status < 3 AND item_requests.user_id = #{current_user.id} 
+          AND (request_contracts.user_id = #{current_user.id} OR t2.status = 1)")
       items = items.map do |item|
         json = item.to_json(current_user)
-        json[:attributes]['chain-status'] = item[:chain_status]
         json
       end
 
