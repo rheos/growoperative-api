@@ -238,7 +238,7 @@ module Api::V1
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.where("user_id = #{current_user.id} AND status < 2")
+      items = Inventory.where("user_id = #{current_user.id} AND (status = 0 or status = 2)")
 
       items = items.map do |item|
         json = item.to_json(current_user)
