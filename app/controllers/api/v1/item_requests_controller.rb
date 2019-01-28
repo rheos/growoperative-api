@@ -169,6 +169,11 @@ module Api::V1
         return
       end
 
+      if @request.request_contract.accepted? && @request.request_contract.user_id == current_user.id
+        render json: { message: 'Request is reserved already, you can not cancel' }, status: 406
+        return
+      end
+
       # cancel the request contract
       @request.request_contract.status = :cancelled
       @request.request_contract.save
@@ -187,14 +192,14 @@ module Api::V1
 
       # check if all requests are accepted
       request_contract = @request.request_contract
-      unless request_contract.reserved?
-        render json: { message: 'The request chain was not accepted' }, status: 406
+      unless request_contract.accepted?
+        render json: { message: 'The request was not reserved' }, status: 406
         return
       end
 
       # find the inventory
       inventory = Inventory.find_by(ref_id: @request.request_contract_id)
-      if inventory.nil? || inventory.status != 'reserved'
+      if inventory.nil? || !inventory.reserved?
         render json: { message: 'Not availabe to settle the inventory' }, status: 406
         return
       end
