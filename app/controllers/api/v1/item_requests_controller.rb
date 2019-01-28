@@ -220,6 +220,7 @@ module Api::V1
           AND (request_contracts.user_id = #{current_user.id} OR t2.status = 1)")
       items = items.map do |item|
         json = item.to_json(current_user)
+        json['id'] = item.inventory_id
         json
       end
 
@@ -234,6 +235,7 @@ module Api::V1
 
       items = items.map do |item|
         json = item.to_json(current_user)
+        json['id'] = item.inventory_id
         json
       end
 
