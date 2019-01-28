@@ -8,8 +8,7 @@ module Api::V1
     # URL: /v1/items/:inventory_id/requests
     def index
       sent = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 2")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
       
       sent.each do |request|
@@ -17,8 +16,8 @@ module Api::V1
       end
       
       received = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 2")
+        .select("item_requests")
+        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
 
       received.each do |request|
@@ -166,20 +165,9 @@ module Api::V1
         return
       end
 
-      unless @request.request_contract.pending?
+      if @request.request_contract.completed? || @request.request_contract.cancelled?
         render json: { message: 'Request chain is not pending already' }, status: 406
         return
-      end
-
-      if @request.friend_id == current_user.id
-        unless @request.status == 'pending'
-          render json: { message: 'Request is not pending' }, status: 406
-          return
-        end
-  
-        # cancel the user's request
-        @request.status = :cancelled
-        @request.save!
       end
 
       # cancel the request contract
@@ -219,7 +207,7 @@ module Api::V1
       inventory.save!
 
       # update contract
-      request_contract.status = :settled
+      request_contract.status = :completed
       request_contract.save!
 
       render json: { message: 'Request has been settled' }, status: 200
@@ -243,7 +231,7 @@ module Api::V1
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.where(user_id: current_user.id, status: :reserved)
+      items = Inventory.where("user_id = #{current_user.id} AND status < 2")
 
       items = items.map do |item|
         json = item.to_json(current_user)
