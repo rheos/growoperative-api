@@ -53,8 +53,7 @@ module Api::V1
 
       # get pending requests
       pending_requests = {}
-      ItemRequest.joins(:request_contract)
-        .where("request_contracts.status = 0 AND item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
+      ItemRequest.where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
         .group("item_requests.inventory_id")
         .select("item_requests.inventory_id, COUNT(item_requests.id) AS action_request")
         .each do |request|
