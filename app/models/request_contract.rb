@@ -3,13 +3,13 @@ class RequestContract < ApplicationRecord
   belongs_to :item
   has_many   :item_requests, dependent: :destroy
   
-  enum status: [ :pending, :accepted, :reserved, :settled, :cancelled ]
+  enum status: [ :pending, :accepted, :completed, :cancelled ]
 
   # callbacks
-  after_update :set_requests_settled
+  after_update :update_callback
 
-  def set_requests_settled
-    if self.settled? || self.cancelled?
+  def update_callback
+    if self.completed? || self.cancelled?
       ItemRequest.where("request_contract_id = #{self.id}").update_all(status: self.status)
     end
 

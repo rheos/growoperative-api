@@ -11,11 +11,11 @@ class ItemRequest < ApplicationRecord
   after_update :update_inventory
 
   #attribs
-  enum status: [ :pending, :accepted, :reserved, :settled, :cancelled ]
+  enum status: [ :pending, :accepted, :completed, :cancelled ]
 
   # update inventory after all requests are accepted
   def update_inventory
-    unless self.status == 'accepted'
+    unless self.accepted?
       return
     end
     # check if all item requests were accepted
@@ -41,7 +41,7 @@ class ItemRequest < ApplicationRecord
     end
 
     # mark request contract as accepted
-    self.request_contract.status = :reserved
+    self.request_contract.status = :accepted
     self.request_contract.save
 
   end
