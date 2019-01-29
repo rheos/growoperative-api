@@ -240,7 +240,7 @@ module Api::V1
 
     # GET: /v1/items/requested
     def requested
-      items = ItemRequest.joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id 
+      items = ItemRequest.joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id
           LEFT JOIN item_requests AS t2 ON t2.request_contract_id = item_requests.request_contract_id AND t2.friend_id=#{current_user.id}")
         .select("item_requests.*, request_contracts.status AS chain_status, request_contracts.user_id AS receiver, signed")
         .where("(request_contracts.status < 2 OR (request_contracts.status = 2 AND signed = 0)) AND item_requests.user_id = #{current_user.id} 

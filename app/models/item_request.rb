@@ -63,6 +63,7 @@ class ItemRequest < ApplicationRecord
         'unit-name' => self.inventory.item.item_unit.unit_name, 
         'item-name-id' => self.inventory.item.item_name_id, 
         'date-available' => self.inventory.item.date_available, 
+        'total-quantity' => self.inventory.quantity, 
         'organic' => self.inventory.item.organic, 
         'created-at' => self.created_at, 
         'sent' => self.user_id == current_user.id,
