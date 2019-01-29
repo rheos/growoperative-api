@@ -1,14 +1,15 @@
 module Api::V1
   class ItemRequestsController < ApiController
     before_action :authenticate_user!
-    before_action :set_request, only: [:accept, :cancel, :settle]
+    before_action :set_request, only: [:accept, :cancel, :settle, :sign]
    
     MAX_DEPTH = 5
     
     # URL: /v1/items/:inventory_id/requests
     def index
       sent = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
+        .select("item_requests.*, request_contracts.status AS chain_status, 
+          IF(request_contracts.status = 2 AND request_contracts.sign = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
       
@@ -206,28 +207,47 @@ module Api::V1
         return
       end
 
-      # change inventory ownership
-      inventory.user_id = request_contract.user_id
-      inventory.price = request_contract.price
-      inventory.status = :available
-      inventory.save!
-
       # update contract
       request_contract.status = :completed
       request_contract.save!
 
       render json: { message: 'Request has been settled' }, status: 200
     end
+    
+    # POST: /v1/items/requests/:request_id/sign
+    def sign
+      unless @request.request_contract.user_id == current_user.id
+        render json: { message: 'The request was not reserved' }, status: 406
+        return
+      end
+
+      if @request.request_contract.status != 2 || @request.request_contract.sign != 0
+        render json: { message: 'Unable to sign it' }, status: 406
+        return
+      end
+
+      @request.request_contract.sign = 1
+      @request.request_contract.save!
+
+      # change inventory ownership
+      inventory.user_id = request_contract.user_id
+      inventory.price = request_contract.price
+      inventory.save!
+
+      render json: { message: 'Request has been signed' }, status: 200
+    end
 
     # GET: /v1/items/requested
     def requested
-      items = ItemRequest.joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id 
+      items = ItemRequest.select("item_requests.*, request_contracts.status AS chain_status, request_contracts.user_id AS receiver, signed")
+        joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id 
           LEFT JOIN item_requests AS t2 ON t2.request_contract_id = item_requests.request_contract_id AND t2.friend_id=#{current_user.id}")
-        .where("request_contracts.status < 3 AND item_requests.user_id = #{current_user.id} 
+        .where("(request_contracts.status < 2 OR (request_contracts.status = 2 AND signed = 0)) AND item_requests.user_id = #{current_user.id} 
           AND (request_contracts.user_id = #{current_user.id} OR t2.status = 1)")
       items = items.map do |item|
         json = item.to_json(current_user)
         json['id'] = item.inventory_id
+        json['action-request'] = item['receiver'] == current_user.id && item['chain_status'] == 2 && item['signed'] == 0
         json
       end
 
@@ -252,7 +272,7 @@ module Api::V1
 
     # GET: /v1/items/settled
     def settled
-      items = ItemRequest.where("(user_id = #{current_user.id} OR friend_id = #{current_user.id}) AND status = 4")
+      items = ItemRequest.where("(user_id = #{current_user.id} OR friend_id = #{current_user.id}) AND status = 2")
       items = items.uniq{ |item| item.request_contract_id}
 
       items = items.map do |item|
