@@ -9,7 +9,7 @@ module Api::V1
     def index
       sent = ItemRequest.joins(:request_contract)
         .select("item_requests.*, request_contracts.status AS chain_status, 
-          IF(request_contracts.status = 2 AND request_contracts.sign = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign")
+          IF(request_contracts.status = 2 AND request_contracts.signed = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign")
         .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 3")
         .as_json
       
