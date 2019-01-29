@@ -221,17 +221,18 @@ module Api::V1
         return
       end
 
-      if @request.request_contract.status != 2 || @request.request_contract.sign != 0
+      unless @request.request_contract.completed? && @request.request_contract.signed == 0
         render json: { message: 'Unable to sign it' }, status: 406
         return
       end
 
-      @request.request_contract.sign = 1
+      @request.request_contract.signed = 1
       @request.request_contract.save!
 
       # change inventory ownership
-      inventory.user_id = request_contract.user_id
-      inventory.price = request_contract.price
+      inventory = Inventory.find_by(ref_id: @request.request_contract_id)
+      inventory.user_id = @request.user_id
+      inventory.price = @request.request_contract.price
       inventory.save!
 
       render json: { message: 'Request has been signed' }, status: 200
@@ -246,8 +247,8 @@ module Api::V1
           AND (request_contracts.user_id = #{current_user.id} OR t2.status = 1)")
       items = items.map do |item|
         json = item.to_json(current_user)
-        json['id'] = item.inventory_id
-        json['action-request'] = item['receiver'] == current_user.id && item['chain_status'] == 2 && item['signed'] == 0
+        json[:id] = item.inventory_id
+        json[:attributes]['action-request'] = item['receiver'] == current_user.id && item['chain_status'] == 2 && item['signed'] == 0
         json
       end
 
