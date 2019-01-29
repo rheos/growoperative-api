@@ -39,7 +39,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.float "quantity"
-    t.decimal "price", precision: 10
+    t.decimal "price", precision: 10, scale: 2
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -85,7 +85,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.integer "quantity"
     t.string "units"
-    t.decimal "price", precision: 10
+    t.decimal "price", precision: 10, scale: 2
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -167,11 +167,12 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.decimal "quantity", precision: 10
-    t.decimal "price", precision: 10
+    t.decimal "price", precision: 10, scale: 2
     t.integer "status", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "inventory_id"
+    t.integer "signed", limit: 1, default: 0, null: false
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
