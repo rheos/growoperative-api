@@ -289,6 +289,7 @@ module Api::V1
 
       items = items.map do |item|
         json = item.to_json(current_user)
+        json[:id] = item.inventory_id
         json[:attributes]['signed'] = item['signed']
         json
       end
