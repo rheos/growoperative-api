@@ -259,7 +259,9 @@ module Api::V1
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.where("user_id = #{current_user.id} AND (status = 0 or status = 2)")
+      items = Inventory.joins("LEFT JOIN request_contracts ON request_contracts.id = inventories.ref_id")
+        .where("user_id = #{current_user.id} AND (inventories.status = 0 or inventories.status = 2) 
+          AND (ref_id IS NULL OR request_contracts.status = 1)")
 
       items = items.map do |item|
         json = item.to_json(current_user)
@@ -273,7 +275,8 @@ module Api::V1
 
     # GET: /v1/items/settled
     def settled
-      items = ItemRequest.where("(user_id = #{current_user.id} OR friend_id = #{current_user.id}) AND status = 2")
+      items = ItemRequest.joins(:inventory, :request_contract)
+        .where("item_requests.friend_id = #{current_user.id} AND inventories.user_id = #{current_user.id} AND request_contracts.status = 2")
       items = items.uniq{ |item| item.request_contract_id}
 
       items = items.map do |item|
