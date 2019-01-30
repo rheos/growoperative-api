@@ -260,7 +260,7 @@ module Api::V1
     # GET: /v1/items/reserved
     def reserved
       items = Inventory.joins("LEFT JOIN request_contracts ON request_contracts.id = inventories.ref_id")
-        .where("user_id = #{current_user.id} AND (inventories.status = 0 or inventories.status = 2) 
+        .where("inventories.user_id = #{current_user.id} AND (inventories.status = 0 or inventories.status = 2) 
           AND (ref_id IS NULL OR request_contracts.status = 1)")
 
       items = items.map do |item|
