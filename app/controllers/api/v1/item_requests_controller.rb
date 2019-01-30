@@ -267,7 +267,7 @@ module Api::V1
       items = items.map do |item|
         json = item.to_json(current_user)
         unless item['old_item_id'].nil?
-          item[:id] = item['old_item_id']
+          json[:id] = item['old_item_id']
         end
         json
       end
