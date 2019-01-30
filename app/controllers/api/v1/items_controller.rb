@@ -165,8 +165,11 @@ module Api::V1
       (1..depth_limit).each do |step|
         queue_ids = Relationship.where("user_id IN (#{queue_ids.join(',')}) OR friend_id IN(#{queue_ids.join(',')})")
           .pluck(:user_id, :friend_id)
-          .flatten!.uniq
+          .flatten!
         
+        break if queue_ids.nil?
+
+        queue_ids = queue_ids.uniq
         # remove checked users
         queue_ids = queue_ids - user_ids
 
@@ -189,9 +192,13 @@ module Api::V1
       #   )
       #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
-      items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1 AND producer_id IS NOT NULL").limit(max_items)
-      items = items.map do |item|
-        item.to_json(current_user)
+      if user_ids.size > 0
+        items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1 AND producer_id IS NOT NULL").limit(max_items)
+        items = items.map do |item|
+          item.to_json(current_user)
+        end
+      else
+        items = []
       end
 
       render json: {
