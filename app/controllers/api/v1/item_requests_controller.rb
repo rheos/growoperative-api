@@ -271,7 +271,7 @@ module Api::V1
         unless item['old_id'].nil?
           json[:id] = item['old_id']
         end
-        json[:attributes][:signed] = item['signed'].nil? 1 : item['signed']
+        json[:attributes][:signed] = item['signed'].nil? ? 1 : item['signed']
         json
       end
 
