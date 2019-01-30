@@ -260,14 +260,14 @@ module Api::V1
     # GET: /v1/items/reserved
     def reserved
       items = Inventory.joins("LEFT JOIN request_contracts ON request_contracts.id = inventories.ref_id")
-        .select('inventories.*, request_contracts.item_id AS old_item_id')
+        .select('inventories.*, request_contracts.inventory_id AS old_id')
         .where("inventories.user_id = #{current_user.id} AND (inventories.status = 0 or inventories.status = 2) 
           AND (ref_id IS NULL OR request_contracts.status = 1)")
 
       items = items.map do |item|
         json = item.to_json(current_user)
-        unless item['old_item_id'].nil?
-          json[:id] = item['old_item_id']
+        unless item['old_id'].nil?
+          json[:id] = item['old_id']
         end
         json
       end
