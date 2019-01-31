@@ -17,7 +17,7 @@ module Api::V1
 
         @items.each do |item|
           item.target_user_id = item.user_id
-          unless item.producer_id.nil?
+          if item.producer_owns?
             item.total_price = item.price
           else
             item.total_price = item.price + helpers.get_relation_price(item.user_id, current_user.id)
@@ -81,7 +81,7 @@ module Api::V1
       newitems.each do |item|
         item.target_user_id = target_user_id
         item.total_price = item.price + route_price
-        if item.producer_id.nil?
+        unless item.producer_owns?
           item.total_price += helpers.get_relation_price(item.user_id, related_user)
         end
       end
@@ -193,7 +193,12 @@ module Api::V1
       #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
       # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       if user_ids.size > 0
-        items = Inventory.where("user_id IN(#{user_ids.join(',')}) AND quantity > 0 AND status = 1 AND producer_id IS NOT NULL").limit(max_items)
+        items = Inventory.joins(:item).where("
+          inventories.user_id = items.producer_id AND
+          inventories.user_id IN(#{user_ids.join(',')}) AND 
+          inventories.quantity > 0 AND 
+          inventories.status = 1
+        ").limit(max_items)
         items = items.map do |item|
           item.to_json(current_user)
         end
@@ -219,8 +224,8 @@ module Api::V1
       RequestContract.destroy_all
       Inventory.destroy_all
       
-      sql = "INSERT INTO inventories (item_id, user_id, quantity, price, status, producer_id, created_at, updated_at)  
-        SELECT id, user_id, quantity, price, 1, user_id, NOW(), NOW()
+      sql = "INSERT INTO inventories (item_id, user_id, quantity, price, status, created_at, updated_at)  
+        SELECT id, user_id, quantity, price, 1, NOW(), NOW()
         FROM items"
       ActiveRecord::Base.connection.execute(sql)
 
