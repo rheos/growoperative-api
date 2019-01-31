@@ -6,7 +6,7 @@ module Api::V1
     # GET : /v1/items?range_degree=:integer 
     # This method will return all item which posted by contact of current user
     def index
-      range_degree = (params[:range_degree] ? params[:range_degree].to_i : (GlobalSetting.find_by(setting: "RangeDegree") ? GlobalSetting.find_by(setting: "RangeDegree").value.to_i : (ENV['range_degree'] ? ENV['range_degree'] : 3)))      
+      range_degree = (params[:range_degree] ? params[:range_degree].to_i : (ENV['range_degree'] ? ENV['range_degree'] : 0)))      
 
       relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
 
