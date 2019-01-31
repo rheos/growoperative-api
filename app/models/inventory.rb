@@ -10,6 +10,10 @@ class Inventory < ApplicationRecord
   attr_accessor :total_price
   attr_accessor :action_request
 
+  def producer_owns?
+    self.user_id == self.item.producer_id
+  end
+
   def target_user_name(current_user)
     relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
       [current_user.id, self.target_user_id], [current_user.id, self.target_user_id]
