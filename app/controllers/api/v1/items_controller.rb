@@ -109,7 +109,7 @@ module Api::V1
       data = item_params
 
       # add mark up price if item is producer's
-      if params[:item][:dtype].to_i != 1
+      if params[:dtype].to_i != 1
         data[:producer_id] = current_user.id
       end
 
