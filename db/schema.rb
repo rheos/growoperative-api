@@ -83,7 +83,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.bigint "user_id"
-    t.integer "quantity"
+    t.decimal "quantity", precision: 10, scale: 5
     t.string "units"
     t.decimal "price", precision: 10, scale: 2
     t.integer "status"
