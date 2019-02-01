@@ -18,6 +18,14 @@ class ItemRequest < ApplicationRecord
     unless self.accepted?
       return
     end
+
+    # mark request for sent 
+    request = ItemRequest.find_by(request_contract_id: self.request_contract_id, user_id: self.friend_id)
+    unless request.nil?
+      request.sent = 1
+      request.save!
+    end
+    
     # check if all item requests were accepted
     if ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size > 0
       return

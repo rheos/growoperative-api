@@ -7,29 +7,37 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      sent = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status, 
-          IF(request_contracts.status = 2 AND request_contracts.signed = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.user_id=#{current_user.id} AND item_requests.status < 3")
+      requests = ItemRequest.joins(:request_contract)
+        .select("
+          item_requests.*, 
+          request_contracts.status AS chain_status, 
+          IF(request_contracts.status = 2 AND request_contracts.signed = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
+        ")
+        .where("
+          (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
+          request_contracts.inventory_id=#{params[:item_id]} AND 
+          item_requests.status < 3
+        ")
         .as_json
       
-      sent.each do |request|
-        request[:contract_name] = helpers.target_user_name(current_user.id, request['friend_id'])
+      res = {}
+      requests.each do |r|
+        if res[r['request_contract_id']].nil?
+          res[r['request_contract_id']] = {}
+        end
+
+        if r['user_id'] == current_user.id
+          r['from'] = 'Me'
+          r['to'] = helpers.target_user_name(current_user.id, r['friend_id'])
+          res[r['request_contract_id']]['sent'] = r;
+        else
+          r['from'] = helpers.target_user_name(current_user.id, r['user_id'])
+          r['to'] = 'Me'
+          res[r['request_contract_id']]['received'] = r;
+        end
       end
       
-      received = ItemRequest.joins(:request_contract)
-        .select("item_requests.*, request_contracts.status AS chain_status")
-        .where("item_requests.inventory_id=#{params[:item_id]} AND item_requests.friend_id=#{current_user.id} AND item_requests.status < 3")
-        .as_json
-
-      received.each do |request|
-        request[:contract_name] = helpers.target_user_name(current_user.id, request['user_id'])
-      end
-
-      render json: {
-        :sent => sent,
-        :received => received,
-      }, status: 200
+      render json: res, status: 200
     end
 
     # POST: /v1/items/:inventory_id/requests
@@ -123,6 +131,7 @@ module Api::V1
         request.price = request_contract.price - price
         request.quantity = request_params[:quantity]
         request.status = :pending
+        request.sent = request.user_id == current_user.id ? 1 : 0
         request.save!
       end
 
@@ -240,11 +249,8 @@ module Api::V1
 
     # GET: /v1/items/requested
     def requested
-      items = ItemRequest.joins("JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id
-          LEFT JOIN item_requests AS t2 ON t2.request_contract_id = item_requests.request_contract_id AND t2.friend_id=#{current_user.id}")
-        .select("item_requests.*, request_contracts.status AS chain_status, request_contracts.user_id AS receiver, signed")
-        .where("request_contracts.status < 2 AND item_requests.user_id = #{current_user.id} 
-          AND (request_contracts.user_id = #{current_user.id} OR t2.status = 1)")
+      items = ItemRequest.joins(:request_contract)
+        .where("item_requests.user_id = #{current_user.id} AND item_requests.sent = 1 AND request_contracts.status < 2")
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = item.inventory_id
@@ -258,13 +264,13 @@ module Api::V1
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.joins("LEFT JOIN request_contracts ON request_contracts.id = inventories.ref_id")
+      items = Inventory.joins(:request_contract)
         .select("inventories.*, request_contracts.inventory_id AS old_id, request_contracts.signed")
-        .where("(inventories.status = 0 or inventories.status = 2) 
-          AND (
-            (inventories.user_id = #{current_user.id} AND (inventories.ref_id IS NULL OR request_contracts.status = 1))
-            OR (request_contracts.user_id = #{current_user.id} AND request_contracts.status = 2)
-          )")
+        .where("
+          inventories.status = 0 OR 
+          inventories.status = 2 OR 
+          (request_contracts.user_id = #{current_user.id} AND request_contracts.status = 2)
+        ")
 
       items = items.map do |item|
         json = item.to_json(current_user)
@@ -284,7 +290,11 @@ module Api::V1
     def settled
       items = ItemRequest.joins(:inventory, :request_contract)
         .select("item_requests.*, request_contracts.signed")
-        .where("item_requests.friend_id = #{current_user.id} AND inventories.user_id = #{current_user.id} AND request_contracts.status = 2")
+        .where("
+          item_requests.friend_id = #{current_user.id} AND 
+          inventories.user_id = #{current_user.id} AND 
+          request_contracts.status = 2
+        ")
       items = items.uniq{ |item| item.request_contract_id}
 
       items = items.map do |item|
