@@ -24,8 +24,10 @@ module Api::V1
       requests.each do |r|
         if r['user_id'] == current_user.id
           r['contact_name'] = helpers.target_user_name(current_user.id, r['friend_id'])
+          r['direction'] = 'sent'
         else
           r['contact_name'] = helpers.target_user_name(current_user.id, r['user_id'])
+          r['direction'] = 'received'
         end
 
         if res[r['request_contract_id']].nil?
