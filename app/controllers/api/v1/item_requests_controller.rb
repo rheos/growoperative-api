@@ -7,10 +7,11 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      requests = ItemRequest.joins(:request_contract)
+      requests = ItemRequest.joins(:request_contract, :inventory)
         .select("
           item_requests.*, 
-          request_contracts.status AS chain_status, 
+          request_contracts.status AS chain_status,
+          inventories.item_id,
           IF(request_contracts.status = 2 AND request_contracts.signed = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
         ")
         .where("
