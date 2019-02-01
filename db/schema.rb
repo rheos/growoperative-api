@@ -44,7 +44,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "ref_id"
-    t.integer "producer_id"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -82,16 +81,17 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   end
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.bigint "request_contract_id"
+    t.bigint "inventory_id"
     t.bigint "user_id"
+    t.integer "friend_id"
     t.decimal "quantity", precision: 10, scale: 5
     t.string "units"
     t.decimal "price", precision: 10, scale: 2
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "friend_id"
-    t.bigint "request_contract_id"
-    t.bigint "inventory_id"
+    t.boolean "sent", default: false, null: false
     t.index ["inventory_id"], name: "index_item_requests_on_inventory_id"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
