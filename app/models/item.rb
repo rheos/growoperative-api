@@ -33,7 +33,6 @@ class Item < ApplicationRecord
   def add_inventory
     inventory = self.inventory.new do |m|
       m.user_id = self.user_id      
-      m.producer_id = self.producer_id
       m.quantity = self.quantity
       m.price = self.price
       m.status = :available
