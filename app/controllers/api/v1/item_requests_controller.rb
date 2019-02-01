@@ -22,19 +22,16 @@ module Api::V1
       
       res = {}
       requests.each do |r|
+        if r['user_id'] == current_user.id
+          r['contact_name'] = helpers.target_user_name(current_user.id, r['friend_id'])
+        else
+          r['contact_name'] = helpers.target_user_name(current_user.id, r['user_id'])
+        end
+
         if res[r['request_contract_id']].nil?
           res[r['request_contract_id']] = {}
         end
-
-        if r['user_id'] == current_user.id
-          r['from'] = 'Me'
-          r['to'] = helpers.target_user_name(current_user.id, r['friend_id'])
-          res[r['request_contract_id']]['sent'] = r;
-        else
-          r['from'] = helpers.target_user_name(current_user.id, r['user_id'])
-          r['to'] = 'Me'
-          res[r['request_contract_id']]['received'] = r;
-        end
+        res[r['request_contract_id']][r['id']] = r;
       end
       
       render json: res, status: 200
