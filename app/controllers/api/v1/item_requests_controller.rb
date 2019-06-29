@@ -115,7 +115,8 @@ module Api::V1
       request_contract.inventory_id = inventory.id
       request_contract.item_id = inventory.item_id
       request_contract.quantity = request_params[:quantity]
-      request_contract.price = inventory.price + shortest[:total]
+      request_contract.price = inventory.price + shortest[:total] #rm
+      request_contract.steps = shortest[:prices].size
       request_contract.save!
 
       # add source user id
@@ -125,13 +126,14 @@ module Api::V1
       shortest[:prices].each_with_index do |price, index|
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
-        request.inventory_id = inventory.id
+        request.inventory_id = inventory.id #rm
         request.user_id = shortest[:path][index]
         request.friend_id = shortest[:path][index + 1]
         request.price = request_contract.price - price
-        request.quantity = request_params[:quantity]
+        request.quantity = request_params[:quantity] #rm
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
+        request.step = shortest[:prices].size - index
         request.save!
       end
 
@@ -216,9 +218,16 @@ module Api::V1
         return
       end
 
-      # update contract
-      request_contract.status = :completed
-      request_contract.save!
+      # update current item request
+      current_chain_item_request = ItemRequest.find_by(id: @request.id, step: request_contract.current_step + 1)
+      unless current_chain_item_request
+        logger.info "Previous request chain is not completed"
+        render json: { message: 'Not availabe to settle the inventory' }, status: 406
+        return
+      end
+      current_chain_item_request.shipped_at = DateTime.now
+
+      #TODO remove item from inventory here
 
       render json: { message: 'Request has been settled' }, status: 200
     end
@@ -234,6 +243,15 @@ module Api::V1
         render json: { message: 'Unable to sign it' }, status: 406
         return
       end
+
+      # # Update current contract step and finish contract, if all steps are done
+      # request_contract = @request.request_contract
+  
+      # request_contract.current_step += 1
+      # if request_contract.current_step == request_contract.steps
+      #   request_contract.status = :completed
+      # end
+      # request_contract.save!
 
       @request.request_contract.signed = 1
       @request.request_contract.save!
