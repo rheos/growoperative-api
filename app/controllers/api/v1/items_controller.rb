@@ -4,11 +4,10 @@ module Api::V1
     before_action :set_inventory, only: [:update, :destroy]
 
     # GET : /v1/items?range_degree=:integer 
-    # This method will return all item which posted by contact of current user
+    # This method will return all item which posted by contacts of current user
     def index
-      range_degree = (params[:range_degree] ? params[:range_degree].to_i : (ENV['range_degree'] ? ENV['range_degree'] : 0))      
-
-      relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
+      range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
+      relationships = Relationship.where("user_id=#{current_user.id} OR friend_id=#{current_user.id}")
 
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
