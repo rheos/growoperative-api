@@ -162,6 +162,7 @@ module Api::V1
       end
 
       @request.status = :accepted
+      @request.accepted_at = DateTime.now
       if @request.save!
         render json: { message: 'Request has been accepted' }, status: 200
       else
@@ -226,6 +227,8 @@ module Api::V1
         return
       end
       current_chain_item_request.shipped_at = DateTime.now
+      current_chain_item_request.status = :completed
+      current_chain_item_request.save!
 
       #TODO remove item from inventory here
 
@@ -234,27 +237,27 @@ module Api::V1
     
     # POST: /v1/items/requests/:request_id/sign
     def sign
-      unless @request.request_contract.user_id == current_user.id
+      unless @request.user_id == current_user.id
         render json: { message: 'The request was not reserved' }, status: 406
         return
       end
 
-      unless @request.request_contract.completed? && @request.request_contract.signed == 0
+      unless (@request.request_contract.completed? || @request.request_contract.accepted?) && @request.request_contract.signed == 0
         render json: { message: 'Unable to sign it' }, status: 406
         return
       end
 
-      # # Update current contract step and finish contract, if all steps are done
-      # request_contract = @request.request_contract
+      # Update current contract step and finish contract, if all steps are done
+      request_contract = @request.request_contract
   
-      # request_contract.current_step += 1
-      # if request_contract.current_step == request_contract.steps
-      #   request_contract.status = :completed
-      # end
-      # request_contract.save!
+      request_contract.current_step += 1
+      if request_contract.current_step == request_contract.steps
+        request_contract.status = :completed
+        request_contract.signed = 1
+      end
+      request_contract.save!
 
-      @request.request_contract.signed = 1
-      @request.request_contract.save!
+      @request.update(signed_at: DateTime.now)
 
       # change inventory ownership
       inventory = Inventory.find_by(ref_id: @request.request_contract_id)
