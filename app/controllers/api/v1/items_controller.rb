@@ -11,9 +11,7 @@ module Api::V1
 
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
-        
         @items = Inventory.where("inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1", users)
-
         @items.each do |item|
           item.target_user_id = item.user_id
           if item.producer_owns?
@@ -27,7 +25,6 @@ module Api::V1
           users.delete(current_user.id)
           users.each do |user|    
             route_price = helpers.get_relation_price(user, current_user.id)
-           
             all_items(range_degree - 1, user, current_user.id, user, route_price)
           end
         end
@@ -36,7 +33,7 @@ module Api::V1
         
         # add items requested through user
         if current_user.is_producer?
-          request_items = Inventory.joins(:item_request)
+          request_items = Inventory.joins(:request_contract => :item_requests)
             .where("inventories.status = 1 AND inventories.quantity > 0 AND item_requests.user_id = #{current_user.id}")
             .select("inventories.*, item_requests.price AS total_price, item_requests.friend_id AS target_user_id")
             .each do |item|
@@ -46,15 +43,17 @@ module Api::V1
 
           @items = (@items + request_items)
         end
+
       end
 
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}
 
       # get pending requests
       pending_requests = {}
-      ItemRequest.where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
-        .group("item_requests.inventory_id")
-        .select("item_requests.inventory_id, COUNT(item_requests.id) AS action_request")
+      ItemRequest.joins(:request_contract => :inventory)
+        .where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
+        .group("inventories.id")
+        .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request")
         .each do |request|
           pending_requests[request.inventory_id] = request.action_request
         end

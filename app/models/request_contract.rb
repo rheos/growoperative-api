@@ -2,6 +2,7 @@ class RequestContract < ApplicationRecord
   belongs_to :user
   belongs_to :item
   has_many   :item_requests, dependent: :destroy
+  has_one :inventory, foreign_key: "ref_id"
   
   enum status: [ :pending, :accepted, :completed, :cancelled ]
 
