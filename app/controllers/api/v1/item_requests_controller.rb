@@ -7,12 +7,13 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      requests = ItemRequest.joins(:request_contract, :inventory)
+      requests = ItemRequest.joins(:request_contract => :inventory)
         .select("
           item_requests.*, 
           request_contracts.status AS chain_status,
+          request_contracts.quantity AS quantity,
           inventories.item_id,
-          IF(request_contracts.status = 2 AND request_contracts.signed = 0 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
+          IF(request_contracts.status = 2 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
@@ -20,7 +21,6 @@ module Api::V1
           item_requests.status < 3
         ")
         .as_json
-      
       res = {}
       requests.each do |r|
         if r['user_id'] == current_user.id
@@ -36,7 +36,7 @@ module Api::V1
         end
         res[r['request_contract_id']][r['id']] = r;
       end
-      
+      p(res)
       render json: res, status: 200
     end
 
@@ -115,22 +115,25 @@ module Api::V1
       request_contract.inventory_id = inventory.id
       request_contract.item_id = inventory.item_id
       request_contract.quantity = request_params[:quantity]
-      request_contract.price = inventory.price + shortest[:total] #rm
       request_contract.steps = shortest[:prices].size
+
       request_contract.save!
+      
+      # bind inventory to request
+      inventory.update(ref_id: request_contract.id)
 
       # add source user id
       shortest[:path] << inventory.user_id
 
       # create requests
+      current_prise = inventory.price
       shortest[:prices].each_with_index do |price, index|
+        current_prise += price
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
-        request.inventory_id = inventory.id #rm
         request.user_id = shortest[:path][index]
         request.friend_id = shortest[:path][index + 1]
-        request.price = request_contract.price - price
-        request.quantity = request_params[:quantity] #rm
+        request.price = current_prise
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
         request.step = shortest[:prices].size - index
@@ -215,7 +218,7 @@ module Api::V1
       # find the inventory
       inventory = Inventory.find_by(ref_id: @request.request_contract_id)
       if inventory.nil? || !inventory.reserved?
-        render json: { message: 'Not availabe to settle the inventory' }, status: 406
+        render json: { message: 'Not availabe to settle the inventory' }, status: 402
         return
       end
 
@@ -242,7 +245,7 @@ module Api::V1
         return
       end
 
-      unless (@request.request_contract.completed? || @request.request_contract.accepted?) && @request.request_contract.signed == 0
+      unless (@request.request_contract.completed? || @request.request_contract.accepted?)
         render json: { message: 'Unable to sign it' }, status: 406
         return
       end
@@ -253,8 +256,8 @@ module Api::V1
       request_contract.current_step += 1
       if request_contract.current_step == request_contract.steps
         request_contract.status = :completed
-        request_contract.signed = 1
       end
+
       request_contract.save!
 
       @request.update(signed_at: DateTime.now)
@@ -262,7 +265,7 @@ module Api::V1
       # change inventory ownership
       inventory = Inventory.find_by(ref_id: @request.request_contract_id)
       inventory.user_id = @request.user_id
-      inventory.price = @request.request_contract.price
+      inventory.price = @request.price
       inventory.save!
 
       render json: { message: 'Request has been signed' }, status: 200
@@ -274,7 +277,7 @@ module Api::V1
         .where("item_requests.user_id = #{current_user.id} AND item_requests.sent = 1 AND request_contracts.status < 2")
       items = items.map do |item|
         json = item.to_json(current_user)
-        json[:id] = item.inventory_id
+        json[:id] = json[:attributes]["inventory_id"]
         json
       end
 
@@ -285,20 +288,19 @@ module Api::V1
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.joins(:request_contract)
-        .select("inventories.*, request_contracts.inventory_id AS old_id, request_contracts.signed")
+      items = Inventory.joins(:request_contract => :item_requests)
+        .select("inventories.*, request_contracts.inventory_id AS old_id")
         .where("
-          inventories.status = 0 OR 
-          inventories.status = 2 OR 
-          (request_contracts.user_id = #{current_user.id} AND request_contracts.status = 2)
-        ")
+          (inventories.user_id = #{current_user.id} AND (inventories.status = 0 OR inventories.status = 2)) 
+          OR 
+          (request_contracts.status = 1 AND item_requests.user_id = #{current_user.id} AND item_requests.status = 2)
+        ").uniq
 
       items = items.map do |item|
         json = item.to_json(current_user)
         unless item['old_id'].nil?
           json[:id] = item['old_id']
         end
-        json[:attributes][:signed] = item['signed'].nil? ? 1 : item['signed']
         json
       end
 
@@ -309,18 +311,18 @@ module Api::V1
 
     # GET: /v1/items/settled
     def settled
-      items = ItemRequest.joins(:inventory, :request_contract)
-        .select("item_requests.*, request_contracts.signed")
+      items = ItemRequest.joins(:request_contract => :inventory)
+        .select("item_requests.*")
         .where("
           item_requests.friend_id = #{current_user.id} AND 
-          inventories.user_id = #{current_user.id} AND 
-          request_contracts.status = 2
+          item_requests.signed_at IS NOT NULL AND
+          item_requests.status = 2
         ")
       items = items.uniq{ |item| item.request_contract_id}
 
       items = items.map do |item|
         json = item.to_json(current_user)
-        json[:id] = item.inventory_id
+        json[:id] = item.inventory.id
         json[:attributes]['signed'] = item['signed']
         json
       end

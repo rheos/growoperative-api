@@ -1,11 +1,11 @@
 class ItemRequest < ApplicationRecord
   belongs_to :user
   belongs_to :friend, :class_name => 'User'
-  belongs_to :inventory
   belongs_to :request_contract
   has_many   :user_relationship_request_prices, dependent: :destroy
   has_many   :request_list_relationship_statuses,dependent: :destroy
   has_many   :order_contents, dependent: :destroy
+
 
   #callbacks
   after_update :update_inventory
@@ -13,6 +13,9 @@ class ItemRequest < ApplicationRecord
   #attribs
   enum status: [ :pending, :accepted, :completed, :cancelled ]
 
+  def inventory
+    self.request_contract.inventory
+  end
   # update inventory after all requests are accepted
   def update_inventory
     unless self.accepted?
@@ -36,7 +39,7 @@ class ItemRequest < ApplicationRecord
     unless self.inventory.save!
       return
     end
-
+    
     # create a new inventory
     reserved = Inventory.new do |m|
       m.item_id = self.inventory.item_id
@@ -50,8 +53,10 @@ class ItemRequest < ApplicationRecord
 
     # mark request contract as accepted
     self.request_contract.status = :accepted
+    self.request_contract.inventory_id = reserved.id
     self.request_contract.save
 
+    Inventory.find(self.inventory.id).update(ref_id: nil)
   end
 
   def to_json(current_user)
@@ -59,7 +64,7 @@ class ItemRequest < ApplicationRecord
     {
       :id => self.id, 
       :attributes => {
-        'quantity' => self.quantity, 
+        'quantity' => self.request_contract.quantity, 
         'total-price' => self.price, 
         'user-id' => target_user_id,
         'target-user-id' => target_user_id, 
@@ -68,6 +73,7 @@ class ItemRequest < ApplicationRecord
         'name' => self.inventory.item.name, 
         'grade-id' => self.inventory.item.grade_id,
         'item-unit-id' => self.inventory.item.item_unit_id, 
+        'inventory_id' => self.inventory.id, 
         'unit-name' => self.inventory.item.item_unit.unit_name, 
         'item-name-id' => self.inventory.item.item_name_id, 
         'date-available' => self.inventory.item.date_available, 
