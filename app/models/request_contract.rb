@@ -15,13 +15,15 @@ class RequestContract < ApplicationRecord
     end
 
     # restore inventory
-    if self.cancelled? && Inventory.where("ref_id = #{self.id}").size > 0
-      inventory = Inventory.find(self.inventory_id)
-      inventory.quantity += self.quantity
-      inventory.save
+    current_inventory = Inventory.find(inventory_id)
+    origin_inventory = Inventory.find_by(id: current_inventory.ref_id)
+    if self.cancelled? && origin_inventory
+      origin_inventory = Inventory.find(current_inventory.ref_id)
+      origin_inventory.quantity += self.quantity
+      origin_inventory.save
 
       # remove old
-      Inventory.where("ref_id = #{self.id}").destroy_all
+      current_inventory.destroy
     end
   end
 end

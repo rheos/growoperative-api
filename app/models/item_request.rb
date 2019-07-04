@@ -13,8 +13,10 @@ class ItemRequest < ApplicationRecord
   #attribs
   enum status: [ :pending, :accepted, :completed, :cancelled ]
 
+  scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
+
   def inventory
-    self.request_contract.inventory
+    inventory ||= Inventory.find(self.request_contract.inventory_id)
   end
   # update inventory after all requests are accepted
   def update_inventory
@@ -35,8 +37,8 @@ class ItemRequest < ApplicationRecord
     end
 
     # decrease quantity
-    self.inventory.quantity -= self.request_contract.quantity
-    unless self.inventory.save!
+    quantity = self.inventory.quantity - self.request_contract.quantity
+    unless self.inventory.update(quantity: quantity)
       return
     end
     
@@ -46,7 +48,7 @@ class ItemRequest < ApplicationRecord
       m.user_id = self.inventory.user_id
       m.price = self.inventory.price
       m.quantity = self.request_contract.quantity
-      m.ref_id = self.request_contract_id
+      m.ref_id = self.inventory.id
       m.status = :reserved
       m.save
     end
@@ -56,7 +58,7 @@ class ItemRequest < ApplicationRecord
     self.request_contract.inventory_id = reserved.id
     self.request_contract.save
 
-    Inventory.find(self.inventory.id).update(ref_id: nil)
+    #Inventory.find(self.inventory.id).update(ref_id: nil)
   end
 
   def to_json(current_user)
