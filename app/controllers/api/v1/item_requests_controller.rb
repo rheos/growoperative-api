@@ -126,9 +126,9 @@ module Api::V1
       shortest[:path] << inventory.user_id
 
       # create requests
-      current_prise = inventory.price
+      current_prise = shortest[:total] + inventory.price
       shortest[:prices].each_with_index do |price, index|
-        current_prise += price
+        current_prise -= price
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
         request.user_id = shortest[:path][index]
