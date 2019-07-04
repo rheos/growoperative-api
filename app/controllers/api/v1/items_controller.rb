@@ -33,7 +33,7 @@ module Api::V1
         
         # add items requested through user
         if current_user.is_producer?
-          request_items = Inventory.joins(:request_contract => :item_requests)
+          request_items = Inventory.with_contract_data
             .where("inventories.status = 1 AND inventories.quantity > 0 AND item_requests.user_id = #{current_user.id}")
             .select("inventories.*, item_requests.price AS total_price, item_requests.friend_id AS target_user_id")
             .each do |item|
@@ -50,7 +50,7 @@ module Api::V1
 
       # get pending requests
       pending_requests = {}
-      ItemRequest.joins(:request_contract => :inventory)
+      ItemRequest.with_inventory_data
         .where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
         .group("inventories.id")
         .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request")
