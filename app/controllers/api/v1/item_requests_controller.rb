@@ -119,21 +119,21 @@ module Api::V1
 
       request_contract.save!
       
+     
       # bind inventory to request
       inventory.update(ref_id: request_contract.id)
 
       # add source user id
       shortest[:path] << inventory.user_id
-
+      shortest[:prices].reverse!
       # create requests
-      current_prise = shortest[:total] + inventory.price
+      current_prise = inventory.price
       shortest[:prices].each_with_index do |price, index|
-        current_prise -= price
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
         request.user_id = shortest[:path][index]
         request.friend_id = shortest[:path][index + 1]
-        request.price = current_prise
+        request.price = inventory.price + price
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
         request.step = shortest[:prices].size - index
