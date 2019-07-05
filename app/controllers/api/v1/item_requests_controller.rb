@@ -13,7 +13,7 @@ module Api::V1
           request_contracts.status AS chain_status,
           request_contracts.quantity AS quantity,
           inventories.item_id,
-          IF(request_contracts.status = 2 AND request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
+          IF(request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
@@ -160,9 +160,9 @@ module Api::V1
         return
       end
 
-      @request.status = :accepted
-      @request.accepted_at = DateTime.now
-      if @request.save!
+      # @request.status = :accepted
+      # @request.accepted_at = DateTime.now
+      if @request.accept_request
         render json: { message: 'Request has been accepted' }, status: 200
       else
         render json: { message: 'Something is wrong' }, status: 500
@@ -212,7 +212,7 @@ module Api::V1
       end
 
       # find the inventory
-      inventory = Inventory.find(@request.request_contract.inventory_id)
+      inventory = @request.request_contract.inventory
       if inventory.nil? || !inventory.reserved?
         render json: { message: 'Not availabe to settle the inventory' }, status: 402
         return
@@ -229,15 +229,13 @@ module Api::V1
       current_chain_item_request.status = :completed
       current_chain_item_request.save!
 
-      #TODO remove item from inventory here
-
-      render json: { message: 'Request has been settled' }, status: 200
+      render json: { message: 'Items has been shipped' }, status: 200
     end
     
     # POST: /v1/items/requests/:request_id/sign
     def sign
       unless @request.user_id == current_user.id
-        render json: { message: 'The request was not reserved' }, status: 406
+        render json: { message: 'You can not sign this request' }, status: 406
         return
       end
 
@@ -256,25 +254,22 @@ module Api::V1
 
       request_contract.save!
 
-      @request.update(signed_at: DateTime.now)
-
-      # change inventory ownership
-      inventory = Inventory.find_by(id: @request.request_contract.inventory_id)
-      inventory.user_id = @request.user_id
-      next_request = ItemRequest.find_by(request_contract_id: request_contract.id, friend_id: current_user.id)
-      inventory.price = next_request ? next_request.price : @request.price
-      inventory.save!
-
+      @request.sign
       render json: { message: 'Request has been signed' }, status: 200
     end
 
     # GET: /v1/items/requested
     def requested
-      items = ItemRequest.joins(:request_contract)
-        .where("item_requests.user_id = #{current_user.id} AND item_requests.sent = 1 AND request_contracts.status < 2 AND item_requests.status < 2")
+      items = ItemRequest.with_inventory_data
+        .where("
+          item_requests.user_id = #{current_user.id} AND item_requests.sent = 1
+          AND request_contracts.status < 2
+          AND inventories.user_id <> #{current_user.id}
+        ").uniq
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = json[:attributes]["inventory_id"]
+        json[:attributes]["need_sign"] = item.shipped_at && !item.signed_at
         json
       end
 
@@ -289,8 +284,6 @@ module Api::V1
         .select("inventories.*, request_contracts.inventory_id AS old_id, item_requests.price AS current_price")
         .where("
           (inventories.user_id = #{current_user.id} AND (inventories.status = 0 OR inventories.status = 2)) 
-          OR 
-          (request_contracts.status = 1 AND item_requests.user_id = #{current_user.id} AND item_requests.status = 2)
         ").uniq
 
       items = items.map do |item|
@@ -312,7 +305,7 @@ module Api::V1
         .select("item_requests.*")
         .where("
           item_requests.friend_id = #{current_user.id} AND 
-          item_requests.signed_at IS NOT NULL AND
+          item_requests.shipped_at IS NOT NULL AND
           item_requests.status = 2
         ")
       items = items.uniq{ |item| item.request_contract_id}
@@ -320,7 +313,7 @@ module Api::V1
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = item.inventory.id
-        json[:attributes]['signed'] = item['signed']
+        json[:attributes]['signed'] = item.signed_at?
         json
       end
 

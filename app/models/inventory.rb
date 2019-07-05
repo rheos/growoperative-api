@@ -1,8 +1,8 @@
 class Inventory < ApplicationRecord
   belongs_to :user
   belongs_to :item
-  belongs_to :request_contract, foreign_key: "ref_id", optional: true
-  #has_many :item_requests, through: :request_contract, dependent: :destroy
+  belongs_to :request_contract, primary_key: 'inventory_id', foreign_key: 'id', inverse_of: :inventory, optional: true, dependent: :destroy
+  has_many :item_requests, through: :request_contract
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
