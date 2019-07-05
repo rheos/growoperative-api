@@ -2,29 +2,23 @@ class ItemRequest < ApplicationRecord
   belongs_to :user
   belongs_to :friend, :class_name => 'User'
   belongs_to :request_contract
+  has_one    :inventory, through: :request_contract
   has_many   :user_relationship_request_prices, dependent: :destroy
   has_many   :request_list_relationship_statuses,dependent: :destroy
   has_many   :order_contents, dependent: :destroy
 
 
   #callbacks
-  after_update :update_inventory
 
   #attribs
   enum status: [ :pending, :accepted, :completed, :cancelled ]
 
   scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
 
-  def inventory
-    inventory ||= Inventory.find(self.request_contract.inventory_id)
-  end
-  # update inventory after all requests are accepted
-  def update_inventory
-    unless self.accepted?
-      return
-    end
+  def accept_request
+    self.update(status: :accepted, accepted_at: DateTime.now)
 
-    # mark request for sent 
+    # mark next request for sent 
     request = ItemRequest.find_by(request_contract_id: self.request_contract_id, user_id: self.friend_id)
     unless request.nil?
       request.sent = 1
@@ -32,33 +26,36 @@ class ItemRequest < ApplicationRecord
     end
     
     # check if all item requests were accepted
-    if ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size > 0
-      return
-    end
+    if ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size == 0
+      #reserve new inventory
+      reserved = Inventory.new do |m|
+        m.item_id = self.inventory.item_id
+        m.user_id = self.inventory.user_id
+        m.price = self.inventory.price
+        m.quantity = self.request_contract.quantity
+        m.ref_id = self.inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
+        m.status = :reserved
+        m.save!
+      end
 
-    # decrease quantity
-    quantity = self.inventory.quantity - self.request_contract.quantity
-    unless self.inventory.update(quantity: quantity)
-      return
-    end
-    
-    # create a new inventory
-    reserved = Inventory.new do |m|
-      m.item_id = self.inventory.item_id
-      m.user_id = self.inventory.user_id
-      m.price = self.inventory.price
-      m.quantity = self.request_contract.quantity
-      m.ref_id = self.inventory.id
-      m.status = :reserved
-      m.save
-    end
+      # decrease origin inventory quantity
+      quantity_left = self.inventory.quantity - self.request_contract.quantity
+      self.inventory.update(quantity: quantity_left)
 
-    # mark request contract as accepted
-    self.request_contract.status = :accepted
-    self.request_contract.inventory_id = reserved.id
-    self.request_contract.save
+      # bind contract to a new reserved inventory and update status
+      self.request_contract.update(inventory_id: reserved.id, status: :accepted)
+      true
+    end
+    true
+  end
 
-    #Inventory.find(self.inventory.id).update(ref_id: nil)
+  def sign
+    self.update(signed_at: DateTime.now)
+    # change inventory ownership and price
+    next_request = ItemRequest.find_by(request_contract_id: request_contract.id, friend_id: self.user_id)
+    # next_price = next_request ? next_request.price : self.price
+    self.inventory.update(user_id: self.user_id, ref_id: nil)
+    # Note: ref_id is disabled because inventory will not be merged with original if contract will be cancelled
   end
 
   def to_json(current_user)
