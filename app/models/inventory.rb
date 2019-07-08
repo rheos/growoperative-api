@@ -1,14 +1,16 @@
 class Inventory < ApplicationRecord
   belongs_to :user
   belongs_to :item
-  belongs_to :request_contract, foreign_key: "ref_id", optional: true
-  has_many :item_request, dependent: :destroy
+  belongs_to :request_contract, primary_key: 'inventory_id', foreign_key: 'id', inverse_of: :inventory, optional: true, dependent: :destroy
+  has_many :item_requests, through: :request_contract
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
   attr_accessor :target_user_id
   attr_accessor :total_price
   attr_accessor :action_request
+
+  scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
 
   def producer_owns?
     self.user_id == self.item.producer_id
