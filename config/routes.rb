@@ -50,10 +50,10 @@ Rails.application.routes.draw do
           get 'reset'
           get 'requested' => 'item_requests#requested'
           get 'reserved' => 'item_requests#reserved'
-          get 'settled' => 'item_requests#settled'
+          get 'shipped' => 'item_requests#shipped'
           post 'requests/:id/accept' => 'item_requests#accept'
           post 'requests/:id/cancel' => 'item_requests#cancel'
-          post 'requests/:id/settle' => 'item_requests#settle'
+          post 'requests/:id/ship' => 'item_requests#ship'
           post 'requests/:id/sign' => 'item_requests#sign'
         end
       end
