@@ -1,7 +1,7 @@
 module Api::V1
   class ItemRequestsController < ApiController
     before_action :authenticate_user!
-    before_action :set_request, only: [:accept, :cancel, :settle, :sign]
+    before_action :set_request, only: [:accept, :cancel, :ship, :sign]
    
     MAX_DEPTH = 5
     
@@ -196,9 +196,9 @@ module Api::V1
       render json: { message: 'Request has been cancelled' }, status: 200
     end
 
-    # POST: /v1/items/requests/:request_id/settle
+    # POST: /v1/items/requests/:request_id/ship
     # Return 200 response if success
-    def settle
+    def ship
       # check permission
       unless current_user.is_admin? || @request.friend_id == current_user.id || @request.inventory.user_id == current_user.id
         render json: { message: 'Not accessable' }, status: 403
@@ -215,7 +215,7 @@ module Api::V1
       # find the inventory
       inventory = @request.request_contract.inventory
       if inventory.nil? || !inventory.reserved?
-        render json: { message: 'Not availabe to settle the inventory' }, status: 402
+        render json: { message: 'Not availabe to ship the inventory' }, status: 402
         return
       end
 
@@ -223,7 +223,7 @@ module Api::V1
       current_chain_item_request = ItemRequest.find_by(id: @request.id, step: request_contract.current_step + 1)
       unless current_chain_item_request
         logger.info "Previous request chain is not completed"
-        render json: { message: 'Not availabe to settle the inventory' }, status: 406
+        render json: { message: 'Not availabe to ship the inventory' }, status: 406
         return
       end
       current_chain_item_request.shipped_at = DateTime.now
@@ -309,8 +309,8 @@ module Api::V1
       }, status: 200
     end
 
-    # GET: /v1/items/settled
-    def settled
+    # GET: /v1/items/shipped
+    def shipped
       items = ItemRequest.with_inventory_data
         .select("item_requests.*")
         .where("

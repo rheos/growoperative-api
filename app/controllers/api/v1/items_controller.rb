@@ -64,6 +64,15 @@ module Api::V1
         item.to_json(current_user)
       end
 
+      # add available count for waiting chain members
+      # result.map do |item|
+      #   requested_inventory = Inventory.with_inventory_data
+      #   .where('
+      #     inventories.status = 2
+      #     AND 
+      #   ')
+      # end
+
       render json: {
         data: result
       }, status: 200
