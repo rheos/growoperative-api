@@ -19,6 +19,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "default_node_price", precision: 10, scale: 2
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "price", precision: 10
   end
 
   create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -39,7 +40,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.float "quantity"
-    t.decimal "price", precision: 10, scale: 2
+    t.decimal "price", precision: 10
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -81,18 +82,18 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   end
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
-    t.bigint "request_contract_id"
-    t.bigint "inventory_id"
     t.bigint "user_id"
-    t.integer "friend_id"
-    t.decimal "quantity", precision: 10, scale: 5
-    t.string "units"
-    t.decimal "price", precision: 10, scale: 2
+    t.decimal "price", precision: 10
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "friend_id"
+    t.bigint "request_contract_id"
     t.boolean "sent", default: false, null: false
-    t.index ["inventory_id"], name: "index_item_requests_on_inventory_id"
+    t.integer "step", default: 0
+    t.datetime "accepted_at"
+    t.datetime "shipped_at"
+    t.datetime "signed_at"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
@@ -167,12 +168,14 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.decimal "quantity", precision: 10, scale: 5
-    t.decimal "price", precision: 10, scale: 2
     t.integer "status", default: 0
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "inventory_id"
-    t.integer "signed", limit: 1, default: 0, null: false
+    t.integer "steps", default: 0
+    t.integer "current_step", default: 0
+    t.datetime "deleted_at"
+    t.datetime "deleted_by"
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
@@ -287,7 +290,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "item_names", "categories"
   add_foreign_key "item_relatiohships", "items"
   add_foreign_key "item_relatiohships", "relationships"
-  add_foreign_key "item_requests", "inventories"
   add_foreign_key "item_requests", "request_contracts"
   add_foreign_key "item_requests", "users"
   add_foreign_key "items", "categories"
