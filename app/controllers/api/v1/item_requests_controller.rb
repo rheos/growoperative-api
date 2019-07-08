@@ -263,7 +263,7 @@ module Api::V1
     def requested
       items = ItemRequest.with_inventory_data
         .where("
-          item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NULL
+          item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.sent = true
           AND request_contracts.status < 2
           AND inventories.user_id <> #{current_user.id}
         ").uniq
