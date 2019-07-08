@@ -20,6 +20,7 @@ module Api::V1
           request_contracts.inventory_id=#{params[:item_id]} AND 
           item_requests.status < 3
         ")
+        .uniq
         .as_json
       res = {}
       requests.each do |r|
@@ -262,7 +263,7 @@ module Api::V1
     def requested
       items = ItemRequest.with_inventory_data
         .where("
-          item_requests.user_id = #{current_user.id} AND item_requests.sent = 1
+          item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NULL
           AND request_contracts.status < 2
           AND inventories.user_id <> #{current_user.id}
         ").uniq
@@ -283,7 +284,14 @@ module Api::V1
       items = Inventory.with_contract_data
         .select("inventories.*, request_contracts.inventory_id AS old_id, item_requests.price AS current_price")
         .where("
-          (inventories.user_id = #{current_user.id} AND (inventories.status = 0 OR inventories.status = 2)) 
+          inventories.user_id = #{current_user.id}
+          AND inventories.status = 2
+          AND ((item_requests.friend_id = #{current_user.id} AND item_requests.shipped_at IS NULL)
+          OR (item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NOT NULL AND (
+            SELECT COUNT(*) FROM item_requests
+            WHERE item_requests.request_contract_id = request_contracts.id AND item_requests.friend_id = #{current_user.id}
+          ) = 0
+          ))
         ").uniq
 
       items = items.map do |item|
@@ -291,6 +299,8 @@ module Api::V1
         unless item['old_id'].nil?
           json[:id] = item['old_id']
         end
+        previous_request = item.item_requests.find_by(user_id: current_user.id)
+        json[:attributes]['total-price'] = previous_request.price if previous_request
         json
       end
 
@@ -304,14 +314,16 @@ module Api::V1
       items = ItemRequest.with_inventory_data
         .select("item_requests.*")
         .where("
-          item_requests.friend_id = #{current_user.id} AND 
+          (item_requests.friend_id = #{current_user.id}) AND 
           item_requests.shipped_at IS NOT NULL AND
           item_requests.status = 2
-        ")
+        ").uniq
       items = items.uniq{ |item| item.request_contract_id}
 
       items = items.map do |item|
         json = item.to_json(current_user)
+        previous_request = item.request_contract.item_requests.find_by(user_id: current_user.id)
+        json[:attributes]['total-price'] = previous_request.price if previous_request
         json[:id] = item.inventory.id
         json[:attributes]['signed'] = item.signed_at?
         json
