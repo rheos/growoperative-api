@@ -7,7 +7,7 @@ class Item < ApplicationRecord
   has_many   :reviews, dependent: :destroy
   has_many   :inventory, dependent: :destroy
 
-  attr_accessor :unit  
+  attr_accessor :unit
   
   # callbacks
   before_create :set_item_name
@@ -32,7 +32,7 @@ class Item < ApplicationRecord
 
   def add_inventory
     inventory = self.inventory.new do |m|
-      m.user_id = self.user_id      
+      m.user_id = self.user_id 
       m.quantity = self.quantity
       m.price = self.price
       m.status = :available

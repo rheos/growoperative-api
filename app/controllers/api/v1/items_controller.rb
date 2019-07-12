@@ -121,7 +121,7 @@ module Api::V1
       end
 
       @item = current_user.items.new(data)
-      if @item.save
+      if @item.save && @item.inventory[0].update_avatars(inventory_avatar_params)
         render json: {
           data: @item.inventory[0].to_json(current_user)
         }, status: 200
@@ -138,12 +138,12 @@ module Api::V1
         data[:producer_id] = current_user.id
       end
 
-      if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+      if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.update_avatars(inventory_avatar_params) && @inventory.item.update(data)
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
       else
-        render :json=> @item.errors, :status=>422
+        render :json=> @inventory.errors, :status=>422
       end
     end
 
@@ -252,11 +252,11 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id,:item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
     end
 
-    def inventory_params
-      params.require(:item).permit(:quantity, :price)
+    def inventory_avatar_params
+      params.permit({inventory_avatars: []})
     end
 
     def check_user_type
