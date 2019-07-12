@@ -3,6 +3,8 @@ class Inventory < ApplicationRecord
   belongs_to :item
   belongs_to :request_contract, primary_key: 'inventory_id', foreign_key: 'id', inverse_of: :inventory, optional: true, dependent: :destroy
   has_many :item_requests, through: :request_contract
+ 
+  mount_uploaders :avatars, ImagesUploader
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
@@ -49,8 +51,23 @@ class Inventory < ApplicationRecord
         'item-name-id' => self.item.item_name_id, 
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 
-        'created-at' => self.created_at, 
+        'created-at' => self.created_at,
+        'avatars' => self.avatars.map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }, 
       }
     }
+  end
+
+  def update_avatars (args)
+    # binding.pry
+    updated_list = []
+    (args[:inventory_avatars] || []).each_with_index do |image, i|
+      if image.is_a? String
+        updated_list[i] = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+      else
+        updated_list[i] = image
+      end
+    end
+    self.avatars = updated_list.compact
+    self.save
   end
 end
