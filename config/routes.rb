@@ -63,6 +63,7 @@ Rails.application.routes.draw do
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'
+      get 'private/*file_path' => 'resources#index'
     end
   end
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html
