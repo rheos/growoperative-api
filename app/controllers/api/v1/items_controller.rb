@@ -121,7 +121,7 @@ module Api::V1
       end
 
       @item = current_user.items.new(data)
-      if @item.save && @item.inventory[0].update_avatars(inventory_avatar_params)
+      if @item.save
         render json: {
           data: @item.inventory[0].to_json(current_user)
         }, status: 200
@@ -131,14 +131,19 @@ module Api::V1
     end
 
     def update
-      data = item_params
-
-      # add mark up price if item is producer's
-      if params[:item][:dashboard_type] != 'broker'
-        data[:producer_id] = current_user.id
+      result = false
+      if(params[:item].present?)
+        data = item_params
+        # add mark up price if item is producer's
+        if params[:item][:dashboard_type] != 'broker'
+          data[:producer_id] = current_user.id
+        end
+        result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+      else
+        result = @inventory.update_avatars(inventory_avatar_params)
       end
 
-      if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.update_avatars(inventory_avatar_params) && @inventory.item.update(data)
+      if result
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -252,7 +257,7 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, {avatars: []})
     end
 
     def inventory_avatar_params

@@ -52,7 +52,8 @@ class Inventory < ApplicationRecord
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 
         'created-at' => self.created_at,
-        'avatars' => self.avatars.map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }, 
+        'avatars' => (self.avatars || self.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
+        'owner-id' => self.user_id,
       }
     }
   end
