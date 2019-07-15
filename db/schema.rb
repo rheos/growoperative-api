@@ -120,6 +120,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "item_unit_id"
     t.boolean "organic", default: false
     t.integer "producer_id"
+    t.json "avatars"
     t.index ["category_id"], name: "index_items_on_category_id"
     t.index ["grade_id"], name: "index_items_on_grade_id"
     t.index ["item_name_id"], name: "index_items_on_item_name_id"
