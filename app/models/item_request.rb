@@ -35,6 +35,7 @@ class ItemRequest < ApplicationRecord
         m.quantity = self.request_contract.quantity
         m.ref_id = self.inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
         m.status = :reserved
+        m.avatars = self.inventory.avatars || self.inventory.item.avatars
         m.save!
       end
 
@@ -80,6 +81,8 @@ class ItemRequest < ApplicationRecord
         'organic' => self.inventory.item.organic, 
         'created-at' => self.created_at, 
         'sent' => self.user_id == current_user.id,
+        'avatars' => (self.inventory.avatars || self.inventory.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
+        'owner-id' => self.inventory.user_id
       }
     }
   end

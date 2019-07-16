@@ -13,6 +13,7 @@ module Api::V1
           request_contracts.status AS chain_status,
           request_contracts.quantity AS quantity,
           inventories.item_id,
+          inventories.user_id AS inventory_owner_id,
           IF(request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
         ")
         .where("
