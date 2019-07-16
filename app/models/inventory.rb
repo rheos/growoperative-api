@@ -71,4 +71,18 @@ class Inventory < ApplicationRecord
     self.avatars = updated_list.compact
     self.save
   end
+
+  def update_status (args)
+    case args[:status]
+    when 'available'
+      if self.status == 'reserved' && self.request_contract.status == 'completed'
+        self.update(status: :available)
+        self.request_contract.destroy
+      else
+        false
+      end
+    else
+      false
+    end
+  end
 end
