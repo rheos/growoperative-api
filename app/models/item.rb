@@ -7,6 +7,8 @@ class Item < ApplicationRecord
   has_many   :reviews, dependent: :destroy
   has_many   :inventory, dependent: :destroy
 
+  mount_uploaders :avatars, ImagesUploader
+
   attr_accessor :unit
   
   # callbacks

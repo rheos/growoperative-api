@@ -52,7 +52,8 @@ class Inventory < ApplicationRecord
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 
         'created-at' => self.created_at,
-        'avatars' => self.avatars.map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }, 
+        'avatars' => (self.avatars || self.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
+        'owner-id' => self.user_id,
       }
     }
   end
@@ -69,5 +70,19 @@ class Inventory < ApplicationRecord
     end
     self.avatars = updated_list.compact
     self.save
+  end
+
+  def update_status (args)
+    case args[:status]
+    when 'available'
+      if self.status == 'reserved' && self.request_contract.status == 'completed'
+        self.update(status: :available)
+        self.request_contract.destroy
+      else
+        false
+      end
+    else
+      false
+    end
   end
 end

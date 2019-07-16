@@ -8,7 +8,6 @@ module Api::V1
     def index
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
       relationships = Relationship.where("user_id=#{current_user.id} OR friend_id=#{current_user.id}")
-
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         @items = Inventory.where("inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1", users)
@@ -121,7 +120,7 @@ module Api::V1
       end
 
       @item = current_user.items.new(data)
-      if @item.save && @item.inventory[0].update_avatars(inventory_avatar_params)
+      if @item.save
         render json: {
           data: @item.inventory[0].to_json(current_user)
         }, status: 200
@@ -131,14 +130,21 @@ module Api::V1
     end
 
     def update
-      data = item_params
-
-      # add mark up price if item is producer's
-      if params[:item][:dashboard_type] != 'broker'
-        data[:producer_id] = current_user.id
+      result = false
+      if(params[:item].present?)
+        data = item_params
+        # add mark up price if item is producer's
+        if params[:item][:dashboard_type] != 'broker'
+          data[:producer_id] = current_user.id
+        end
+        result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+      elsif(params[:inventory_avatars].present?)
+        result = @inventory.update_avatars(inventory_avatar_params)
+      else
+        result = @inventory.update_status(inventory_status_params)
       end
 
-      if @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.update_avatars(inventory_avatar_params) && @inventory.item.update(data)
+      if result != false
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -252,11 +258,15 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, {avatars: []})
     end
 
     def inventory_avatar_params
       params.permit({inventory_avatars: []})
+    end
+    
+    def inventory_status_params
+      params.require(:inventory).permit(:status)
     end
 
     def check_user_type
