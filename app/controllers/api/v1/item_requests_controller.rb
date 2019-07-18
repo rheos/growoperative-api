@@ -123,15 +123,14 @@ module Api::V1
 
       # add source user id
       shortest[:path] << inventory.user_id
-      shortest[:prices].reverse!
       # create requests
-      current_prise = inventory.price
+      final_price = inventory.price + shortest[:total]
       shortest[:prices].each_with_index do |price, index|
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
         request.user_id = shortest[:path][index]
         request.friend_id = shortest[:path][index + 1]
-        request.price = inventory.price + price
+        request.price = final_price - price
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
         request.step = shortest[:prices].size - index
