@@ -55,7 +55,7 @@ class ItemRequest < ApplicationRecord
     # change inventory ownership and price
     next_request = ItemRequest.find_by(request_contract_id: request_contract.id, friend_id: self.user_id)
     # next_price = next_request ? next_request.price : self.price
-    self.inventory.update(user_id: self.user_id, ref_id: nil)
+    self.inventory.update(user_id: self.user_id, ref_id: nil, price: self.price)
     # Note: ref_id is disabled because inventory will not be merged with original if contract will be cancelled
   end
 
