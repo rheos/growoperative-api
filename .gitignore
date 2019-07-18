@@ -33,3 +33,4 @@
 .env.local
 /Gemfile.lock
 /config/database.yml
+/private/uploads

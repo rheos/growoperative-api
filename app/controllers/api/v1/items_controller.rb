@@ -258,11 +258,11 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, {avatars: []})
+      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
     end
 
     def inventory_avatar_params
-      params.permit({inventory_avatars: []})
+      params.permit({inventory_avatars: [], source_images: []})
     end
     
     def inventory_status_params
