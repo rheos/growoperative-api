@@ -59,17 +59,30 @@ class Inventory < ApplicationRecord
   end
 
   def update_avatars (args)
-    # binding.pry
     updated_list = []
-    (args[:inventory_avatars] || []).each_with_index do |image, i|
+    was_deleted = false #optimization flag for thumbnails cleaning up
+  
+    (args[:source_images] || []).each_with_index do |image, i|
       if image.is_a? String
-        updated_list[i] = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+        present_avatar = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+        updated_list[i] = present_avatar
+        was_deleted = true if present_avatar 
       else
         updated_list[i] = image
       end
     end
     self.avatars = updated_list.compact
     self.save
+
+    # update thumbnails
+    if self.avatars.length > 0
+      uploader = self.avatars[0]
+      (args[:inventory_avatars].compact || []).each do |avatar|
+        uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url.split('/').last})
+      end
+    end
+
+    uploader.clear_thumbnails if was_deleted
   end
 
   def update_status (args)

@@ -33,6 +33,27 @@ class ImagesUploader < CarrierWave::Uploader::Base
   #   process resize_to_fit: [50, 50]
   # end
 
+  def update_thumbnail (thumbnail, origin_names)
+    # binding.pry
+    store!(thumbnail)
+  end
+
+  def clear_thumbnails
+    # binding.pry
+    items = []
+    Dir.foreach(store_dir.gsub('..', Rails.root.to_s)) do |item|
+      next if item == '.' or item == '..'
+      items.push(item)
+    end
+
+    items.each do |item|
+      origin_file = item.gsub('thumbnail_', '')
+      if (item.include?('thumbnail_') && !items.include?(origin_file))
+        File.delete(store_dir.gsub('..', Rails.root.to_s) + '/' + item)
+      end
+    end
+  end
+
   # Add a white list of extensions which are allowed to be uploaded.
   # For images you might use something like this:
   # def extension_whitelist
