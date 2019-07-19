@@ -139,7 +139,7 @@ module Api::V1
         end
         result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
       elsif(params[:inventory_avatars].present?)
-        result = @inventory.update_avatars(inventory_avatar_params)
+        result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
       else
         result = @inventory.update_status(inventory_status_params)
       end

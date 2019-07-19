@@ -38,7 +38,33 @@ class Item < ApplicationRecord
       m.quantity = self.quantity
       m.price = self.price
       m.status = :available
+      m.gallery_map = ['<-', '<-', '<-', '<-', '<-']
       m.save
     end
+  end
+
+  def update_avatars (args)
+
+    updated_list = []
+    was_deleted = false #optimization flag for thumbnails cleaning up
+  
+    (args[:source_images] || []).each_with_index do |image, i|
+      if image.is_a? String
+        present_avatar = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+        updated_list[i] = present_avatar
+        was_deleted = true if !present_avatar 
+      else
+        updated_list[i] = image
+      end
+    end
+    self.avatars = updated_list.compact
+    self.save
+
+    # update thumbnails
+    uploader = ImagesUploader.new(self, 'avatars')
+    (args[:inventory_avatars].compact || []).each do |avatar|
+      uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url && img.url.split('/').last})
+    end
+    uploader.clear_thumbnails if was_deleted
   end
 end
