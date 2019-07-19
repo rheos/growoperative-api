@@ -5,6 +5,7 @@ class Inventory < ApplicationRecord
   has_many :item_requests, through: :request_contract
  
   mount_uploaders :avatars, ImagesUploader
+  serialize :gallery_map, Array
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
@@ -52,36 +53,59 @@ class Inventory < ApplicationRecord
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 
         'created-at' => self.created_at,
-        'avatars' => (self.avatars || self.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
+        'avatars' => avatars_with_item,
         'owner-id' => self.user_id,
       }
     }
   end
 
-  def update_avatars (args)
+  def avatars_with_item
+    avatars = []
+    self.gallery_map.each_with_index do |s, i|
+      if s == '+'
+        avatars.push(self['avatars'] && self['avatars'][i] && self.avatars.find {|n| n.identifier == self['avatars'][i]})
+      elsif s == '<-'
+        avatars.push(self.item['avatars'] && self.item['avatars'][i] && self.item.avatars.find {|n| n.identifier == self.item['avatars'][i]})
+      end
+    end
+    avatars.compact.map{ |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }
+  end
+
+  def update_avatars (args, current_user_id)
+    if current_user_id == self.item.user_id
+      self.item.update_avatars(args)
+      return
+    end 
+
     updated_list = []
+    order_map = []
     was_deleted = false #optimization flag for thumbnails cleaning up
-  
-    (args[:source_images] || []).each_with_index do |image, i|
+    
+    ((args[:source_images] || []).select {|arg| arg != 'null'}).each_with_index do |image, i|
       if image.is_a? String
-        present_avatar = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+        present_avatar = self.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
         updated_list[i] = present_avatar
-        was_deleted = true if present_avatar 
+        if present_avatar
+          order_map[i] = '+'
+        else
+          order_map[i] = (self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}) ? '<-' : '-'
+        end
       else
         updated_list[i] = image
+        order_map[i] = '+'
       end
     end
-    self.avatars = updated_list.compact
-    self.save
+
+    self.avatars = updated_list
+    self.gallery_map = order_map
+    self.save!
 
     # update thumbnails
-    if self.avatars.length > 0
-      uploader = self.avatars[0]
-      (args[:inventory_avatars].compact || []).each do |avatar|
-        uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url.split('/').last})
-      end
+    uploader = ImagesUploader.new(self, 'avatars')
+    avatar_names = self.avatars.map {|img| img.url && img.url.split('/').last}
+    (args[:inventory_avatars].compact || []).each do |avatar|
+      uploader.update_thumbnail(avatar, avatar_names.compact)
     end
-
     uploader.clear_thumbnails if was_deleted
   end
 

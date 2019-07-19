@@ -33,23 +33,24 @@ class ImagesUploader < CarrierWave::Uploader::Base
   #   process resize_to_fit: [50, 50]
   # end
 
-  def update_thumbnail (thumbnail, origin_names)
-    # binding.pry
+  def update_thumbnail (thumbnail, origin_names = nil)
     store!(thumbnail)
   end
 
   def clear_thumbnails
     # binding.pry
-    items = []
-    Dir.foreach(store_dir.gsub('..', Rails.root.to_s)) do |item|
-      next if item == '.' or item == '..'
-      items.push(item)
-    end
+    if(File.directory?(store_dir.gsub('..', Rails.root.to_s)))
+      items = []
+      Dir.foreach(store_dir.gsub('..', Rails.root.to_s)) do |item|
+        next if item == '.' or item == '..'
+        items.push(item)
+      end
 
-    items.each do |item|
-      origin_file = item.gsub('thumbnail_', '')
-      if (item.include?('thumbnail_') && !items.include?(origin_file))
-        File.delete(store_dir.gsub('..', Rails.root.to_s) + '/' + item)
+      items.each do |item|
+        origin_file = item.gsub('thumbnail_', '')
+        if (item.include?('thumbnail_') && !items.include?(origin_file))
+          File.delete(store_dir.gsub('..', Rails.root.to_s) + '/' + item)
+        end
       end
     end
   end
