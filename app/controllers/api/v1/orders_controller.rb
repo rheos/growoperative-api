@@ -1,0 +1,25 @@
+module Api::V1
+  class OrdersController < ApiController
+    before_action :authenticate_user!
+
+    def index
+    end
+
+    def update
+      order = Order.find_by(id: params[:id])
+      render :json=> {error: 'Unable to find order'}, :status=>422 if !order
+
+      if order.apply_action(order_action_params, current_user.id)
+        render json: {
+          data: order
+        }, status: 200
+      else
+        render :json=> {error: 'Unable to process order!'}, :status=>422
+      end
+    end
+
+    def order_action_params
+      params.require(:order_action)
+    end
+  end
+end

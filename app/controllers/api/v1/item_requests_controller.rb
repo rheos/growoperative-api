@@ -192,6 +192,7 @@ module Api::V1
       # cancel the request contract
       @request.request_contract.status = :cancelled
       @request.request_contract.save
+      @request.update(order_id: nil)
 
       render json: { message: 'Request has been cancelled' }, status: 200
     end
@@ -226,9 +227,7 @@ module Api::V1
         render json: { message: 'Not availabe to ship the inventory' }, status: 406
         return
       end
-      current_chain_item_request.shipped_at = DateTime.now
-      current_chain_item_request.status = :completed
-      current_chain_item_request.save!
+      current_chain_item_request.ship
 
       render json: { message: 'Items has been shipped' }, status: 200
     end
@@ -244,16 +243,6 @@ module Api::V1
         render json: { message: 'Unable to sign it' }, status: 406
         return
       end
-
-      # Update current contract step and finish contract, if all steps are done
-      request_contract = @request.request_contract
-  
-      request_contract.current_step += 1
-      if request_contract.current_step == request_contract.steps
-        request_contract.status = :completed
-      end
-
-      request_contract.save!
 
       @request.sign
       render json: { message: 'Request has been signed' }, status: 200
@@ -274,15 +263,28 @@ module Api::V1
         json
       end
 
+      result = []
+      items = items.group_by{|i| i[:attributes]["order"]}
+      items.each do |key, value|
+        if key.nil?
+          result.push(value)
+        else
+          res = Order.find(key).as_json
+          (res['friend_id'] == current_user.id.to_s || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+        end
+      end
+      
+      # binding.pry
+
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.with_contract_data
-        .select("inventories.*, request_contracts.inventory_id AS old_id, item_requests.price AS current_price")
+      requests = ItemRequest.with_inventory_data
+        .select("item_requests.*, inventories.id AS inventory_id")
         .where("
           inventories.user_id = #{current_user.id}
           AND inventories.status = 2
@@ -292,20 +294,30 @@ module Api::V1
             WHERE item_requests.request_contract_id = request_contracts.id AND item_requests.friend_id = #{current_user.id}
           ) = 0
           ))
-        ").uniq
+        ")
+      # binding.pry
+      result = []
+      requests = requests.map{|r| r.to_json(current_user)}.group_by{|i| i[:attributes]["order"]}
 
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        unless item['old_id'].nil?
-          json[:id] = item['old_id']
+      requests.each do |key, value|
+        inventory_ids = value.map{|i| i[:attributes]['inventory_id']}
+        items = Inventory.where(id: inventory_ids).map{|item|
+          json = item.to_json(current_user)
+          previous_request = item.item_requests.find_by(user_id: current_user.id)
+          json[:attributes]['total-price'] = previous_request.price if previous_request
+          json
+        }
+
+        if key.nil? || value.find{|r| r[:attributes]['chain_status'] == 'completed'}
+          result.push(items)
+        else
+          order = Order.find(key).as_json
+          result.push({order: order, items: items})
         end
-        previous_request = item.item_requests.find_by(user_id: current_user.id)
-        json[:attributes]['total-price'] = previous_request.price if previous_request
-        json
       end
 
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 
@@ -329,8 +341,19 @@ module Api::V1
         json
       end
 
+      result = []
+      items = items.group_by{|i| i[:attributes]["order"]}
+      items.each do |key, value|
+        if key.nil?
+          result.push(value)
+        else
+          res = Order.find(key).as_json
+          result.push({order: res, items: value})
+        end
+      end
+
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 

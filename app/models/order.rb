@@ -1,4 +1,31 @@
 class Order < ApplicationRecord
-  belongs_to :relationship
-  has_many   :order_contents, dependent: :destroy
+  has_many :item_requests, primary_key: 'id', foreign_key: 'order_id'
+
+  enum order_status: [ :pending, :shipped, :signed ]
+
+  def remove_request (id)
+    # self.item_requests.find(id)
+  end
+
+  def apply_action (action, user_id)
+    # binding.pry
+    case action
+    when 'sign'
+      # binding.pry
+      return false if (user_id.to_s != self.user_id || self.order_status != "shipped")
+      self.item_requests.each do |item_request|
+        item_request.sign if !item_request.signed_at
+      end
+      self.update(signed_on: DateTime.now, order_status: :signed)
+    when 'ship'
+      # binding.pry
+      return false if (user_id.to_s != self.friend_id || self.order_status == "shipped")
+      self.item_requests.each do |item_request|
+        item_request.ship if !item_request.shipped_at
+      end
+      self.update(shipped_on: DateTime.now, order_status: :shipped)
+    else
+      return false
+    end
+  end
 end
