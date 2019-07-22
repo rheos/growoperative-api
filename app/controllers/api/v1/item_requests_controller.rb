@@ -305,6 +305,7 @@ module Api::V1
           json = item.to_json(current_user)
           previous_request = item.item_requests.find_by(user_id: current_user.id)
           json[:attributes]['total-price'] = previous_request.price if previous_request
+          json[:attributes]['target-user-name'] = User.find(json[:attributes]['target-user-id']).user_name
           json
         }
 
