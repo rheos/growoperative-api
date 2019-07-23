@@ -52,7 +52,8 @@ class ItemRequest < ApplicationRecord
       if parallel_request
         order = Order.find_by(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
         if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_label: self.inventory.item.name + ' order', order_total: self.request_contract.quantity + parallel_request.request_contract.quantity)
+          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity + parallel_request.request_contract.quantity)
+          order.update(order_label: 'Order ' + order.id.to_s)
           parallel_request.update(order_id: order.id)
         else
           order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
@@ -85,7 +86,8 @@ class ItemRequest < ApplicationRecord
     if next_request && next_parallel_request
       order = Order.find_by(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
       if !order
-        order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0, order_label: next_request.inventory.item.name + ' order')
+        order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
+        order.update(order_label: 'Order ' + order.id.to_s)
         next_request.update(order_id: order.id)
         next_parallel_request.update(order_id: order.id)
       else

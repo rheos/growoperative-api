@@ -25,6 +25,8 @@ class Order < ApplicationRecord
       item = self.item_requests.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]}")
       return false if !item
       item.update(order_id: nil)
+      self.destroy if ItemRequest.where(order_id: self.id).count == 0
+      true
     when 'add_item'
       item_request = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]} AND item_requests.status = 1")
       return false if !item_request.first || item_request.first.friend_id.to_s != user_id.to_s || item_request.first.friend_id.to_s != self.friend_id
