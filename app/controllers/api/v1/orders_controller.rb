@@ -20,6 +20,7 @@ module Api::V1
 
         args = order_params
         args[:user_id] = request.first.user_id
+        args[:order_status] = 0
         order = Order.create(args)
         if order
           render json: { order: order }, status: 200
