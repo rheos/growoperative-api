@@ -8,10 +8,8 @@ class Order < ApplicationRecord
   end
 
   def apply_action (action, user_id)
-    # binding.pry
     case action[:action_name]
     when 'sign'
-      # binding.pry
       return false if (user_id.to_s != self.user_id || self.order_status != "shipped")
       self.item_requests.each do |item_request|
         item_request.sign if !item_request.signed_at
@@ -24,9 +22,13 @@ class Order < ApplicationRecord
       end
       self.update(shipped_on: DateTime.now, order_status: :shipped)
     when 'remove_item'
-      item = self.item_requests.find_by(id: action[:request_id])
-      return false if !item || item.friend_id.to_s != user_id.to_s
+      item = self.item_requests.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]}")
+      return false if !item
       item.update(order_id: nil)
+    when 'add_item'
+      item_request = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]} AND item_requests.status = 1")
+      return false if !item_request.first || item_request.first.friend_id.to_s != user_id.to_s || item_request.first.friend_id.to_s != self.friend_id
+      item_request.first.update(order_id: self.id)
     else
       return false
     end
