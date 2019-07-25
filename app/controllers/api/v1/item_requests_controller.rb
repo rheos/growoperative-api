@@ -162,6 +162,13 @@ module Api::V1
         return
       end
 
+      if @request.status == 'reserved'
+        @request.update(status: :accepted, sent: true)
+        @request.request_contract.update(status: :accepted)
+        render json: { message: 'Request has been accepted' }, status: 200
+        return
+      end
+
       # @request.status = :accepted
       # @request.accepted_at = DateTime.now
       if @request.accept_request
@@ -187,6 +194,12 @@ module Api::V1
 
       if @request.request_contract.accepted? && @request.request_contract.user_id == current_user.id
         render json: { message: 'Request is reserved already, you can not cancel' }, status: 406
+        return
+      end
+
+      if @request.status == 'reserved'
+        @request.request_contract.destroy
+        render json: { message: 'Request has been cancelled' }, status: 200
         return
       end
 
@@ -257,12 +270,12 @@ module Api::V1
       if !inventory || !user || reserve_params[:quantity].to_f > inventory.quantity
         return render json: { message: 'Unable to reserve an item!' }, status: 404
       end
-      price = helpers.get_relation_price(current_user.id, reserve_params[:user_id]) + inventory.price
+      price = helpers.get_relation_price(current_user.id, user.id)  + inventory.price
 
       reserved = Inventory.new do |m|
         m.item_id = inventory.item_id
         m.user_id = inventory.user_id
-        m.price = inventory.price + price
+        m.price = price
         m.quantity = reserve_params[:quantity]
         m.ref_id = inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
         m.status = :reserved
@@ -283,7 +296,7 @@ module Api::V1
       request.request_contract_id = request_contract.id
       request.user_id = user.id
       request.friend_id = current_user.id
-      request.price = price + inventory.price
+      request.price = price
       request.status = :reserved
       request.sent = request.user_id == current_user.id ? 1 : 0
       request.step = 1
