@@ -145,7 +145,7 @@ module Api::V1
     # Return 200 response if success
     def accept
       # check permission
-      unless current_user.is_admin? || (@request.friend_id == current_user.id && @request.status != "reserved")
+      unless current_user.is_admin? || @request.friend_id == current_user.id || (@request.status == "reserved" && @request.user_id == current_user.id)
         render json: { message: 'Not accessable' }, status: 403
         return
       end
