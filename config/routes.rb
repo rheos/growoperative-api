@@ -55,6 +55,7 @@ Rails.application.routes.draw do
           post 'requests/:id/cancel' => 'item_requests#cancel'
           post 'requests/:id/ship' => 'item_requests#ship'
           post 'requests/:id/sign' => 'item_requests#sign'
+          post 'requests/reserve' => 'item_requests#reserve'
         end
       end
       resources :user_category_prices, only: [:create]

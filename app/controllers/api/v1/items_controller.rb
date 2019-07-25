@@ -50,11 +50,12 @@ module Api::V1
       # get pending requests
       pending_requests = {}
       ItemRequest.with_inventory_data
-        .where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
+        .where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)")
         .group("inventories.id")
-        .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request")
+        .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
           pending_requests[request.inventory_id] = request.action_request
+          pending_requests[request.reserved_id] = request.action_request if request.reserved_id
         end
       
       # assign count
@@ -62,15 +63,6 @@ module Api::V1
         item.action_request = pending_requests.key?(item.id) ? pending_requests[item.id] : 0
         item.to_json(current_user)
       end
-
-      # add available count for waiting chain members
-      # result.map do |item|
-      #   requested_inventory = Inventory.with_inventory_data
-      #   .where('
-      #     inventories.status = 2
-      #     AND 
-      #   ')
-      # end
 
       render json: {
         data: result

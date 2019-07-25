@@ -123,7 +123,7 @@ module Api::V1
 			# 	users = []
 			# end
 			render json: {
-				data: relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }])
+				data: relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }, :user_relationship_prices])
 			}, status: 200
 		end
 

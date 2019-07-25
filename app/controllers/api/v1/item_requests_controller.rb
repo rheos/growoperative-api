@@ -7,6 +7,7 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
+      # binding.pry
       requests = ItemRequest.with_inventory_data
         .select("
           item_requests.*, 
@@ -18,8 +19,8 @@ module Api::V1
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
-          request_contracts.inventory_id=#{params[:item_id]} AND 
-          item_requests.status < 3
+          ((request_contracts.inventory_id=#{params[:item_id]} AND item_requests.status < 3)
+          OR ((inventories.ref_id=#{params[:item_id]} OR request_contracts.inventory_id=#{params[:item_id]}) AND item_requests.status = 4))
         ")
         .uniq
         .as_json
@@ -144,13 +145,13 @@ module Api::V1
     # Return 200 response if success
     def accept
       # check permission
-      unless current_user.is_admin? || @request.friend_id == current_user.id
+      unless current_user.is_admin? || (@request.friend_id == current_user.id && @request.status != "reserved")
         render json: { message: 'Not accessable' }, status: 403
         return
       end
 
       # check if request is pending
-      unless @request.pending?
+      unless (@request.pending? || @request.status == "reserved")
         render json: { message: 'Request is not pending' }, status: 406
         return
       end
@@ -246,6 +247,49 @@ module Api::V1
 
       @request.sign
       render json: { message: 'Request has been signed' }, status: 200
+    end
+
+    # POST: /v1/items/requests/reserve
+    def reserve
+      inventory = Inventory.find(reserve_params[:inventory_id])
+      user = User.find(reserve_params[:user_id])
+
+      if !inventory || !user || reserve_params[:quantity].to_f > inventory.quantity
+        return render json: { message: 'Unable to reserve an item!' }, status: 404
+      end
+      price = helpers.get_relation_price(current_user.id, reserve_params[:user_id]) + inventory.price
+
+      reserved = Inventory.new do |m|
+        m.item_id = inventory.item_id
+        m.user_id = inventory.user_id
+        m.price = inventory.price + price
+        m.quantity = reserve_params[:quantity]
+        m.ref_id = inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
+        m.status = :reserved
+        m.gallery_map = inventory.gallery_map
+        m.save!
+      end
+      inventory.update(quantity: inventory.quantity - reserved.quantity)
+
+      request_contract = RequestContract.new
+      request_contract.user_id = user.id
+      request_contract.inventory_id = reserved.id
+      request_contract.item_id = reserved.item_id
+      request_contract.quantity = reserved.quantity
+      request_contract.steps = 1
+      request_contract.save!
+
+      request = ItemRequest.new
+      request.request_contract_id = request_contract.id
+      request.user_id = user.id
+      request.friend_id = current_user.id
+      request.price = price + inventory.price
+      request.status = :reserved
+      request.sent = request.user_id == current_user.id ? 1 : 0
+      request.step = 1
+      request.save!
+
+      render json: { message: 'Item has been reserved' }, status: 200
     end
 
     # GET: /v1/items/requested
@@ -363,6 +407,10 @@ module Api::V1
     private
     def request_params
       params.require(:request).permit(:quantity, :price)
+    end
+
+    def reserve_params
+      params.permit(:inventory_id, :user_id, :quantity)
     end
 
     def set_request
