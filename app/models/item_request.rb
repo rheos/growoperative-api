@@ -48,19 +48,16 @@ class ItemRequest < ApplicationRecord
 
       # create or find order if there are any request_contract with same relation present
       # binding.pry
-      parallel_request = ItemRequest.where("user_id = #{self.user_id} AND friend_id = #{self.friend_id} AND status = 1 AND signed_at IS NULL AND shipped_at IS NULL AND id != #{self.id}").first
-      if parallel_request
-        order = Order.find_by(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-        if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity + parallel_request.request_contract.quantity)
-          order.update(order_label: 'Order ' + order.id.to_s)
-          parallel_request.update(order_id: order.id)
-        else
-          order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
-        end
-        self.update(order_id: order.id)
+      order = Order.where(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
+      return { message: 'Please, choose order to assign' } if order.length > 1
+      order = order[0]
+      if !order
+        order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
+        order.update(order_label: 'Order ' + order.id.to_s)
+      else
+        order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
       end
-      true
+      self.update(order_id: order.id)
     end
     true
   end

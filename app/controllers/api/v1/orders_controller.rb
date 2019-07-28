@@ -5,8 +5,8 @@ module Api::V1
     def create
       # binding.pry
       if params[:order].present? && params[:order][:acceptable_item].present?
-        request = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{params[:order][:acceptable_item]} AND friend_id = #{current_user.id} AND signed_at IS NULL")
-        orders = Order.where(user_id: request.first.user_id.to_s, friend_id: request.first.friend_id.to_s) if request && request.first
+        request = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{params[:order][:acceptable_item]} AND friend_id = #{current_user.id} AND signed_at IS NULL AND shipped_at IS NULL")
+        orders = Order.where(user_id: request.first.user_id.to_s, friend_id: request.first.friend_id.to_s, order_status: :pending) if request && request.first
 
         render json: { orders: orders || [] }, status: 200
       else
@@ -22,6 +22,7 @@ module Api::V1
         args[:user_id] = request.first.user_id
         args[:order_status] = 0
         order = Order.create(args)
+        order.update(order_label: 'Order ' + order.id.to_s) if !order.order_label || order.order_label == ''
         if order
           render json: { order: order }, status: 200
         else
