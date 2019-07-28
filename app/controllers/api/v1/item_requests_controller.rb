@@ -162,16 +162,12 @@ module Api::V1
         return
       end
 
-      if @request.status == 'reserved'
-        @request.update(status: :accepted, sent: true)
-        @request.request_contract.update(status: :accepted)
-        render json: { message: 'Request has been accepted' }, status: 200
-        return
-      end
-
       # @request.status = :accepted
       # @request.accepted_at = DateTime.now
-      if @request.accept_request
+      result = @request.accept_request
+      if result == true 
+        render json: result, status: 207
+      elsif result[:message]
         render json: { message: 'Request has been accepted' }, status: 200
       else
         render json: { message: 'Something is wrong' }, status: 500
@@ -374,6 +370,11 @@ module Api::V1
           order = Order.find(key).as_json
           result.push({order: order, items: items})
         end
+      end
+
+      without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0")
+      if without_requests.length > 0
+        result.push(without_requests.map { |item| item.request_contract ? nil : item.to_json(current_user) }.compact)
       end
 
       render json: {

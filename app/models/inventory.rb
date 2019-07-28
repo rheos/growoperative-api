@@ -112,9 +112,23 @@ class Inventory < ApplicationRecord
   def update_status (args)
     case args[:status]
     when 'available'
-      if self.status == 'reserved' && self.request_contract.status == 'completed'
-        self.update(status: :available)
-        self.request_contract.destroy
+      if self.status == 'reserved' && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
+        if self.request_contract
+          self.update(status: :available)
+          self.request_contract.destroy
+        else
+          if self.ref_id
+            inventory = Inventory.find(self.ref_id)
+            if inventory
+              inventory.update(quantity: inventory.quantity + self.quantity)
+              self.destroy
+            else
+              self.update(status: :available)
+            end
+          else
+            self.update(status: :available)
+          end
+        end
       else
         false
       end
