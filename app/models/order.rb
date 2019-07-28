@@ -28,9 +28,11 @@ class Order < ApplicationRecord
       self.destroy if ItemRequest.where(order_id: self.id).count == 0
       true
     when 'add_item'
-      item_request = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]} AND item_requests.status = 1")
-      return false if !item_request.first || item_request.first.friend_id.to_s != user_id.to_s || item_request.first.friend_id.to_s != self.friend_id
-      item_request.first.update(order_id: self.id)
+      item_requests = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]} AND item_requests.status = 1")
+      return false if !item_requests.first
+      item_request = item_requests.find{ |i| i.friend_id.to_s == user_id.to_s || i.friend_id.to_s == self.friend_id}
+      return false if !item_request
+      item_request.update(order_id: self.id)
     else
       return false
     end
