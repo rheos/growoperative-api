@@ -1,5 +1,5 @@
 require 'rails_helper'
 
-RSpec.describe ItemRequestsController, type: :controller do
-
+RSpec.describe Api::V1::ItemRequestsController, type: :controller do
+    pending "add some examples to (or delete) #{__FILE__}"
 end

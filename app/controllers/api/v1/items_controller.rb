@@ -141,7 +141,7 @@ module Api::V1
         result = @inventory.update_status(inventory_status_params)
       end
 
-      if result != false
+      if result == true
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -189,19 +189,6 @@ module Api::V1
 
       user_ids.delete(current_user.id)
 
-      # Recursive SQL is availbe on Mysql 8
-      # sql = "
-      #   WITH RECURSIVE get_friends(obj_user_id, depth, cycle) AS (
-      #     SELECT IF(user_id = #{current_user.id}, friend_id, user_id), 1, false
-      #     FROM relationships
-      #     WHERE user_id = #{current_user.id} OR friend_id = #{current_user.id}
-      #   UNION ALL
-      #     SELECT IF(user_id = obj_user_id, friend_id, user_id), get_friends.depth + 1, user_id = ANY(obj_user_id)
-      #     FROM relationships
-      #     WHERE NOT cycle AND (depth < #{depth_limit}) AND (user_id = obj_user_id OR friend_id = obj_user_id)
-      #   )
-      #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
-      # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       if user_ids.size > 0
         items = Inventory.joins(:item).where("
           inventories.user_id = items.producer_id AND
@@ -233,6 +220,7 @@ module Api::V1
       ItemRequest.destroy_all
       RequestContract.destroy_all
       Inventory.destroy_all
+      Order.destroy_all
       
       sql = "INSERT INTO inventories (item_id, user_id, quantity, price, status, created_at, updated_at)  
         SELECT id, user_id, quantity, price, 1, NOW(), NOW()

@@ -13,6 +13,8 @@ class Inventory < ApplicationRecord
   attr_accessor :total_price
   attr_accessor :action_request
 
+  validates :quantity, presence:true, numericality: true
+
   scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
 
   def producer_owns?

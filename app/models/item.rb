@@ -9,6 +9,8 @@ class Item < ApplicationRecord
 
   mount_uploaders :avatars, ImagesUploader
 
+  validates :quantity, presence:true, numericality: true
+
   attr_accessor :unit
   
   # callbacks
