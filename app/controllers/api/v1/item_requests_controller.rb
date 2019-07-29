@@ -165,10 +165,10 @@ module Api::V1
       # @request.status = :accepted
       # @request.accepted_at = DateTime.now
       result = @request.accept_request
-      if result == true 
-        render json: result, status: 207
-      elsif result[:message]
+      if result == true
         render json: { message: 'Request has been accepted' }, status: 200
+      elsif result[:message]
+        render json: result, status: 207
       else
         render json: { message: 'Something is wrong' }, status: 500
       end

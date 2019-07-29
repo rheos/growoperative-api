@@ -16,6 +16,7 @@ class ItemRequest < ApplicationRecord
   scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
 
   def accept_request
+    prev_status = self.status
     self.update(status: :accepted, accepted_at: DateTime.now)
 
     # mark next request for sent 
@@ -24,40 +25,46 @@ class ItemRequest < ApplicationRecord
       request.sent = 1
       request.save!
     end
-    
-    # check if all item requests were accepted
-    if ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size == 0
+
+    # or request is accepted by the inventory owner
+    pending_size = ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size
+    if self.step == 1 || pending_size == 0
+      if(prev_status == "pending")
       #reserve new inventory
-      reserved = Inventory.new do |m|
-        m.item_id = self.inventory.item_id
-        m.user_id = self.inventory.user_id
-        m.price = self.inventory.price
-        m.quantity = self.request_contract.quantity
-        m.ref_id = self.inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
-        m.status = :reserved
-        m.gallery_map = self.inventory.gallery_map
-        m.save!
-      end
+        reserved = Inventory.new do |m|
+          m.item_id = self.inventory.item_id
+          m.user_id = self.inventory.user_id
+          m.price = self.inventory.price
+          m.quantity = self.request_contract.quantity
+          m.ref_id = self.inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
+          m.status = :reserved
+          m.gallery_map = self.inventory.gallery_map
+          m.save!
+        end
 
-      # decrease origin inventory quantity
-      quantity_left = self.inventory.quantity - self.request_contract.quantity
-      self.inventory.update(quantity: quantity_left)
-     
-      # bind contract to a new reserved inventory and update status
-      self.request_contract.update(inventory_id: reserved.id, status: :accepted)
+        # decrease origin inventory quantity
+        quantity_left = self.inventory.quantity - self.request_contract.quantity
+        self.inventory.update(quantity: quantity_left)
 
-      # create or find order if there are any request_contract with same relation present
-      # binding.pry
-      order = Order.where(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-      return { message: 'Please, choose order to assign' } if order.length > 1
-      order = order[0]
-      if !order
-        order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
-        order.update(order_label: 'Order ' + order.id.to_s)
+        # update inventory status if all item requests are accepted
+        self.request_contract.update(status: :accepted) if pending_size == 0
+        # bind contract to a new reserved inventory and update status
+        RequestContract.find_by(id: self.request_contract_id).update(inventory_id: reserved.id)
+
+        # create or find order if there are any request_contract with same relation present
+        order = Order.where(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
+        return { message: 'Please, choose order to assign' } if order.length > 1
+        order = order[0]
+        if !order
+          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
+          order.update(order_label: 'Order ' + order.id.to_s)
+        else
+          order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
+        end
+        self.update(order_id: order.id)
       else
-        order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
+        self.request_contract.update(status: :accepted) if pending_size == 0
       end
-      self.update(order_id: order.id)
     end
     true
   end
@@ -78,15 +85,13 @@ class ItemRequest < ApplicationRecord
 
     # Create or find order if current request isn't last in chain and there are requests with same relation present
     next_request = ItemRequest.find_by(request_contract_id: self.request_contract_id, friend_id: self.user_id)
-    next_parallel_request = ItemRequest.where("friend_id = #{self.user_id} AND status = 1 AND signed_at IS NULL AND shipped_at IS NULL AND id != #{next_request.id}").first if next_request
 
-    if next_request && next_parallel_request
+    if next_request
       order = Order.find_by(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
       if !order
         order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
         order.update(order_label: 'Order ' + order.id.to_s)
         next_request.update(order_id: order.id)
-        next_parallel_request.update(order_id: order.id)
       else
         order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
       end
@@ -109,21 +114,21 @@ class ItemRequest < ApplicationRecord
       :id => self.id, 
       :attributes => {
         'quantity' => self.request_contract.quantity, 
-        'total-price' => self.price, 
+        'total-price' => self.price,
         'user-id' => target_user_id,
-        'target-user-id' => target_user_id, 
+        'target-user-id' => target_user_id,
         'target-user-name' => ApplicationController.helpers.target_user_name(current_user.id, target_user_id),
-        'category-id' => self.inventory.item.category_id, 
-        'name' => self.inventory.item.name, 
+        'category-id' => self.inventory.item.category_id,
+        'name' => self.inventory.item.name,
         'grade-id' => self.inventory.item.grade_id,
-        'item-unit-id' => self.inventory.item.item_unit_id, 
-        'inventory_id' => self.inventory.id, 
-        'unit-name' => self.inventory.item.item_unit.unit_name, 
-        'item-name-id' => self.inventory.item.item_name_id, 
-        'date-available' => self.inventory.item.date_available, 
-        'total-quantity' => self.inventory.quantity, 
-        'organic' => self.inventory.item.organic, 
-        'created-at' => self.created_at, 
+        'item-unit-id' => self.inventory.item.item_unit_id,
+        'inventory_id' => self.inventory.id,
+        'unit-name' => self.inventory.item.item_unit.unit_name,
+        'item-name-id' => self.inventory.item.item_name_id,
+        'date-available' => self.inventory.item.date_available,
+        'total-quantity' => self.inventory.quantity,
+        'organic' => self.inventory.item.organic,
+        'created-at' => self.created_at,
         'sent' => self.user_id == current_user.id,
         'avatars' => ((self.inventory.avatars.length > 0 && self.inventory.avatars) || self.inventory.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
         'owner-id' => self.inventory.user_id,

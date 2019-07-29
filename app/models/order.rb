@@ -16,7 +16,7 @@ class Order < ApplicationRecord
       end
       self.update(signed_on: DateTime.now, order_status: :signed)
     when 'ship'
-      return false if (user_id.to_s != self.friend_id || self.order_status == "shipped")
+      return false if (user_id.to_s != self.friend_id || self.order_status == "shipped") || self.item_requests.find{|item_request| item_request.request_contract.status != "accepted"}
       self.item_requests.each do |item_request|
         item_request.ship if !item_request.shipped_at
       end
