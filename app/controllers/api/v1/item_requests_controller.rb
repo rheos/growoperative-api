@@ -200,7 +200,7 @@ module Api::V1
       end
 
       # cancel the request contract
-      order = Order.find(@request.order_id)
+      order = Order.find_by(id: @request.order_id)
       @request.update(order_id: nil)
       order.destroy if order && ItemRequest.where(order_id: order.id).count == 0
       @request.request_contract.status = :cancelled
@@ -380,7 +380,7 @@ module Api::V1
 
       without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0")
       if without_requests.length > 0
-        result.push(without_requests.map { |item| item.request_contract ? nil : item.to_json(current_user) }.compact)
+        result.push(without_requests.map { |item| item.to_json(current_user) }.compact)
       end
 
       render json: {
