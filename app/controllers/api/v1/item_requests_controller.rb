@@ -312,7 +312,8 @@ module Api::V1
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = json[:attributes]["inventory_id"]
-        json[:attributes]["need_sign"] = item.shipped_at && !item.signed_at
+        next_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
+        json[:attributes]["need_sign"] = (item.shipped_at && !item.signed_at) || (next_request && next_request.status == "pending" )
         json
       end
 
@@ -367,7 +368,10 @@ module Api::V1
         if key.nil? || value.find{|r| r[:attributes]['chain_status'] == 'completed'}
           result.push(items)
         else
-          order = Order.find(key).as_json
+          order = Order.find(key)
+          ready = order.item_requests.select{|req| req.request_contract.status != "accepted"}.length > 0 ? false : true
+          order = order.as_json
+          order["is_ready"] = ready
           result.push({order: order, items: items})
         end
       end
