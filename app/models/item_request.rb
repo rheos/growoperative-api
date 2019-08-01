@@ -29,6 +29,7 @@ class ItemRequest < ApplicationRecord
     # or request is accepted by the inventory owner
     pending_size = ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size
     if self.step == 1 || pending_size == 0
+      self.update(sent: true) if (prev_status == "reserved" || self.step == 1)
       if(prev_status == "pending")
       #reserve new inventory
         reserved = Inventory.new do |m|
