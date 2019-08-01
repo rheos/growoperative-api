@@ -200,9 +200,11 @@ module Api::V1
       end
 
       # cancel the request contract
+      order = Order.find(@request.order_id)
+      @request.update(order_id: nil)
+      order.destroy if order && ItemRequest.where(order_id: order.id).count == 0
       @request.request_contract.status = :cancelled
       @request.request_contract.save
-      @request.update(order_id: nil)
 
       render json: { message: 'Request has been cancelled' }, status: 200
     end
