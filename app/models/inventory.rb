@@ -57,6 +57,7 @@ class Inventory < ApplicationRecord
         'created-at' => self.created_at,
         'avatars' => avatars_with_item,
         'owner-id' => self.user_id,
+        'status' => self.status
       }
     }
   end
