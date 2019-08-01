@@ -350,6 +350,7 @@ module Api::V1
             WHERE item_requests.request_contract_id = request_contracts.id AND item_requests.friend_id = #{current_user.id}
           ) = 0
           ))
+          OR (item_requests.friend_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.shipped_at IS NOT NULL AND request_contracts.status = 3)
         ")
       # binding.pry
       result = []
@@ -378,7 +379,9 @@ module Api::V1
         end
       end
 
-      without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0")
+      without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0 
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
+
       if without_requests.length > 0
         result.push(without_requests.map { |item| item.to_json(current_user) }.compact)
       end
