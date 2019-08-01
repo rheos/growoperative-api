@@ -137,5 +137,6 @@ class Inventory < ApplicationRecord
     else
       false
     end
+    true
   end
 end
