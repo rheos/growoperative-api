@@ -68,5 +68,6 @@ class Item < ApplicationRecord
       uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url && img.url.split('/').last})
     end
     uploader.clear_thumbnails if was_deleted
+    true
   end
 end

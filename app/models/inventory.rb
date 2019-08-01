@@ -75,8 +75,7 @@ class Inventory < ApplicationRecord
 
   def update_avatars (args, current_user_id)
     if current_user_id == self.item.user_id
-      self.item.update_avatars(args)
-      return
+      return self.item.update_avatars(args)
     end 
 
     updated_list = []
@@ -109,6 +108,7 @@ class Inventory < ApplicationRecord
       uploader.update_thumbnail(avatar, avatar_names.compact)
     end
     uploader.clear_thumbnails if was_deleted
+    true
   end
 
   def update_status (args)
