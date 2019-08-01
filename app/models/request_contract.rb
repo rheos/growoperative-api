@@ -16,12 +16,12 @@ class RequestContract < ApplicationRecord
 
 
     # restore inventory
-    origin_inventory = Inventory.find_by(id: self.inventory.ref_id)
-    if self.cancelled? && origin_inventory
-      origin_inventory.quantity += self.quantity
-      origin_inventory.save
-      # remove reserved inventory
-      self.inventory.destroy
-    end
+    # origin_inventory = Inventory.find_by(id: self.inventory.ref_id)
+    # if self.cancelled? && origin_inventory
+    #   origin_inventory.quantity += self.quantity
+    #   origin_inventory.save
+    #   # remove reserved inventory
+    #   self.inventory.destroy
+    # end
   end
 end
