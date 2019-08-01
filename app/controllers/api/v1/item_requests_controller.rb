@@ -266,12 +266,12 @@ module Api::V1
       if !inventory || !user || reserve_params[:quantity].to_f > inventory.quantity
         return render json: { message: 'Unable to reserve an item!' }, status: 404
       end
-      price = helpers.get_relation_price(current_user.id, user.id)  + inventory.price
+      price = helpers.get_relation_price(current_user.id, user.id) + inventory.price
 
       reserved = Inventory.new do |m|
         m.item_id = inventory.item_id
         m.user_id = inventory.user_id
-        m.price = price
+        m.price = reserve_params[:price] || price
         m.quantity = reserve_params[:quantity]
         m.ref_id = inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
         m.status = :reserved
@@ -292,7 +292,7 @@ module Api::V1
       request.request_contract_id = request_contract.id
       request.user_id = user.id
       request.friend_id = current_user.id
-      request.price = price
+      request.price = reserve_params[:price] || price
       request.status = :reserved
       request.sent = request.user_id == current_user.id ? 1 : 0
       request.step = 1
@@ -428,7 +428,7 @@ module Api::V1
     end
 
     def reserve_params
-      params.permit(:inventory_id, :user_id, :quantity)
+      params.permit(:inventory_id, :user_id, :quantity, :price)
     end
 
     def set_request
