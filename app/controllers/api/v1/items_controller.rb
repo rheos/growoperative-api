@@ -6,6 +6,7 @@ module Api::V1
     # GET : /v1/items?range_degree=:integer 
     # This method will return all item which posted by contacts of current user
     def index
+
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
       relationships = Relationship.where("user_id=#{current_user.id} OR friend_id=#{current_user.id}")
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
@@ -141,7 +142,7 @@ module Api::V1
         result = @inventory.update_status(inventory_status_params)
       end
 
-      if result == true
+      if result
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -153,6 +154,7 @@ module Api::V1
     def destroy
       # check if there is a user using this item
       # destory if there is only owner, else destory owner's inventory only
+      # binding.pry
       if current_user.is_admin? || Inventory.where("item_id = #{@inventory.item_id}").size == 1
         @inventory.item.destroy!
       else

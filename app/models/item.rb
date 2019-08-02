@@ -46,10 +46,9 @@ class Item < ApplicationRecord
   end
 
   def update_avatars (args)
-
     updated_list = []
     was_deleted = false #optimization flag for thumbnails cleaning up
-  
+
     (args[:source_images] || []).each_with_index do |image, i|
       if image.is_a? String
         present_avatar = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
@@ -68,5 +67,6 @@ class Item < ApplicationRecord
       uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url && img.url.split('/').last})
     end
     uploader.clear_thumbnails if was_deleted
+    true
   end
 end
