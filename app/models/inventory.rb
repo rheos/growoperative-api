@@ -122,9 +122,9 @@ class Inventory < ApplicationRecord
   def update_status (args)
     case args[:status]
     when 'available'
+      self.reload
       if self.status == 'reserved' && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
         if self.request_contract
-          self.update(status: :available)
           self.request_contract.destroy
           inventory = Inventory.find_by(id: self.ref_id)
           if inventory
@@ -144,12 +144,12 @@ class Inventory < ApplicationRecord
             self.update(status: :available)
           end
         end
+        return true
       else
-        false
+        return false
       end
     else
-      false
+      return false
     end
-    true
   end
 end
