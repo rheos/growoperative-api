@@ -7,6 +7,8 @@ class Inventory < ApplicationRecord
   mount_uploaders :avatars, ImagesUploader
   serialize :gallery_map, Array
 
+  after_update :update_callback
+
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
   attr_accessor :target_user_id
@@ -17,13 +19,18 @@ class Inventory < ApplicationRecord
 
   scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
 
+  def update_callback
+    self.update(gallery_map: ["<-", "<-", "<-", "<-", "<-"]) if self.gallery_map == [] || self.gallery_map == nil
+  end
+
   def producer_owns?
     self.user_id == self.item.producer_id
   end
 
   def target_user_name(current_user)
+    target_id = self.target_user_id.nil? ? self.user_id : self.target_user_id
     relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
-      [current_user.id, self.target_user_id], [current_user.id, self.target_user_id]
+      [current_user.id, target_id], [current_user.id, target_id]
     if relation.first
       if (relation.first.user_id == current_user.id) && relation.first.friend_label.present?
         relation.first.friend_label

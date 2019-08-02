@@ -64,6 +64,14 @@ class ItemRequest < ApplicationRecord
         end
         self.update(order_id: order.id)
       else
+        order = Order.find_by(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
+        if !order
+          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
+          order.update(order_label: 'Order ' + order.id.to_s)
+        else
+          order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
+        end
+        self.update(order_id: order.id)
         self.request_contract.update(status: :accepted) if pending_size == 0
       end
     end
@@ -83,7 +91,7 @@ class ItemRequest < ApplicationRecord
     # change inventory ownership and price
     self.inventory.update(user_id: self.user_id, ref_id: nil, price: self.price)
     # Note: ref_id is disabled because inventory will not be merged with original if contract will be cancelled
-
+  
     # Create or find order if current request isn't last in chain and there are requests with same relation present
     next_request = ItemRequest.find_by(request_contract_id: self.request_contract_id, friend_id: self.user_id)
 
