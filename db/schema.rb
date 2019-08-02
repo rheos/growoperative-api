@@ -46,7 +46,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
     t.integer "ref_id"
     t.json "avatars"
-    t.string "gallery_map", default: "--- []\n"
+    t.string "gallery_map", default: "---\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
