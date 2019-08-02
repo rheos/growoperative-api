@@ -61,7 +61,7 @@ module Api::V1
         .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
           pending_requests[request.inventory_id] = request.action_request
-          pending_requests[request.reserved_id] = request.action_request if request.reserved_id
+          pending_requests[request.reserved_id] = Inventory.find(request.reserved_id).item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count if request.reserved_id
         end
       
       # assign count

@@ -57,6 +57,7 @@ class Inventory < ApplicationRecord
         'created-at' => self.created_at,
         'avatars' => avatars_with_item,
         'owner-id' => self.user_id,
+        'status' => self.status
       }
     }
   end
@@ -118,9 +119,14 @@ class Inventory < ApplicationRecord
         if self.request_contract
           self.update(status: :available)
           self.request_contract.destroy
+          inventory = Inventory.find_by(id: self.ref_id)
+          if inventory
+            inventory.update(quantity: inventory.quantity + self.quantity)
+            self.destroy
+          end
         else
           if self.ref_id
-            inventory = Inventory.find(self.ref_id)
+            inventory = Inventory.find_by(id: self.ref_id)
             if inventory
               inventory.update(quantity: inventory.quantity + self.quantity)
               self.destroy
@@ -137,5 +143,6 @@ class Inventory < ApplicationRecord
     else
       false
     end
+    true
   end
 end
