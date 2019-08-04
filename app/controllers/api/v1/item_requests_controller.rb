@@ -372,7 +372,7 @@ module Api::V1
           result.push(items)
         else
           order = Order.find(key)
-          ready = order.item_requests.select{|req| req.request_contract.status != "accepted"}.length > 0 ? false : true
+          ready = order.item_requests.reject{|req| ["accepted", "cancelled"].include?(req.request_contract.status)}.length > 0 ? false : true
           order = order.as_json
           order["is_ready"] = ready
           result.push({order: order, items: items})
