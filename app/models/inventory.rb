@@ -130,6 +130,8 @@ class Inventory < ApplicationRecord
           if inventory
             inventory.update(quantity: inventory.quantity + self.quantity)
             self.destroy
+          else
+            self.update(status: :available)
           end
         else
           if self.ref_id
