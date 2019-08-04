@@ -7,7 +7,7 @@ class Inventory < ApplicationRecord
   mount_uploaders :avatars, ImagesUploader
   serialize :gallery_map, Array
 
-  after_update :update_callback
+  after_commit :check_gallery
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
@@ -19,7 +19,7 @@ class Inventory < ApplicationRecord
 
   scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
 
-  def update_callback
+  def check_gallery
     self.update(gallery_map: ["<-", "<-", "<-", "<-", "<-"]) if self.gallery_map == [] || self.gallery_map == nil
   end
 
@@ -82,6 +82,7 @@ class Inventory < ApplicationRecord
   end
 
   def update_avatars (args, current_user_id)
+    binding.pry
     if current_user_id == self.item.user_id
       return self.item.update_avatars(args)
     end 
