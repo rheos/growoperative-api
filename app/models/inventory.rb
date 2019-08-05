@@ -7,8 +7,6 @@ class Inventory < ApplicationRecord
   mount_uploaders :avatars, ImagesUploader
   serialize :gallery_map, Array
 
-  after_commit :check_gallery
-
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
   attr_accessor :target_user_id
@@ -18,10 +16,6 @@ class Inventory < ApplicationRecord
   validates :quantity, presence:true, numericality: true
 
   scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
-
-  def check_gallery
-    self.update(gallery_map: ["<-", "<-", "<-", "<-", "<-"]) if self.gallery_map == [] || self.gallery_map == nil
-  end
 
   def producer_owns?
     self.user_id == self.item.producer_id
@@ -71,18 +65,17 @@ class Inventory < ApplicationRecord
 
   def avatars_with_item
     avatars = []
-    self.gallery_map.each_with_index do |s, i|
-      if s == '+'
-        avatars.push(self['avatars'] && self['avatars'][i] && self.avatars.find {|n| n.identifier == self['avatars'][i]})
-      elsif s == '<-'
-        avatars.push(self.item['avatars'] && self.item['avatars'][i] && self.item.avatars.find {|n| n.identifier == self.item['avatars'][i]})
+    if self.gallery_map.length > 0 && !self.gallery_map.find {|mp| mp != "<-"}
+      avatars = self.item.avatars
+    else
+      self.gallery_map.each do |name|
+        avatars.push((self.avatars && self.avatars.find {|n| n.identifier == name}) || (self.item.avatars && self.item.avatars.find {|n| n.identifier == name}) || nil)
       end
     end
     avatars.compact.map{ |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }
   end
 
   def update_avatars (args, current_user_id)
-    binding.pry
     if current_user_id == self.item.user_id
       return self.item.update_avatars(args)
     end 
@@ -94,15 +87,17 @@ class Inventory < ApplicationRecord
     ((args[:source_images] || []).select {|arg| arg != 'null'}).each_with_index do |image, i|
       if image.is_a? String
         present_avatar = self.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
-        updated_list[i] = present_avatar
         if present_avatar
-          order_map[i] = '+'
+          updated_list.push(present_avatar) 
+          order_map.push(image.split('/').last)
         else
-          order_map[i] = (self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}) ? '<-' : '-'
+          item_avatar = self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
+          order_map.push(image.split('/').last) if item_avatar
+          was_deleted = true if !item_avatar
         end
       else
-        updated_list[i] = image
-        order_map[i] = '+'
+        updated_list.push(image)
+        order_map.push(image.original_filename)
       end
     end
 
@@ -118,6 +113,14 @@ class Inventory < ApplicationRecord
     end
     uploader.clear_thumbnails if was_deleted
     true
+  end
+
+  def update_item_avatar_relation (old_name, new_name)
+    index = self.gallery_map.index(old_name)
+    if index
+      self.gallery_map[index] = new_name
+      self.save!
+    end
   end
 
   def update_status (args)
