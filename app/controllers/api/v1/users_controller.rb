@@ -122,8 +122,9 @@ module Api::V1
 			# else
 			# 	users = []
 			# end
+			res = relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }, :user_relationship_prices])
 			render json: {
-				data: relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }, :user_relationship_prices])
+				items: res, default_markup: helpers.get_user_markup(current_user.id)
 			}, status: 200
 		end
 
