@@ -7,6 +7,7 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
+      # binding.pry
       requests = ItemRequest.with_inventory_data
         .select("
           item_requests.*, 
@@ -18,8 +19,8 @@ module Api::V1
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
-          request_contracts.inventory_id=#{params[:item_id]} AND 
-          item_requests.status < 3
+          ((request_contracts.inventory_id=#{params[:item_id]} AND item_requests.status < 3)
+          OR ((inventories.ref_id=#{params[:item_id]} OR request_contracts.inventory_id=#{params[:item_id]}) AND item_requests.status = 4))
         ")
         .uniq
         .as_json
@@ -144,13 +145,13 @@ module Api::V1
     # Return 200 response if success
     def accept
       # check permission
-      unless current_user.is_admin? || @request.friend_id == current_user.id
+      unless current_user.is_admin? || @request.friend_id == current_user.id || (@request.status == "reserved" && @request.user_id == current_user.id)
         render json: { message: 'Not accessable' }, status: 403
         return
       end
 
       # check if request is pending
-      unless @request.pending?
+      unless (@request.pending? || @request.status == "reserved")
         render json: { message: 'Request is not pending' }, status: 406
         return
       end
@@ -163,8 +164,11 @@ module Api::V1
 
       # @request.status = :accepted
       # @request.accepted_at = DateTime.now
-      if @request.accept_request
+      result = @request.accept_request
+      if result == true
         render json: { message: 'Request has been accepted' }, status: 200
+      elsif result[:message]
+        render json: result, status: 207
       else
         render json: { message: 'Something is wrong' }, status: 500
       end
@@ -189,7 +193,16 @@ module Api::V1
         return
       end
 
+      if @request.status == 'reserved'
+        @request.request_contract.destroy
+        render json: { message: 'Request has been cancelled' }, status: 200
+        return
+      end
+
       # cancel the request contract
+      order = Order.find_by(id: @request.order_id)
+      @request.update(order_id: nil)
+      order.destroy if order && ItemRequest.where(order_id: order.id).count == 0
       @request.request_contract.status = :cancelled
       @request.request_contract.save
 
@@ -226,9 +239,7 @@ module Api::V1
         render json: { message: 'Not availabe to ship the inventory' }, status: 406
         return
       end
-      current_chain_item_request.shipped_at = DateTime.now
-      current_chain_item_request.status = :completed
-      current_chain_item_request.save!
+      current_chain_item_request.ship
 
       render json: { message: 'Items has been shipped' }, status: 200
     end
@@ -245,18 +256,51 @@ module Api::V1
         return
       end
 
-      # Update current contract step and finish contract, if all steps are done
-      request_contract = @request.request_contract
-  
-      request_contract.current_step += 1
-      if request_contract.current_step == request_contract.steps
-        request_contract.status = :completed
-      end
-
-      request_contract.save!
-
       @request.sign
       render json: { message: 'Request has been signed' }, status: 200
+    end
+
+    # POST: /v1/items/requests/reserve
+    def reserve
+      inventory = Inventory.find(reserve_params[:inventory_id])
+      user = User.find(reserve_params[:user_id])
+
+      if !inventory || !user || reserve_params[:quantity].to_f > inventory.quantity
+        return render json: { message: 'Unable to reserve an item!' }, status: 404
+      end
+      price = helpers.get_relation_price(current_user.id, user.id) + inventory.price
+
+      reserved = Inventory.new do |m|
+        m.item_id = inventory.item_id
+        m.user_id = inventory.user_id
+        m.price = reserve_params[:price] || price
+        m.quantity = reserve_params[:quantity]
+        m.ref_id = inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
+        m.status = :reserved
+        m.gallery_map = inventory.gallery_map
+        m.save!
+      end
+      inventory.update(quantity: inventory.quantity - reserved.quantity)
+
+      request_contract = RequestContract.new
+      request_contract.user_id = user.id
+      request_contract.inventory_id = reserved.id
+      request_contract.item_id = reserved.item_id
+      request_contract.quantity = reserved.quantity
+      request_contract.steps = 1
+      request_contract.save!
+
+      request = ItemRequest.new
+      request.request_contract_id = request_contract.id
+      request.user_id = user.id
+      request.friend_id = current_user.id
+      request.price = reserve_params[:price] || price
+      request.status = :reserved
+      request.sent = request.user_id == current_user.id ? 1 : 0
+      request.step = 1
+      request.save!
+
+      render json: { message: 'Item has been reserved' }, status: 200
     end
 
     # GET: /v1/items/requested
@@ -270,19 +314,33 @@ module Api::V1
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = json[:attributes]["inventory_id"]
-        json[:attributes]["need_sign"] = item.shipped_at && !item.signed_at
+        next_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
+        json[:attributes]["need_sign"] = (item.shipped_at && !item.signed_at) || (next_request && next_request.status == "pending" )
         json
       end
 
+      result = []
+      items = items.group_by{|i| i[:attributes]["order"]}
+      items.each do |key, value|
+        if key.nil?
+          result.push(value)
+        else
+          res = Order.find(key).as_json
+          (res['friend_id'] == current_user.id.to_s || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+        end
+      end
+      
+      # binding.pry
+
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 
     # GET: /v1/items/reserved
     def reserved
-      items = Inventory.with_contract_data
-        .select("inventories.*, request_contracts.inventory_id AS old_id, item_requests.price AS current_price")
+      requests = ItemRequest.with_inventory_data
+        .select("item_requests.*, inventories.id AS inventory_id")
         .where("
           inventories.user_id = #{current_user.id}
           AND inventories.status = 2
@@ -292,20 +350,44 @@ module Api::V1
             WHERE item_requests.request_contract_id = request_contracts.id AND item_requests.friend_id = #{current_user.id}
           ) = 0
           ))
-        ").uniq
+          OR (item_requests.friend_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.shipped_at IS NOT NULL AND request_contracts.status = 3)
+        ")
+      # binding.pry
+      result = []
+      requests = requests.map{|r| r.to_json(current_user)}.group_by{|i| i[:attributes]["order"]}
 
-      items = items.map do |item|
-        json = item.to_json(current_user)
-        unless item['old_id'].nil?
-          json[:id] = item['old_id']
+      requests.each do |key, value|
+        inventory_ids = value.map{|i| i[:attributes]['inventory_id']}
+        items = Inventory.where(id: inventory_ids).map{|item|
+          json = item.to_json(current_user)
+          previous_request = item.item_requests.find_by(user_id: current_user.id)
+          json[:attributes]['total-price'] = previous_request.price if previous_request
+          next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
+          user_name =  User.find(next_request.user_id).user_name if next_request
+          json[:attributes]['target-user-name'] = user_name if user_name
+          json
+        }
+
+        if key.nil? || value.find{|r| r[:attributes]['chain_status'] == 'completed'}
+          result.push(items)
+        else
+          order = Order.find(key)
+          ready = order.item_requests.reject{|req| ["accepted", "cancelled"].include?(req.request_contract.status)}.length > 0 ? false : true
+          order = order.as_json
+          order["is_ready"] = ready
+          result.push({order: order, items: items})
         end
-        previous_request = item.item_requests.find_by(user_id: current_user.id)
-        json[:attributes]['total-price'] = previous_request.price if previous_request
-        json
+      end
+
+      without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0 
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
+
+      if without_requests.length > 0
+        result.push(without_requests.map { |item| item.to_json(current_user) }.compact)
       end
 
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 
@@ -329,14 +411,29 @@ module Api::V1
         json
       end
 
+      result = []
+      items = items.group_by{|i| i[:attributes]["order"]}
+      items.each do |key, value|
+        if key.nil?
+          result.push(value)
+        else
+          res = Order.find(key).as_json
+          result.push({order: res, items: value})
+        end
+      end
+
       render json: {
-        data: items
+        data: result
       }, status: 200
     end
 
     private
     def request_params
       params.require(:request).permit(:quantity, :price)
+    end
+
+    def reserve_params
+      params.permit(:inventory_id, :user_id, :quantity, :price)
     end
 
     def set_request

@@ -113,17 +113,20 @@ module Api::V1
 		end
 
 		# contact list
-		# url : v1/users/contact_list
+		# url : v1/users/contact_list?:target_inventory_id
 		def contact_list
 			relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
-			# if relationships.count > 0
-			# 	user_ids = relationships.pluck(:user_id, :friend_id).flatten.uniq.compact - [current_user.id]
-			# 	users = User.where("id IN (?)", user_ids)
-			# else
-			# 	users = []
-			# end
+
+			res = relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }, :user_relationship_prices])
+			target_price = 0
+			if params[:target_inventory_id].present? && Inventory.find(params[:target_inventory_id]).item.user_id != current_user.id
+				res.each do |relation|
+					friend_id = relation["user"]["id"] == current_user.id ? relation["friend"]["id"] : relation["user"]["id"]
+					relation["proposed_price"] = helpers.get_relation_price(current_user.id, friend_id)
+				end
+			end
 			render json: {
-				data: relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }])
+				items: res, default_markup: helpers.get_user_markup(current_user.id)
 			}, status: 200
 		end
 
