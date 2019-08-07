@@ -6,11 +6,17 @@ module Api::V1
     # GET : /v1/items?range_degree=:integer 
     # This method will return all item which posted by contacts of current user
     def index
+
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
       relationships = Relationship.where("user_id=#{current_user.id} OR friend_id=#{current_user.id}")
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
-        @items = Inventory.where("inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1", users)
+        @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1) OR (inventories.status = 2 AND (
+          (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
+          AND request_contracts.status = 0 
+          AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 4 OR item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
+        ))", users).uniq
+
         @items.each do |item|
           item.target_user_id = item.user_id
           if item.producer_owns?
@@ -50,11 +56,12 @@ module Api::V1
       # get pending requests
       pending_requests = {}
       ItemRequest.with_inventory_data
-        .where("item_requests.friend_id = #{current_user.id} AND item_requests.status = 0")
+        .where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)")
         .group("inventories.id")
-        .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request")
+        .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
           pending_requests[request.inventory_id] = request.action_request
+          pending_requests[request.reserved_id] = Inventory.find(request.reserved_id).item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count if request.reserved_id
         end
       
       # assign count
@@ -62,15 +69,6 @@ module Api::V1
         item.action_request = pending_requests.key?(item.id) ? pending_requests[item.id] : 0
         item.to_json(current_user)
       end
-
-      # add available count for waiting chain members
-      # result.map do |item|
-      #   requested_inventory = Inventory.with_inventory_data
-      #   .where('
-      #     inventories.status = 2
-      #     AND 
-      #   ')
-      # end
 
       render json: {
         data: result
@@ -144,7 +142,7 @@ module Api::V1
         result = @inventory.update_status(inventory_status_params)
       end
 
-      if result != false
+      if result
         render json: {
           data: @inventory.to_json(current_user)
         }, status: 200
@@ -156,6 +154,7 @@ module Api::V1
     def destroy
       # check if there is a user using this item
       # destory if there is only owner, else destory owner's inventory only
+      # binding.pry
       if current_user.is_admin? || Inventory.where("item_id = #{@inventory.item_id}").size == 1
         @inventory.item.destroy!
       else
@@ -192,19 +191,6 @@ module Api::V1
 
       user_ids.delete(current_user.id)
 
-      # Recursive SQL is availbe on Mysql 8
-      # sql = "
-      #   WITH RECURSIVE get_friends(obj_user_id, depth, cycle) AS (
-      #     SELECT IF(user_id = #{current_user.id}, friend_id, user_id), 1, false
-      #     FROM relationships
-      #     WHERE user_id = #{current_user.id} OR friend_id = #{current_user.id}
-      #   UNION ALL
-      #     SELECT IF(user_id = obj_user_id, friend_id, user_id), get_friends.depth + 1, user_id = ANY(obj_user_id)
-      #     FROM relationships
-      #     WHERE NOT cycle AND (depth < #{depth_limit}) AND (user_id = obj_user_id OR friend_id = obj_user_id)
-      #   )
-      #   SELECT DISTINCT(obj_user_id) FROM get_friends;"
-      # user_ids = ActiveRecord::Base.connection.execute(sql).pluck('obj_user_id')
       if user_ids.size > 0
         items = Inventory.joins(:item).where("
           inventories.user_id = items.producer_id AND
@@ -236,6 +222,7 @@ module Api::V1
       ItemRequest.destroy_all
       RequestContract.destroy_all
       Inventory.destroy_all
+      Order.destroy_all
       
       sql = "INSERT INTO inventories (item_id, user_id, quantity, price, status, created_at, updated_at)  
         SELECT id, user_id, quantity, price, 1, NOW(), NOW()

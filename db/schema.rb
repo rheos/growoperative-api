@@ -46,7 +46,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
     t.integer "ref_id"
     t.json "avatars"
-    t.string "gallery_map", default: "--- []\n"
+    t.string "gallery_map", default: "---\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -96,6 +96,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "accepted_at"
     t.datetime "shipped_at"
     t.datetime "signed_at"
+    t.integer "order_id"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
@@ -135,24 +136,17 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["jti"], name: "index_jwt_blacklist_on_jti"
   end
 
-  create_table "order_contents", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
-    t.bigint "order_id"
-    t.string "status"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.bigint "item_request_id"
-    t.index ["item_request_id"], name: "index_order_contents_on_item_request_id"
-    t.index ["order_id"], name: "index_order_contents_on_order_id"
-  end
-
   create_table "orders", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
-    t.bigint "relationship_id"
-    t.decimal "total", precision: 10
-    t.string "status"
-    t.integer "paid"
+    t.string "user_id"
+    t.string "friend_id"
+    t.string "order_label"
+    t.decimal "order_total", precision: 10
+    t.integer "order_status"
+    t.datetime "estimated_date"
+    t.datetime "shipped_on"
+    t.datetime "signed_on"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["relationship_id"], name: "index_orders_on_relationship_id"
   end
 
   create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -300,9 +294,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "items", "item_names"
   add_foreign_key "items", "item_units"
   add_foreign_key "items", "users"
-  add_foreign_key "order_contents", "item_requests"
-  add_foreign_key "order_contents", "orders"
-  add_foreign_key "orders", "relationships"
   add_foreign_key "relationships", "users"
   add_foreign_key "request_contracts", "items"
   add_foreign_key "request_contracts", "users"

@@ -13,6 +13,8 @@ class Inventory < ApplicationRecord
   attr_accessor :total_price
   attr_accessor :action_request
 
+  validates :quantity, presence:true, numericality: true
+
   scope :with_contract_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`inventory_id` = `inventories`.`id` INNER JOIN `item_requests` ON `item_requests`.`request_contract_id` = `request_contracts`.`id`") }
 
   def producer_owns?
@@ -20,8 +22,9 @@ class Inventory < ApplicationRecord
   end
 
   def target_user_name(current_user)
+    target_id = self.target_user_id.nil? ? self.user_id : self.target_user_id
     relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
-      [current_user.id, self.target_user_id], [current_user.id, self.target_user_id]
+      [current_user.id, target_id], [current_user.id, target_id]
     if relation.first
       if (relation.first.user_id == current_user.id) && relation.first.friend_label.present?
         relation.first.friend_label
@@ -55,17 +58,18 @@ class Inventory < ApplicationRecord
         'created-at' => self.created_at,
         'avatars' => avatars_with_item,
         'owner-id' => self.user_id,
+        'status' => self.status
       }
     }
   end
 
   def avatars_with_item
     avatars = []
-    self.gallery_map.each_with_index do |s, i|
-      if s == '+'
-        avatars.push(self['avatars'] && self['avatars'][i] && self.avatars.find {|n| n.identifier == self['avatars'][i]})
-      elsif s == '<-'
-        avatars.push(self.item['avatars'] && self.item['avatars'][i] && self.item.avatars.find {|n| n.identifier == self.item['avatars'][i]})
+    if self.gallery_map.length > 0 && !self.gallery_map.find {|mp| mp != "<-"}
+      avatars = self.item.avatars
+    else
+      self.gallery_map.each do |name|
+        avatars.push((self.avatars && self.avatars.find {|n| n.identifier == name}) || (self.item.avatars && self.item.avatars.find {|n| n.identifier == name}) || nil)
       end
     end
     avatars.compact.map{ |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }
@@ -73,8 +77,7 @@ class Inventory < ApplicationRecord
 
   def update_avatars (args, current_user_id)
     if current_user_id == self.item.user_id
-      self.item.update_avatars(args)
-      return
+      return self.item.update_avatars(args)
     end 
 
     updated_list = []
@@ -84,15 +87,17 @@ class Inventory < ApplicationRecord
     ((args[:source_images] || []).select {|arg| arg != 'null'}).each_with_index do |image, i|
       if image.is_a? String
         present_avatar = self.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
-        updated_list[i] = present_avatar
         if present_avatar
-          order_map[i] = '+'
+          updated_list.push(present_avatar) 
+          order_map.push(image.split('/').last)
         else
-          order_map[i] = (self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}) ? '<-' : '-'
+          item_avatar = self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
+          order_map.push(image.split('/').last) if item_avatar
+          was_deleted = true if !item_avatar
         end
       else
-        updated_list[i] = image
-        order_map[i] = '+'
+        updated_list.push(image)
+        order_map.push(image.original_filename)
       end
     end
 
@@ -107,19 +112,50 @@ class Inventory < ApplicationRecord
       uploader.update_thumbnail(avatar, avatar_names.compact)
     end
     uploader.clear_thumbnails if was_deleted
+    true
+  end
+
+  def update_item_avatar_relation (old_name, new_name)
+    index = self.gallery_map.index(old_name)
+    if index
+      self.gallery_map[index] = new_name
+      self.save!
+    end
   end
 
   def update_status (args)
     case args[:status]
     when 'available'
-      if self.status == 'reserved' && self.request_contract.status == 'completed'
-        self.update(status: :available)
-        self.request_contract.destroy
+      self.reload
+      if self.status == 'reserved' && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
+        if self.request_contract
+          self.request_contract.destroy
+          inventory = Inventory.find_by(id: self.ref_id)
+          if inventory
+            inventory.update(quantity: inventory.quantity + self.quantity)
+            self.destroy
+          else
+            self.update(status: :available)
+          end
+        else
+          if self.ref_id
+            inventory = Inventory.find_by(id: self.ref_id)
+            if inventory
+              inventory.update(quantity: inventory.quantity + self.quantity)
+              self.destroy
+            else
+              self.update(status: :available)
+            end
+          else
+            self.update(status: :available)
+          end
+        end
+        return true
       else
-        false
+        return false
       end
     else
-      false
+      return false
     end
   end
 end

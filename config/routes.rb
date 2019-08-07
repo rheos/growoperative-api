@@ -55,11 +55,13 @@ Rails.application.routes.draw do
           post 'requests/:id/cancel' => 'item_requests#cancel'
           post 'requests/:id/ship' => 'item_requests#ship'
           post 'requests/:id/sign' => 'item_requests#sign'
+          post 'requests/reserve' => 'item_requests#reserve'
         end
       end
       resources :user_category_prices, only: [:create]
       resources :user_relationship_prices,            only: [:index, :create]
       resources :user_relationship_request_prices,    only: [:create]
+      resources :orders
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'
