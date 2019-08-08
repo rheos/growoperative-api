@@ -361,4 +361,25 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(finished_inventory.item.avatars.length).to eq 0
     expect(finished_inventory.avatars.length).to eq 1
   end
+
+  it "Dianna owns an inventory without item produced by self, and markups are applied to chain", skip_hooks: true do
+    post "/login", params: {user_name: "dianna", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "dianna")
+
+    order = ItemRequest.where(friend_id: user.id).first.order
+    expect(ItemRequest.where(friend_id: user.id).last.order_id).to eq order.id
+
+    patch "/v1/orders/#{order.id}", headers: {"Authorization": $token}, params: {
+      order_action: {
+        action_name: "ship",
+        item_id: nil
+      }
+    }
+
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"]).to be_truthy
+    expect(ItemRequest.where(friend_id: user.id).select{|r| r.status != "completed"}.length).to eq 0
+  end
 end
