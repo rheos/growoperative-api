@@ -368,18 +368,69 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     $token = response.headers["authorization"]
     user = User.find_by(user_name: "dianna")
 
-    order = ItemRequest.where(friend_id: user.id).first.order
-    expect(ItemRequest.where(friend_id: user.id).last.order_id).to eq order.id
-
-    patch "/v1/orders/#{order.id}", headers: {"Authorization": $token}, params: {
-      order_action: {
-        action_name: "ship",
-        item_id: nil
-      }
+    post "/v1/items", headers: {"Authorization": $token}, params: {
+      item: {
+        user_id: user.id, 
+        quantity: "1000", 
+        category_id: Category.first.id, 
+        name: "no_owner", 
+        grade_id: Grade.first.id, 
+        price: 100, 
+        date_available: DateTime.now, item_unit_id: 
+        ItemUnit.first.id, 
+        organic: true 
+      }, dtype: 1
     }
 
     expect(response).to be_successful
-    expect(JSON(response.body)["data"]).to be_truthy
-    expect(ItemRequest.where(friend_id: user.id).select{|r| r.status != "completed"}.length).to eq 0
+    expect(Item.find_by(name: "no_owner").producer_id).to eq nil
+
+    post "/login", params: {user_name: "dianna_friend", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "dianna_friend")
+
+    # should apply 100 markup to item's price
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 200
+
+
+    post "/login", params: {user_name: "dianna_friend2", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "dianna_friend2")
+
+    # should apply 100 + 100 markup to item's price
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 300
+   
+  end
+
+  it "Markups are deleted, and default markup is used", skip_hooks: true do
+    UserRelationshipPrice.destroy_all
+    # should apply 1 + 1 default node prices
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 102
+
+    # create item category price and default node price
+    UserCategoryPrice.create(user_id: User.find_by(user_name: 'dianna').id, category_id: Category.first.id, unit: ItemUnit.first.unit_name, price: 10)
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 111
+
+    Category.first.update(default_node_price: 20)
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    # should be 10 + 20 (category price for 1 relation and default category node price for 2 relation)
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 130
+
+    UserCategoryPrice.destroy_all
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    # should be 20 + 20 (default category node prices only)
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 140
   end
 end
