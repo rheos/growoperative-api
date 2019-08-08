@@ -223,33 +223,33 @@ module Api::V1
 		# Method : PATCH
 		# Parameter : { "first_id": 2, "second_id": 4, "new_label": "Test" }
 		def edit_contact_label
-      if (params[:first_id] != "" && params[:second_id] != "" && params[:new_label] != "")
-        first_id = params[:first_id]
-        second_id = params[:second_id]
-        relationship = Relationship.find_by("user_id IN (?) AND friend_id IN (?)",[second_id, first_id],[second_id, first_id] )
-        if relationship
-        	if first_id.to_i > second_id.to_i
-	        	relationship.friend_label = params[:new_label]
-	        else
-	          relationship.user_label = params[:new_label]
-	        end
-          if relationship.save
-            render json: {
-              message: "Update label successfully"
-            }, status: 200
-          else
-            render :json=> relationship.errors, status:422
-          end
-        else
-          render json: {
-            message: "Invalid value entered."
-          }, status: 422
-        end
-      else
-	      render json: {
-	        message: "Please submit proper value"
-	      },status: 422
-	    end
+		if (params[:first_id] != "" && params[:second_id] != "" && params[:new_label] != "")
+			first_id = params[:first_id]
+			second_id = params[:second_id]
+			relationship = Relationship.find_by("user_id IN (?) AND friend_id IN (?)",[second_id, first_id],[second_id, first_id] )
+			if relationship
+				if first_id.to_i > second_id.to_i
+					relationship.friend_label = params[:new_label]
+				else
+				relationship.user_label = params[:new_label]
+				end
+			if relationship.save
+				render json: {
+				message: "Update label successfully"
+				}, status: 200
+			else
+				render :json=> relationship.errors, status:422
+			end
+			else
+			render json: {
+				message: "Invalid value entered."
+			}, status: 422
+			end
+		else
+			render json: {
+				message: "Please submit proper value"
+			},status: 422
+		end
     end
 
     # This api will return contact label

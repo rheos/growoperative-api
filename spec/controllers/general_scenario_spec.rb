@@ -117,7 +117,54 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(user.items.count).to eq 1
   end
 
-  it "Dianna_friend2 loads available and requests 25 units from Dianna's inventory", skip_hooks: true do
+  it "Users sets relationship prices", skip_hooks: true do
+    user = User.find_by(user_name: "dianna")
+
+    post "/v1/user_relationship_prices", headers: {"Authorization": $token}, params: {
+      user_relationship_price: {
+        category_id: 1,
+        friend_id: User.find_by(user_name: 'dianna_friend').id,
+        price: 100,
+        relationship_id: user.relationships.first.id
+      }
+    }
+
+    expect(response).to be_successful
+    expect(user.user_relationship_prices.first.price.to_i).to eq 100
+
+    post "/login", params: {user_name: "dianna_friend", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "dianna_friend")
+
+    post "/v1/user_relationship_prices", headers: {"Authorization": $token}, params: {
+      user_relationship_price: {
+        category_id: 1,
+        friend_id: User.find_by(user_name: 'dianna_friend2').id,
+        price: 100,
+        relationship_id: user.relationships.first.id
+      }
+    }
+
+    expect(response).to be_successful
+    expect(user.user_relationship_prices.first.price.to_i).to eq 100
+  end
+
+  it "Dianna_friend loads available and gets price without relation markup", skip_hooks: true do
+    post "/login", params: {user_name: "dianna_friend", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "dianna_friend")
+
+    get "/v1/items?range_degree=2", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].length).to eq 1
+    expect(JSON(response.body)["data"][0]["attributes"]["total-price"].to_i).to eq 100
+
+    inventory_id = JSON(response.body)["data"][0]["id"]
+  end
+
+  it "Dianna_friend2 loads available, gets price with relation markup and requests 25 units from Dianna's inventory through dianna_friend", skip_hooks: true do
     post "/login", params: {user_name: "dianna_friend2", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
@@ -126,6 +173,8 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
     expect(response).to be_successful
     expect(JSON(response.body)["data"].length).to eq 1
+    expect(JSON(response.body)["data"][0]["attributes"]["total-price"].to_i).to eq 200
+
     inventory_id = JSON(response.body)["data"][0]["id"]
 
     post "/v1/items/#{inventory_id}/requests", headers: {"Authorization": $token}, params: {
@@ -173,7 +222,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
       inventory_id: user.inventories.first.id,
       user_id: User.find_by(user_name: 'dianna_friend').id,
       quantity: 75,
-      price: 200
+      price: 300
     }
 
     expect(response).to be_successful
@@ -193,6 +242,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(response).to be_successful
     expect(JSON(response.body)["data"].length).to eq 2
     expect(JSON(response.body)["data"][1]["attributes"]["action-request"]).to eq 1
+    expect(JSON(response.body)["data"][1]["attributes"]["total-price"].to_i).to eq 300
 
     get "/v1/items/requested", headers: {"Authorization": $token}
     expect(response).to be_successful
