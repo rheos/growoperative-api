@@ -24,23 +24,28 @@ end
 
 RSpec.configure do |config|
   config.fixture_path = "#{::Rails.root}/spec/fixtures"
-  config.use_transactional_fixtures = true
+  config.use_transactional_fixtures = false
   config.infer_spec_type_from_file_location!
   config.filter_rails_from_backtrace!
   config.include FactoryBot::Syntax::Methods
 
-  config.before do
-    Rails.application.load_seed
+  # config.before do
+  #   Rails.application.load_seed
+  # end
+
+  config.before(:each) do |test|
+    unless test.metadata[:skip_hooks]
+      DatabaseCleaner.strategy = :deletion
+      DatabaseCleaner.clean_with(:truncation)
+      Rails.application.load_seed
+    end
   end
 
-  config.before(:all) do
-    DatabaseCleaner.strategy = :deletion
-    DatabaseCleaner.clean_with(:truncation)
-  end
-
-  config.after(:each) do
-    DatabaseCleaner.strategy = :deletion
-    DatabaseCleaner.clean_with(:truncation)
+  config.after(:each) do |test|
+    unless test.metadata[:skip_hooks]
+      DatabaseCleaner.strategy = :deletion
+      DatabaseCleaner.clean_with(:truncation)
+    end
   end
 
   # config.after(:all) do
