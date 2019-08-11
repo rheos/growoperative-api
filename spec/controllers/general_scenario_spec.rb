@@ -14,6 +14,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
 
   it 'creates Admin user and global settings', skip_hooks: true do
     global_setting = GlobalSetting.find_or_initialize_by(setting: "ChainLimit")
+    global_setting.value = 4
     global_setting.save
     cat_price = GlobalSetting.find_or_initialize_by(setting: "user_category_relationship_price")
     cat_price.value = 1
@@ -23,14 +24,14 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     degree.save
 
     pass_word = "bobsentme!"
-    admin = User.find_or_initialize_by(user_name: "bob")
+    admin = User.find_or_initialize_by(user_name: "admin")
     admin.password = pass_word
     admin.invite_limit = 1000000
     admin.depth= 0
     admin.save
     admin.user_groups.create!(group_label: "admin")
 
-    post "/login", params: {user_name: "bob", password: pass_word}
+    post "/login", params: {user_name: "admin", password: pass_word}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
 
@@ -39,7 +40,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     $invitation_code = JSON(response.body)["invitation_code"]
   end
 
-  it "Dianna registration by Bob's code and invite token generation", skip_hooks: true do
+  it "Dianna registration by admin's code and invite token generation", skip_hooks: true do
     post "/signup", params: { user: {
       user_name: "dianna",
       password: "bobsentme!",
@@ -54,12 +55,12 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     get "/v1/users/generate_invitation?user_type=broker", headers: {"Authorization": $token}
     expect(JSON(response.body)["invitation_code"]).to be_truthy
     $invitation_code = JSON(response.body)["invitation_code"]
-    expect(Relationship.find_by(user_id: User.find_by(user_name: "bob").id, friend_id: User.find_by(user_name: "dianna").id)).to be_truthy
+    expect(Relationship.find_by(user_id: User.find_by(user_name: "admin").id, friend_id: User.find_by(user_name: "dianna").id)).to be_truthy
   end
 
-  it "bruce_knows_dianna registration by Dianna's code and invite token generation", skip_hooks: true do
+  it "bob registration by Dianna's code and invite token generation", skip_hooks: true do
     post "/signup", params: { user: {
-      user_name: "bruce_knows_dianna",
+      user_name: "bob",
       password: "bobsentme!",
       password_confirmation: "bobsentme!",
       invited_code: $invitation_code
@@ -72,12 +73,12 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     get "/v1/users/generate_invitation?user_type=broker", headers: {"Authorization": $token}
     expect(JSON(response.body)["invitation_code"]).to be_truthy
     $invitation_code = JSON(response.body)["invitation_code"]
-    expect(Relationship.find_by(user_id: User.find_by(user_name: "dianna").id, friend_id: User.find_by(user_name: "bruce_knows_dianna").id)).to be_truthy
+    expect(Relationship.find_by(user_id: User.find_by(user_name: "dianna").id, friend_id: User.find_by(user_name: "bob").id)).to be_truthy
   end
 
-  it "barry_knows_bruce registration by bruce_knows_dianna's code", skip_hooks: true do
+  it "bruce registration by bob's code", skip_hooks: true do
     post "/signup", params: { user: {
-      user_name: "barry_knows_bruce",
+      user_name: "bruce",
       password: "bobsentme!",
       password_confirmation: "bobsentme!",
       invited_code: $invitation_code
@@ -87,7 +88,30 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
 
-    expect(Relationship.find_by(user_id: User.find_by(user_name: "bruce_knows_dianna").id, friend_id: User.find_by(user_name: "barry_knows_bruce").id)).to be_truthy
+    expect(Relationship.find_by(user_id: User.find_by(user_name: "bob").id, friend_id: User.find_by(user_name: "bruce").id)).to be_truthy
+
+    get "/v1/users/generate_invitation?user_type=broker", headers: {"Authorization": $token}
+    expect(JSON(response.body)["invitation_code"]).to be_truthy
+    $invitation_code = JSON(response.body)["invitation_code"]
+  end
+
+  it "barry registration by bob's code", skip_hooks: true do
+    post "/signup", params: { user: {
+      user_name: "barry",
+      password: "bobsentme!",
+      password_confirmation: "bobsentme!",
+      invited_code: $invitation_code
+    }}
+
+    expect(response).to be_successful
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+
+    expect(Relationship.find_by(user_id: User.find_by(user_name: "bruce").id, friend_id: User.find_by(user_name: "barry").id)).to be_truthy
+
+    get "/v1/users/generate_invitation?user_type=broker", headers: {"Authorization": $token}
+    expect(JSON(response.body)["invitation_code"]).to be_truthy
+    $invitation_code = JSON(response.body)["invitation_code"]
   end
 
   it "Dianna creates an item with inventory", skip_hooks: true do
@@ -123,7 +147,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     post "/v1/user_relationship_prices", headers: {"Authorization": $token}, params: {
       user_relationship_price: {
         category_id: 1,
-        friend_id: User.find_by(user_name: 'bruce_knows_dianna').id,
+        friend_id: User.find_by(user_name: 'bob').id,
         price: 100,
         relationship_id: user.relationships.first.id
       }
@@ -132,15 +156,15 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(response).to be_successful
     expect(user.user_relationship_prices.first.price.to_i).to eq 100
 
-    post "/login", params: {user_name: "bruce_knows_dianna", password: "bobsentme!"}
+    post "/login", params: {user_name: "bob", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "bruce_knows_dianna")
+    user = User.find_by(user_name: "bob")
 
     post "/v1/user_relationship_prices", headers: {"Authorization": $token}, params: {
       user_relationship_price: {
         category_id: 1,
-        friend_id: User.find_by(user_name: 'barry_knows_bruce').id,
+        friend_id: User.find_by(user_name: 'bruce').id,
         price: 100,
         relationship_id: user.relationships.first.id
       }
@@ -150,11 +174,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(user.user_relationship_prices.first.price.to_i).to eq 100
   end
 
-  it "bruce_knows_dianna loads available and gets price without relation markup", skip_hooks: true do
-    post "/login", params: {user_name: "bruce_knows_dianna", password: "bobsentme!"}
+  it "bob loads available and gets price without relation markup", skip_hooks: true do
+    post "/login", params: {user_name: "bob", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "bruce_knows_dianna")
+    user = User.find_by(user_name: "bob")
 
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
     expect(response).to be_successful
@@ -164,11 +188,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     inventory_id = JSON(response.body)["data"][0]["id"]
   end
 
-  it "barry_knows_bruce loads available, gets price with relation markup and requests 25 units from Dianna's inventory through bruce_knows_dianna", skip_hooks: true do
-    post "/login", params: {user_name: "barry_knows_bruce", password: "bobsentme!"}
+  it "bruce loads available, gets price with relation markup and requests 25 units from Dianna's inventory through bob", skip_hooks: true do
+    post "/login", params: {user_name: "bruce", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "barry_knows_bruce")
+    user = User.find_by(user_name: "bruce")
 
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
     expect(response).to be_successful
@@ -212,7 +236,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(user.inventories.last.item_requests.last.order).to be_truthy
   end
 
-  it "Dianna reserving item for bruce_knows_dianna", skip_hooks: true do
+  it "Dianna reserving item for bob", skip_hooks: true do
     user = User.find_by(user_name: "dianna")
 
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
@@ -220,7 +244,7 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
 
     post "/v1/items/requests/reserve", headers: {"Authorization": $token}, params: {
       inventory_id: user.inventories.first.id,
-      user_id: User.find_by(user_name: 'bruce_knows_dianna').id,
+      user_id: User.find_by(user_name: 'bob').id,
       quantity: 75,
       price: 300
     }
@@ -232,11 +256,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(user.inventories.last.item_requests.first.status).to eq "reserved"
   end
   
-  it "bruce_knows_dianna loads available and accepts requests", skip_hooks: true do
-    post "/login", params: {user_name: "bruce_knows_dianna", password: "bobsentme!"}
+  it "bob loads available and accepts requests", skip_hooks: true do
+    post "/login", params: {user_name: "bob", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "bruce_knows_dianna")
+    user = User.find_by(user_name: "bob")
 
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
     expect(response).to be_successful
@@ -279,11 +303,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(ItemRequest.where(friend_id: user.id).select{|r| r.status != "completed"}.length).to eq 0
   end
 
-  it "bruce_knows_dianna signs an order, moves finished contract inventory to available and ships next contract", skip_hooks: true do
-    post "/login", params: {user_name: "bruce_knows_dianna", password: "bobsentme!"}
+  it "bob signs an order, moves finished contract inventory to available and ships next contract", skip_hooks: true do
+    post "/login", params: {user_name: "bob", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "bruce_knows_dianna")
+    user = User.find_by(user_name: "bob")
 
     get "/v1/items/requested", headers: {"Authorization": $token}
     expect(JSON(response.body)["data"][0]["items"].length).to eq 2
@@ -322,11 +346,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(pending_order.order_status).to eq "shipped"
   end
 
-  it "barry_knows_bruce signs an order, moves finished contract inventory to available and editing avatars", skip_hooks: true do
-    post "/login", params: {user_name: "barry_knows_bruce", password: "bobsentme!"}
+  it "bruce signs an order, moves finished contract inventory to available and editing avatars", skip_hooks: true do
+    post "/login", params: {user_name: "bruce", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "barry_knows_bruce")
+    user = User.find_by(user_name: "bruce")
 
     get "/v1/items/requested", headers: {"Authorization": $token}
     expect(JSON(response.body)["data"][0]["items"].length).to eq 1
@@ -385,10 +409,10 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(response).to be_successful
     expect(Item.find_by(name: "no_owner").producer_id).to eq nil
 
-    post "/login", params: {user_name: "bruce_knows_dianna", password: "bobsentme!"}
+    post "/login", params: {user_name: "bob", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "bruce_knows_dianna")
+    user = User.find_by(user_name: "bob")
 
     # should apply 100 markup to item's price
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
@@ -396,10 +420,10 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 200
 
 
-    post "/login", params: {user_name: "barry_knows_bruce", password: "bobsentme!"}
+    post "/login", params: {user_name: "bruce", password: "bobsentme!"}
     expect(response.headers["authorization"]).to be_truthy
     $token = response.headers["authorization"]
-    user = User.find_by(user_name: "barry_knows_bruce")
+    user = User.find_by(user_name: "bruce")
 
     # should apply 100 + 100 markup to item's price
     get "/v1/items?range_degree=2", headers: {"Authorization": $token}
@@ -432,5 +456,39 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
     expect(response).to be_successful
     # should be 20 + 20 (default category node prices only)
     expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 140
+  end
+
+  it "Mrequesting item as barry and checks contract and requests values", skip_hooks: true do
+    post "/login", params: {user_name: "barry", password: "bobsentme!"}
+    expect(response.headers["authorization"]).to be_truthy
+    $token = response.headers["authorization"]
+    user = User.find_by(user_name: "barry")
+
+    dianna = User.find_by(user_name: "dianna")
+    dianna.user_relationship_prices.create(
+      category_id: 1,
+      friend_id: User.find_by(user_name: 'bob').id,
+      price: 100,
+      relationship_id: dianna.relationships.first.id
+    )
+
+    get "/v1/items?range_degree=3", headers: {"Authorization": $token}
+    expect(response).to be_successful
+    expect(JSON(response.body)["data"].find{|item| item["id"] == 5}["attributes"]["total-price"].to_i).to eq 240 #100 +  dianna's markup(100) + 2 x default category node price (20)
+
+    post "/v1/items/#{5}/requests", headers: {"Authorization": $token}, params: {
+      request: {
+        quantity: 100
+      }
+    }
+
+    expect(response).to be_successful
+    contract = RequestContract.find_by(inventory_id: 5, user_id: user.id)
+    expect(contract.steps).to eq(3)
+    requests = contract.item_requests
+    expect(requests.count).to eq(3)
+    expect(requests.where(step: 1).first.price.to_i).to eq(200)
+    expect(requests.where(step: 2).first.price.to_i).to eq(220)
+    expect(requests.where(step: 3).first.price.to_i).to eq(240)
   end
 end
