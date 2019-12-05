@@ -7,7 +7,6 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
-      # binding.pry
       requests = ItemRequest.with_inventory_data
         .select("
           item_requests.*, 
