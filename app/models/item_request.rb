@@ -141,6 +141,7 @@ class ItemRequest < ApplicationRecord
         'sent' => self.user_id == current_user.id,
         'avatars' => ((self.inventory.avatars.length > 0 && self.inventory.avatars) || self.inventory.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
         'owner-id' => self.inventory.user_id,
+        'producer' => self.inventory.item.producer_id,
         'order' => self.order_id,
         'chain_status' => self.request_contract.status
       }
