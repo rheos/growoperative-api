@@ -131,10 +131,6 @@ module Api::V1
       result = false
       if(params[:item].present?)
         data = item_params
-        # add mark up price if item is producer's
-        if params[:item][:dashboard_type] != 'broker'
-          data[:producer_id] = current_user.id
-        end
         result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
       elsif(params[:inventory_avatars].present?)
         result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
