@@ -22,7 +22,10 @@ module Api::V1
           if item.producer_owns?
             item.total_price = item.price
           else
-            item.total_price = item.price + helpers.get_relation_price(item.user_id, current_user.id)
+            if item.status == "reserved" && item.item_requests.count
+              adj_price = item.item_requests.where(user_id: current_user.id, status: "reserved").first&.price
+            end
+            item.total_price = adj_price || item.price + helpers.get_relation_price(item.user_id, current_user.id)
           end
         end
 
