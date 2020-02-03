@@ -360,7 +360,9 @@ module Api::V1
         items = Inventory.where(id: inventory_ids).map{|item|
           json = item.to_json(current_user)
           previous_request = item.item_requests.find_by(user_id: current_user.id)
+          current_request = item.item_requests.find_by(friend_id: current_user.id)
           json[:attributes]['total-price'] = previous_request.price if previous_request
+          json[:attributes]['expected-price'] = current_request.price if current_request
           next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
           user_name =  User.find(next_request.user_id).user_name if next_request
           json[:attributes]['target-user-name'] = user_name if user_name
@@ -404,7 +406,9 @@ module Api::V1
       items = items.map do |item|
         json = item.to_json(current_user)
         previous_request = item.request_contract.item_requests.find_by(user_id: current_user.id)
+        current_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
         json[:attributes]['total-price'] = previous_request.price if previous_request
+        json[:attributes]['expected-price'] = current_request.price if current_request
         json[:id] = item.inventory.id
         json[:attributes]['signed'] = item.signed_at?
         json
