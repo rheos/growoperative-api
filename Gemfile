@@ -44,6 +44,7 @@ gem 'devise',           '~> 4.2'
 gem 'devise-jwt'
 gem 'dotenv-rails'
 gem 'carrierwave', '>= 2.0.0.rc', '< 3.0'
+gem "rmagick"
 # gem 'devise_invitable', '~> 1.7.0'
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console

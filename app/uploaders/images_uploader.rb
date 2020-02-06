@@ -1,7 +1,9 @@
+require 'carrierwave/processing/rmagick'
+
 class ImagesUploader < CarrierWave::Uploader::Base
   # Include RMagick or MiniMagick support:
-  # include CarrierWave::RMagick
-  # include CarrierWave::MiniMagick
+  include CarrierWave::RMagick
+
 
   # Choose what kind of storage to use for this uploader:
   storage :file
@@ -32,6 +34,16 @@ class ImagesUploader < CarrierWave::Uploader::Base
   # version :thumb do
   #   process resize_to_fit: [50, 50]
   # end
+
+  process :strip
+
+  def strip
+    manipulate! do |img|
+      img.strip!
+      img = yield(img) if block_given?
+      img
+    end
+  end
 
   def update_thumbnail (thumbnail, origin_names = nil)
     store!(thumbnail)
