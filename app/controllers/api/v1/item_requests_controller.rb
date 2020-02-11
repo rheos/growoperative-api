@@ -380,7 +380,7 @@ module Api::V1
         end
       end
 
-      without_requests = Inventory.where("user_id = #{current_user.id} AND status = 2 AND quantity > 0 
+      without_requests = Inventory.where("user_id = #{current_user.id} AND (status IN (1,2)) AND quantity > 0 
       AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
 
       if without_requests.length > 0
