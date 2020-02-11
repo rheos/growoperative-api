@@ -364,7 +364,7 @@ module Api::V1
           json[:attributes]['total-price'] = previous_request.price if previous_request
           json[:attributes]['expected-price'] = current_request.price if current_request
           next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
-          user_name =  User.find(next_request.user_id).user_name if next_request
+          user_name = helpers.target_user_name(current_user.id, next_request.user_id) if next_request
           json[:attributes]['target-user-name'] = user_name if user_name
           json
         }
