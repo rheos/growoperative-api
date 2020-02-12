@@ -68,7 +68,7 @@ module Api::V1
     end
 
     def order_params
-      params.require(:order).permit(:order_label, :estimated_date, :user_id, :friend_id)
+      params.require(:order).permit(:order_label, :estimated_date, :estimated_time, :location, :note, :user_id, :friend_id)
     end
   end
 end
