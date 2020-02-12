@@ -128,7 +128,7 @@ class Inventory < ApplicationRecord
     case args[:status]
     when 'available'
       self.reload
-      if self.status == 'reserved' && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
+      if (self.status == 'reserved' || self.status == 'unavailable') && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
         if self.request_contract
           self.request_contract.destroy
           inventory = Inventory.find_by(id: self.ref_id)
