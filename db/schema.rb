@@ -147,6 +147,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "signed_on"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.time "estimated_time"
+    t.string "location", null: false
+    t.text "note"
   end
 
   create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
