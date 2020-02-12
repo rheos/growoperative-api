@@ -58,7 +58,7 @@ module Api::V1
         requested_contracts = item.item_requests.where(user_id: current_user.id, status: :pending).map(&:request_contract_id)
         requested_quantity = RequestContract.where(id: requested_contracts).sum(:quantity)
         item.quantity -= requested_quantity;
-        return item if item.quantity > 0
+        item if item.quantity > 0
       }.compact
 
       # get pending requests
