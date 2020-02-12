@@ -1,5 +1,5 @@
 class Order < ApplicationRecord
-  has_many :item_requests, primary_key: 'id', foreign_key: 'order_id'
+  has_many :item_requests, primary_key: 'id', foreign_key: 'order_id', dependent: :destroy
 
   enum order_status: [ :pending, :shipped, :signed ]
 

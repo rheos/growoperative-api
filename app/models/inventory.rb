@@ -131,7 +131,7 @@ class Inventory < ApplicationRecord
       self.reload
       if (self.status == 'reserved' || self.status == 'unavailable') && (!self.request_contract || self.request_contract.status == 'completed' || self.request_contract.status == 'cancelled')
         if self.request_contract
-          self.request_contract.destroy
+          self.request_contract.update(archived: true)
           inventory = Inventory.find_by(id: self.ref_id)
           if inventory
             inventory.update(quantity: inventory.quantity + self.quantity)

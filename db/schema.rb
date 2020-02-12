@@ -173,6 +173,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "current_step", default: 0
     t.datetime "deleted_at"
     t.datetime "deleted_by"
+    t.boolean "archived", default: false
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end

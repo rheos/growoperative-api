@@ -100,7 +100,6 @@ module Api::V1
 
       @items = (@items + newitems)
 
-      # binding.pry
       if(step > 1)
         users.each do |user|
           next_route_price = route_price

@@ -340,7 +340,7 @@ module Api::V1
     # GET: /v1/items/my_items
     def my_items
       result = Inventory.where("user_id = #{current_user.id} AND (status IN (0,1)) AND quantity > 0 
-      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id AND request_contracts.status NOT IN(0, 3)) = 0")
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id AND request_contracts.status NOT IN(0, 3) AND request_contracts.archived = false) = 0")
       .map { |item| item.to_json(current_user) }.compact
 
       render json: {

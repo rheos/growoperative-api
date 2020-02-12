@@ -53,6 +53,16 @@ module Api::V1
       end
     end
 
+    def destroy
+      order = Order.find_by(id: params[:id])
+      render :json=> {error: 'Unable to find order'}, :status=>422 if !order
+      if order.order_status == 'signed' && order.destroy!
+        render json: {}, status: 200
+      else
+        render json: { error: 'Unable to destroy order!' }, status: 500
+      end
+    end
+
     def order_action_params
       params.require(:order_action).permit(:action_name, :item_id)
     end
