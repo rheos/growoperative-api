@@ -319,13 +319,14 @@ module Api::V1
       end
 
       result = []
+
       items = items.group_by{|i| i[:attributes]["order"]}
       items.each do |key, value|
         if key.nil?
           result.push(value)
         else
           res = Order.find(key).as_json
-          (res['friend_id'] == current_user.id.to_s || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+          (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
         end
       end
       
@@ -339,7 +340,7 @@ module Api::V1
     # GET: /v1/items/my_items
     def my_items
       result = Inventory.where("user_id = #{current_user.id} AND (status IN (0,1)) AND quantity > 0 
-      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id AND request_contracts.status NOT IN(0, 3)) = 0")
       .map { |item| item.to_json(current_user) }.compact
 
       render json: {
