@@ -155,6 +155,9 @@ class Inventory < ApplicationRecord
       else
         return false
       end
+    when 'unavailable'
+      self.reload
+      self.status == 'available' ? self.update(status: :unavailable) : false
     else
       return false
     end

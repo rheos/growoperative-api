@@ -48,6 +48,7 @@ Rails.application.routes.draw do
         collection do
           get 'around'
           get 'reset'
+          get 'my_items' => 'item_requests#my_items'
           get 'requested' => 'item_requests#requested'
           get 'reserved' => 'item_requests#reserved'
           get 'shipped' => 'item_requests#shipped'
