@@ -336,6 +336,17 @@ module Api::V1
       }, status: 200
     end
 
+    # GET: /v1/items/my_items
+    def my_items
+      result = Inventory.where("user_id = #{current_user.id} AND (status IN (0,1)) AND quantity > 0 
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
+      .map { |item| item.to_json(current_user) }.compact
+
+      render json: {
+        data: result
+      }, status: 200
+    end
+
     # GET: /v1/items/reserved
     def reserved
       requests = ItemRequest.with_inventory_data
@@ -380,7 +391,7 @@ module Api::V1
         end
       end
 
-      without_requests = Inventory.where("user_id = #{current_user.id} AND (status IN (1,2)) AND quantity > 0 
+      without_requests = Inventory.where("user_id = #{current_user.id} AND (status = 2) AND quantity > 0 
       AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id) = 0")
 
       if without_requests.length > 0
