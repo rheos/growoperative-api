@@ -37,7 +37,7 @@ module Api::V1
           end
         end
       else
-        @items = current_user.inventories.where("status = 1 AND quantity > 0")
+        @items = []
         
         # add items requested through user
         if current_user.is_producer?
