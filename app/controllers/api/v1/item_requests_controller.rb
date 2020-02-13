@@ -319,18 +319,19 @@ module Api::V1
       end
 
       result = []
+      items_without_order = []
 
       items = items.group_by{|i| i[:attributes]["order"]}
       items.each do |key, value|
-        if key.nil?
-          result.push(value)
+        if key.nil? || Order.find(key).request_contracts.where.not(status: :accepted).count > 0
+          items_without_order += value
         else
           res = Order.find(key).as_json
           (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
         end
       end
-      
-      # binding.pry
+
+      result.push(items_without_order)
 
       render json: {
         data: result

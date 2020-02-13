@@ -1,6 +1,6 @@
 class Order < ApplicationRecord
   has_many :item_requests, primary_key: 'id', foreign_key: 'order_id', dependent: :destroy
-
+  has_many :request_contracts, through: :item_requests
   enum order_status: [ :pending, :shipped, :signed ]
 
   def remove_request (id)

@@ -148,7 +148,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.time "estimated_time"
-    t.string "location", null: false
+    t.string "location", default: "pick up", null: false
     t.text "note"
   end
 
