@@ -112,6 +112,7 @@ class ItemRequest < ApplicationRecord
     request_contract.current_step += 1
     if request_contract.current_step == request_contract.steps
       request_contract.status = :completed
+      inventory.update(status: :unavailable)
     end
 
     request_contract.save!

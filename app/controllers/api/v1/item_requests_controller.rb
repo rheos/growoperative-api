@@ -323,11 +323,19 @@ module Api::V1
 
       items = items.group_by{|i| i[:attributes]["order"]}
       items.each do |key, value|
-        if key.nil? || Order.find(key).request_contracts.where.not(status: :accepted).count > 0
+        # add inventory without an order, of there is no order
+        if key.nil?
           items_without_order += value
         else
-          res = Order.find(key).as_json
-          (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+          order = Order.find(key)
+          # add inventory without an order, of there are still unconfirmed requests, or previous chain member still waiting for delivery
+          current_user_requests = order.item_requests.joins(:inventory).where("item_requests.user_id = #{current_user.id} AND inventories.user_id != item_requests.friend_id")
+          if current_user_requests.count > 0 || order.request_contracts.where.not(status: :accepted).count > 0
+            items_without_order += value
+          else
+            res = order.as_json
+            (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+          end
         end
       end
 
@@ -341,7 +349,7 @@ module Api::V1
     # GET: /v1/items/my_items
     def my_items
       result = Inventory.where("user_id = #{current_user.id} AND (status IN (0,1)) AND quantity > 0 
-      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id AND request_contracts.status NOT IN(0, 3) AND request_contracts.archived = false) = 0")
+      AND (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id AND request_contracts.status NOT IN(0, 2, 3) AND request_contracts.archived = false) = 0")
       .map { |item| item.to_json(current_user) }.compact
 
       render json: {
