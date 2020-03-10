@@ -321,7 +321,7 @@ module Api::V1
       result = []
       items_without_order = []
 
-      items = items.group_by{|i| i[:attributes]["order"]}
+      items = items.group_by{|i| i[:attributes]["order"]}.compact
       items.each do |key, value|
         # add inventory without an order, of there is no order
         if key.nil?
@@ -339,10 +339,10 @@ module Api::V1
         end
       end
 
-      result.push(items_without_order)
+      result.push(items_without_order) if items_without_order.length > 0
 
       render json: {
-        data: result
+        data: result.compact
       }, status: 200
     end
 
