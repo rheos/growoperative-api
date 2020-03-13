@@ -89,7 +89,7 @@ module Api::V1
       users.delete(before_user)
       users.delete(related_user)
 
-      newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1", users)
+      newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1 AND user_id != #{current_user.id}", users)
       newitems.each do |item|
         item.target_user_id = target_user_id
         item.total_price = item.price + route_price
