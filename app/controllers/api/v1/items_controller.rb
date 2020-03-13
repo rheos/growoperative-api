@@ -15,7 +15,7 @@ module Api::V1
           (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
           AND request_contracts.status = 0 
           AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 4 OR item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
-        ))) AND inventories.id != #{current_user.id}", users).uniq
+        ))) AND inventories.user_id != #{current_user.id}", users).uniq
 
         @items.each do |item|
           item.target_user_id = item.user_id
@@ -64,7 +64,7 @@ module Api::V1
       # get pending requests
       pending_requests = {}
       ItemRequest.with_inventory_data
-        .where("((item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)) AND inventories.id != #{current_user.id}")
+        .where("((item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)) AND inventories.user_id != #{current_user.id}")
         .group("inventories.id")
         .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
