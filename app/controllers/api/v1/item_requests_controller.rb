@@ -22,9 +22,11 @@ module Api::V1
           OR ((inventories.ref_id=#{params[:item_id]} OR request_contracts.inventory_id=#{params[:item_id]}) AND item_requests.status = 4))
         ")
         .uniq
-        .as_json
       res = {}
       requests.each do |r|
+        contract_chain_status = r.calculate_cahin_status
+        r = r.as_json
+        r['contract_chain_status'] = contract_chain_status
         if r['user_id'] == current_user.id
           r['contact_name'] = helpers.target_user_name(current_user.id, r['friend_id'])
           r['direction'] = 'sent'
@@ -373,7 +375,6 @@ module Api::V1
           ))
           OR (item_requests.friend_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.shipped_at IS NOT NULL AND request_contracts.status = 3)
         ")
-      # binding.pry
       result = []
       requests = requests.map{|r| r.to_json(current_user)}.group_by{|i| i[:attributes]["order"]}
 

@@ -55,7 +55,7 @@ module Api::V1
       end
 
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}.map{ |item| 
-        requested_contracts = item.item_requests.where(user_id: current_user.id, status: :pending).map(&:request_contract_id)
+        requested_contracts = item.item_requests.where(user_id: current_user.id, status: :pending, sent: true).map(&:request_contract_id)
         requested_quantity = RequestContract.where(id: requested_contracts).sum(:quantity)
         item.quantity -= requested_quantity;
         item if item.quantity > 0

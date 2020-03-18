@@ -118,6 +118,17 @@ class ItemRequest < ApplicationRecord
     request_contract.save!
   end
 
+  def calculate_cahin_status
+    contract = self.request_contract
+    return contract.status if ['accepted', 'completed', 'cancelled'].include?(contract.status)
+    if contract.item_requests.where(status: :pending).count > 0
+      return 'partially'
+    else
+      return 'pending'
+    end
+
+  end
+
   def to_json(current_user)
     target_user_id = self.user_id == current_user.id ? self.friend_id : self.user_id
     {
@@ -144,7 +155,7 @@ class ItemRequest < ApplicationRecord
         'owner-id' => self.inventory.user_id,
         'producer' => self.inventory.item.producer_id,
         'order' => self.order_id,
-        'chain_status' => self.request_contract.status
+        'contract_chain_status' => calculate_cahin_status
       }
     }
   end
