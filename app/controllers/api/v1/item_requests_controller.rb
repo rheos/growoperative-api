@@ -280,6 +280,7 @@ module Api::V1
         m.ref_id = inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
         m.status = :reserved
         m.gallery_map = inventory.gallery_map
+        m.ref_price = inventory.price
         m.save!
       end
       inventory.update(quantity: inventory.quantity - reserved.quantity)
@@ -382,10 +383,12 @@ module Api::V1
         inventory_ids = value.map{|i| i[:attributes]['inventory_id']}
         items = Inventory.where(id: inventory_ids).map{|item|
           json = item.to_json(current_user)
+          # binding.pry
           previous_request = item.item_requests.find_by(user_id: current_user.id)
           current_request = item.item_requests.find_by(friend_id: current_user.id)
           json[:attributes]['total-price'] = previous_request.price if previous_request
-          json[:attributes]['expected-price'] = current_request.price if current_request
+          json[:attributes]['expected-price'] = (item.ref_price || current_request.price) if current_request
+
           next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
           user_name = helpers.target_user_name(current_user.id, next_request.user_id) if next_request
           json[:attributes]['target-user-name'] = user_name if user_name
@@ -431,7 +434,7 @@ module Api::V1
         previous_request = item.request_contract.item_requests.find_by(user_id: current_user.id)
         current_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
         json[:attributes]['total-price'] = previous_request.price if previous_request
-        json[:attributes]['expected-price'] = current_request.price if current_request
+        json[:attributes]['expected-price'] = (item.inventory.ref_price || current_request.price) if current_request
         json[:id] = item.inventory.id
         json[:attributes]['signed'] = item.signed_at?
         json
