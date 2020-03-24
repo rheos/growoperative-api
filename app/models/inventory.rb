@@ -78,7 +78,7 @@ class Inventory < ApplicationRecord
   end
 
   def update_avatars (args, current_user_id)
-    Spawnling.new do
+    # Spawnling.new do
       if current_user_id == self.item.user_id
         return self.item.update_avatars(args)
       end 
@@ -112,10 +112,11 @@ class Inventory < ApplicationRecord
       uploader = ImagesUploader.new(self, 'avatars')
       avatar_names = self.avatars.map {|img| img.url && img.url.split('/').last}
       (args[:inventory_avatars].compact || []).each do |avatar|
+        # binding.pry
         uploader.update_thumbnail(avatar, avatar_names.compact)
       end
       uploader.clear_thumbnails if was_deleted
-    end
+    # end
     true
   end
 
