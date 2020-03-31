@@ -14,7 +14,7 @@ module Api::V1
         @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
           (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
           AND request_contracts.status = 0 
-          AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 4 OR item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
+          AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
         ))", users).uniq
 
         @items.each do |item|
@@ -55,7 +55,7 @@ module Api::V1
       end
 
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}.map{ |item| 
-        requested_contracts = item.item_requests.where(user_id: current_user.id, status: :pending, sent: true).map(&:request_contract_id)
+        requested_contracts = item.item_requests.where(user_id: current_user.id, status: [:pending, :reserved], sent: true).map(&:request_contract_id)
         requested_quantity = RequestContract.where(id: requested_contracts).sum(:quantity)
         item.quantity -= requested_quantity;
         item if item.quantity > 0
@@ -64,7 +64,7 @@ module Api::V1
       # get pending requests
       pending_requests = {}
       ItemRequest.with_inventory_data
-        .where("((item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4))")
+        .where("((item_requests.friend_id = #{current_user.id} AND item_requests.status = 0))")
         .group("inventories.id")
         .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
