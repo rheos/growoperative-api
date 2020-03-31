@@ -313,15 +313,15 @@ module Api::V1
     def requested
       items = ItemRequest.with_inventory_data
         .where("
-          item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.sent = true
-          AND request_contracts.status < 2
+          ((item_requests.user_id = #{current_user.id} AND item_requests.signed_at IS NULL AND item_requests.sent = true
+          AND request_contracts.status < 2) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4))
           AND inventories.user_id <> #{current_user.id}
         ").uniq
       items = items.map do |item|
         json = item.to_json(current_user)
         json[:id] = json[:attributes]["inventory_id"]
         next_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
-        json[:attributes]["need_sign"] = (item.shipped_at && !item.signed_at) || (next_request && next_request.status == "pending" )
+        json[:attributes]["need_sign"] = (item.shipped_at && !item.signed_at) || (next_request && next_request.status == "pending" ) || (item.status == 'reserved')
         json
       end
 
