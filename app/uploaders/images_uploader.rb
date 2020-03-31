@@ -45,10 +45,13 @@ class ImagesUploader < CarrierWave::Uploader::Base
     end
   end
 
-  def update_thumbnail (thumbnail, origin_names = nil)
-    store!(thumbnail)
-    resize_to_fit(200, 200)
-    store!
+  def update_thumbnail (thumbnail)
+    begin
+      store!(thumbnail)
+      resize_to_fit(200, 200)
+      store!
+    rescue
+    end
   end
 
   def clear_thumbnails

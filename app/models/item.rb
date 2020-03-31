@@ -81,7 +81,7 @@ class Item < ApplicationRecord
     # update thumbnails
     uploader = ImagesUploader.new(self, 'avatars')
     (args[:inventory_avatars].compact || []).each do |avatar|
-      uploader.update_thumbnail(avatar, self.avatars.map {|img| img.url && img.url.split('/').last})
+      uploader.update_thumbnail(avatar)
     end
     uploader.clear_thumbnails if was_deleted
     true
