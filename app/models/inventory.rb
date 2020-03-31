@@ -113,7 +113,7 @@ class Inventory < ApplicationRecord
       avatar_names = self.avatars.map {|img| img.url && img.url.split('/').last}
       (args[:inventory_avatars].compact || []).each do |avatar|
         # binding.pry
-        uploader.update_thumbnail(avatar, avatar_names.compact)
+        uploader.update_thumbnail(avatar)
       end
       uploader.clear_thumbnails if was_deleted
     # end
