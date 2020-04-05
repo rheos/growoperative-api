@@ -209,7 +209,8 @@ module Api::V1
       order.destroy if order && ItemRequest.where(order_id: order.id).count == 0
       @request.request_contract.status = :cancelled
       @request.request_contract.save
-      @request.request_contract.inventory.update(status: :unavailable)
+      request_contract = @request.request_contract
+      request_contract.inventory.update(status: :unavailable) if (request_contract.inventory.status == 'reserved')
 
       render json: { message: 'Request has been cancelled' }, status: 200
     end
