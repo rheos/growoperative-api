@@ -13,7 +13,7 @@ module Api::V1
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
           (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
-          AND request_contracts.status = 0 
+          AND (request_contracts.status = 0 OR request_contracts.status = 3) 
           AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
         ))", users).uniq
 
