@@ -52,7 +52,8 @@ class Item < ApplicationRecord
 
     (args[:source_images] || []).each_with_index do |image, i|
       if image.is_a? String
-        present_avatar = self.avatars.find {|img| img.url.split('/').last == image.split('/').last}
+        img_name = image.split('/').last.split('thumb500_').last
+        present_avatar = self.avatars.find {|img| img.url.split('/').last == img_name}
         updated_list[i] = present_avatar
         was_deleted = true if !present_avatar 
       else

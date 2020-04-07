@@ -35,6 +35,10 @@ class ImagesUploader < CarrierWave::Uploader::Base
   #   process resize_to_fit: [50, 50]
   # end
 
+  version :thumb500 do
+    process :resize_to_fit => [300, 300]
+  end
+
   process :strip
 
   def strip
