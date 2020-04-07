@@ -89,13 +89,14 @@ class Inventory < ApplicationRecord
       
       ((args[:source_images] || []).select {|arg| arg != 'null'}).each_with_index do |image, i|
         if image.is_a? String
-          present_avatar = self.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
+          img_name = image.split('/').last.split('thumb500_').last
+          present_avatar = self.avatars.find {|img| img && img.url.split('/').last == img_name}
           if present_avatar
             updated_list.push(present_avatar) 
-            order_map.push(image.split('/').last)
+            order_map.push(img_name)
           else
-            item_avatar = self.item.avatars.find {|img| img && img.url.split('/').last == image.split('/').last}
-            order_map.push(image.split('/').last) if item_avatar
+            item_avatar = self.item.avatars.find {|img| img && img.url.split('/').last == img_name}
+            order_map.push(img_name) if item_avatar
             was_deleted = true if !item_avatar
           end
         else
