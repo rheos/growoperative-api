@@ -174,6 +174,30 @@ module Api::V1
         render json: { message: 'Something is wrong' }, status: 500
       end
     end
+    # POST: /v1/items/requests/accept
+    # Return 200 response if success
+    def bulk_accept
+      successful = true
+      params[:ids].each do |id|
+        item = Inventory.find_by(id: id)
+        unless item
+          successful = false
+          next
+        end
+
+        requests = item.item_requests.where(status: :reserved, user_id: current_user.id).or(item.item_requests.where(status: :pending, friend_id: current_user.id))
+        requests.each do |req|
+          result = req.accept_request
+          successful = result if result == false
+        end
+      end
+
+      if successful == true
+        render json: { message: 'Requests has been accepted' }, status: 200
+      else
+        render json: { message: 'Something is wrong' }, status: 500
+      end
+    end
 
     # POST: /v1/items/requests/:request_id/cancel
     # Return 200 response if success

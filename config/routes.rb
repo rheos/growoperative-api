@@ -57,6 +57,7 @@ Rails.application.routes.draw do
           post 'requests/:id/ship' => 'item_requests#ship'
           post 'requests/:id/sign' => 'item_requests#sign'
           post 'requests/reserve' => 'item_requests#reserve'
+          post 'requests/accept' => 'item_requests#bulk_accept'
         end
       end
       resources :user_category_prices, only: [:create]
