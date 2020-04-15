@@ -29,6 +29,9 @@ module Api::V1
 				if params[:user_type] != ''
 					@invitation.user_type = params[:user_type]
 				end
+				if params[:user_price].present?
+					@invitation.user_price = params[:user_price]
+				end
 				@invitation.status = 0
 				if @invitation.save!
 				render json: {

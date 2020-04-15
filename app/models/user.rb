@@ -124,7 +124,8 @@ class User < ApplicationRecord
   def set_relationship
     find_invitation
     if self.invited_code
-      Relationship.create(user_id: self.parent_id, friend_id: self.id, status: 1, action_user_id:self.parent_id, user_label: @invitation.label, friend_label: @invitation.note_label)
+      relation = Relationship.create(user_id: self.parent_id, friend_id: self.id, status: 1, action_user_id:self.parent_id, user_label: @invitation.label, friend_label: @invitation.note_label)
+      UserRelationshipPrice.create(price: @invitation.user_price, category_id: 1, relationship_id: relation.id, friend_id: self.id, user_id: self.parent_id) if @invitation.user_price
     end
   end
   def find_invitation

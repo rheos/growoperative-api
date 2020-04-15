@@ -128,7 +128,7 @@ module Api::V1
 
 		private
 		def invitation_params
-			params.require(:invitation).permit(:label)
+			params.require(:invitation).permit(:label, :user_price)
 		end
 
 		def set_invitation
