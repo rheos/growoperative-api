@@ -24,6 +24,7 @@ Rails.application.routes.draw do
           patch 'update_password'
           patch 'edit_contact_label'
           post 'get_contact_label'
+          post 'destroy_relationship'
         end
         member do 
           get 'get_invitation_limit'

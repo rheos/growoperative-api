@@ -276,7 +276,20 @@ module Api::V1
     # URL : /v1/users/:id/item_list
     def item_list
     	render json: @user.items, status: 200
-    end
+	end
+	
+	# This api will rdestroy relation between 2 users
+	# URL : /v1/users/destroy_relationship
+	# method : POST
+    # parameter : { "id": 2 }
+	def destroy_relationship
+		relation = Relationship.where("id = (?) AND (user_id = (?) OR friend_id = (?))", params[:id], current_user.id, current_user.id).first
+		render json: { message: 'Relation was not found'}, status: 404 unless relation
+		
+		relation.destroy!
+
+		render json: { message: 'Success' }, status: 200
+	end
 		private
 		def set_user
 			@user = User.find_by(id: params[:id])

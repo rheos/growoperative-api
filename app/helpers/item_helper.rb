@@ -41,6 +41,9 @@ module ItemHelper
         user = User.find(target_user_id)
         user.nickname ? user.nickname : user.user_name
       end
+    else
+      user = User.find(target_user_id)
+      user.nickname ? user.nickname : user.user_name
     end
   end 
     
