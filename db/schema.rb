@@ -62,6 +62,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "user_type", default: 0
     t.string "note_label"
     t.integer "accepted_id"
+    t.float "user_price"
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
 
@@ -74,14 +75,14 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["category_id"], name: "index_item_names_on_category_id"
   end
 
-  create_table "item_relatiohships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "item_relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.bigint "item_id"
     t.bigint "relationship_id"
     t.boolean "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["item_id"], name: "index_item_relatiohships_on_item_id"
-    t.index ["relationship_id"], name: "index_item_relatiohships_on_relationship_id"
+    t.index ["item_id"], name: "index_item_relationships_on_item_id"
+    t.index ["relationship_id"], name: "index_item_relationships_on_relationship_id"
   end
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -290,8 +291,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
   add_foreign_key "item_names", "categories"
-  add_foreign_key "item_relatiohships", "items"
-  add_foreign_key "item_relatiohships", "relationships"
+  add_foreign_key "item_relationships", "items"
+  add_foreign_key "item_relationships", "relationships"
   add_foreign_key "item_requests", "request_contracts"
   add_foreign_key "item_requests", "users"
   add_foreign_key "items", "categories"

@@ -34,6 +34,13 @@ class Inventory < ApplicationRecord
         user = User.find(self.target_user_id)
         user.nickname ? user.nickname : user.user_name
       end
+    else
+      if self.target_user_id
+        user = User.find(self.target_user_id)
+        user.nickname ? user.nickname : user.user_name
+      else
+        self.user.user_name
+      end
     end
   end 
 
