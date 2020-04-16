@@ -160,6 +160,7 @@ module Api::V1
       # destory if there is only owner, else destory owner's inventory only
       # binding.pry
       if current_user.is_admin? || Inventory.where("item_id = #{@inventory.item_id}").size == 1
+        RequestContract.where(inventory_id: @inventory.id).destroy_all
         @inventory.item.destroy!
       else
         @inventory.destroy
