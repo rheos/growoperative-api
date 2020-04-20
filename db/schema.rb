@@ -163,6 +163,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
     t.string "user_label"
     t.string "friend_label"
+    t.integer "actions_state", default: 0
+    t.integer "friend_actions_state", default: 0
     t.index ["user_id"], name: "index_relationships_on_user_id"
   end
 
