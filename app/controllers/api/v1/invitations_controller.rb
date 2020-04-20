@@ -30,10 +30,10 @@ module Api::V1
 			}
 		end
 
-		# This api will update label
+		# This api will update invitation
 		# url : v1/invitations/:id
 		# method : POST
-		# parameter : { "invitation": {"label": "Demo"}}
+		# parameter : { "invitation": {"label": "Demo", "user_price": 2}}
 		def update
 			if @invitation.update(invitation_params)
 				render json: {

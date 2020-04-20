@@ -7,8 +7,10 @@ module Api::V1
     # This method will return all item which posted by contacts of current user
     def index
 
+      # 0 - ALL;   1 - ONLY SELL; 2 - ONLY BUY; 3 - NONE;
+
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
-      relationships = Relationship.where("user_id=#{current_user.id} OR friend_id=#{current_user.id}")
+      relationships = Relationship.where("(user_id=#{current_user.id} AND friend_actions_state < 2) OR (friend_id=#{current_user.id} AND actions_state < 2)")
       if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
         @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (

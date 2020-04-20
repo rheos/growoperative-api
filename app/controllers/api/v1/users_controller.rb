@@ -13,6 +13,20 @@ module Api::V1
 			render json: User.find(params[:id])
 		end
 
+		def update_relation
+			relation = Relationship.find_by(id: params[:id])
+
+			render json: { message: "Relation not found"}, status: 404 if (!relation || (relation.user_id != current_user.id && relation.friend_id != current_user.id))
+
+			if relation.user_id == current_user.id
+				relation.update(actions_state: params[:actions_state])
+			else
+				relation.update(friend_actions_state: params[:actions_state])
+			end
+
+			render json: relation, status: 200
+		end
+
 
 		# url : /v1/current_user_types
 		# method : GET
