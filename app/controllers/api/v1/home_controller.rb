@@ -25,7 +25,7 @@ class Api::V1::HomeController < Api::V1::ApiController
 			case user_group.group_label
 			when "admin"
 				# avilable_type += ["producer", "broker", "wholesaler", "retailer", "consumer", "admin"]
-				avilable_type += ["producer", "broker", "wholesaler", "admin"]
+				avilable_type += ["producer", "broker", "wholesaler", "retailer", "admin", "consumer"]
 			when "consumer"
 				avilable_type += ["consumer"]
 			when "producer"
