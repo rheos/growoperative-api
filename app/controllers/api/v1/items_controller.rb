@@ -11,32 +11,43 @@ module Api::V1
 
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
       relationships = Relationship.where("(user_id=#{current_user.id} AND friend_actions_state < 2 AND (actions_state = 0 || actions_state = 2)) OR (friend_id=#{current_user.id} AND actions_state < 2 AND (friend_actions_state = 0 || friend_actions_state = 2))")
-      if !current_user.is_producer? && relationships.count > 0 && range_degree > 0
+      if (!current_user.is_producer? && relationships.count > 0 && range_degree > 0) || (params[:dashboard_type] == 'consumer')
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
-        @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
-          (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
-          AND (request_contracts.status = 0 OR request_contracts.status = 3) 
-          AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
-        ))", users).uniq
 
-        @items.each do |item|
-          item.target_user_id = item.user_id
-          if item.producer_owns?
-            item.total_price = item.price
-          else
-            if item.status == "reserved" && item.item_requests.count
-              adj_price = item.item_requests.where(user_id: current_user.id, status: "reserved").first&.price
-            end
-            item.total_price = adj_price || item.price + helpers.get_relation_price(item.user_id, current_user.id)
-          end
+        # include only retailer relations if user is a consumer
+        if params[:dashboard_type] == 'consumer'
+          range_degree = 0
+          users = users.select{|u| u != current_user.id && User.find(u).has_role?('retailer')}
         end
 
-        if range_degree > 1 
-          users.delete(current_user.id)
-          users.each do |user|    
-            route_price = helpers.get_relation_price(user, current_user.id)
-            all_items(range_degree - 1, user, current_user.id, user, route_price)
+        if users.length > 0
+          @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
+            (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
+            AND (request_contracts.status = 0 OR request_contracts.status = 3) 
+            AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
+          ))", users).uniq
+
+          @items.each do |item|
+            item.target_user_id = item.user_id
+            if item.producer_owns?
+              item.total_price = item.price
+            else
+              if item.status == "reserved" && item.item_requests.count
+                adj_price = item.item_requests.where(user_id: current_user.id, status: "reserved").first&.price
+              end
+              item.total_price = adj_price || item.price + helpers.get_relation_price(item.user_id, current_user.id)
+            end
           end
+  
+          if range_degree > 1 
+            users.delete(current_user.id)
+            users.each do |user|    
+              route_price = helpers.get_relation_price(user, current_user.id)
+              all_items(range_degree - 1, user, current_user.id, user, route_price)
+            end
+          end
+        else
+          @items = []
         end
       else
         @items = []
