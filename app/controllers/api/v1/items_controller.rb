@@ -139,6 +139,8 @@ module Api::V1
 
       @item = current_user.items.new(data)
       if @item.save
+        @item.inventory[0].unit_options.create(unit_option_params) if params[:unit_option].present?
+
         render json: {
           data: @item.inventory[0].to_json(current_user)
         }, status: 200
@@ -147,14 +149,36 @@ module Api::V1
       end
     end
 
+    # route 4 unit_options_destroy
+    def unit_option_destroy
+      inventory = Inventory.find_by(id: params[:item_id])
+      return render json: {}, status: 404 if !inventory || (inventory.user_id != current_user.id && !current_user.is_admin?)
+
+      unit_option = inventory.unit_options.find(params[:id])
+      return render json: {}, status: 404 unless unit_option
+
+      unit_option.destroy
+
+      return render json: {message: 'Unit option was destroyed!'}, status: 200
+
+    end
+
+  
     def update
       result = false
       if(params[:item].present?)
         data = item_params
-        result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+
+        if data[:description].present? || data[:description] == ""
+          result = @inventory.update(description: data[:description])
+        else
+          result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+        end
       elsif(params[:inventory_avatars].present?)
         result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
         @inventory.reload
+      elsif params[:unit_option].present?
+        result = @inventory.unit_options.find(params[:unit_opt_id]).update(unit_option_params)
       else
         result = @inventory.update_status(inventory_status_params)
       end
@@ -263,7 +287,11 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic)
+      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, :description)
+    end
+
+    def unit_option_params
+      params.require(:unit_option).permit(:price, :quantity, :item_unit_id)
     end
 
     def inventory_avatar_params
