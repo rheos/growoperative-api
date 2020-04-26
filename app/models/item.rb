@@ -27,10 +27,10 @@ class Item < ApplicationRecord
   end
 
   def set_item_unit
-    if self.item_unit_id.nil?
-      item_unit = ItemUnit.find_or_create_by(unit_name: self.unit)
-      item_unit.save
-      self.item_unit_id = item_unit.id
+    i_unit = ItemUnit.find_or_create_by(unit_name: self.unit)
+    i_unit.save
+    if self.item_unit_id != i_unit.id
+      self.item_unit_id = i_unit.id
     end
   end
 
