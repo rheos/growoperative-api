@@ -139,7 +139,11 @@ module Api::V1
 
       @item = current_user.items.new(data)
       if @item.save
-        @item.inventory[0].unit_options.create(unit_option_params) if params[:unit_option].present?
+        if params[:unit_options].present? && params[:unit_options].length > 0
+          params[:unit_options].each do |option|
+            @item.inventory[0].unit_options.create(option)
+          end 
+        end
 
         render json: {
           data: @item.inventory[0].to_json(current_user)
@@ -154,7 +158,7 @@ module Api::V1
       inventory = Inventory.find_by(id: params[:item_id])
       return render json: {}, status: 404 if !inventory || (inventory.user_id != current_user.id && !current_user.is_admin?)
 
-      unit_option = inventory.unit_options.find(params[:id])
+      unit_option = inventory.unit_options.find(params[:unit_id])
       return render json: {}, status: 404 unless unit_option
 
       unit_option.destroy
@@ -178,7 +182,7 @@ module Api::V1
         result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
         @inventory.reload
       elsif params[:unit_option].present?
-        result = @inventory.unit_options.find(params[:unit_opt_id]).update(unit_option_params)
+        result = @inventory.unit_options.create(unit_option_params)
       else
         result = @inventory.update_status(inventory_status_params)
       end
@@ -292,6 +296,10 @@ module Api::V1
 
     def unit_option_params
       params.require(:unit_option).permit(:price, :quantity, :item_unit_id)
+    end
+
+    def unit_options_params
+      params.premit(unit_options: [])
     end
 
     def inventory_avatar_params
