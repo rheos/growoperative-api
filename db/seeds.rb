@@ -103,11 +103,11 @@ generate_category
 
 # generate Unit data
 def generate_item_unit
-  ItemUnit.create!(unit_name: "pounds", item_symbol: "lbs")
+  ItemUnit.create!(unit_name: "pounds", item_symbol: "lbs", equivalent: 453.592)
   ItemUnit.create!(unit_name: "ounces", item_symbol: "oz")
   ItemUnit.create!(unit_name: "boxes", item_symbol: "box")
   ItemUnit.create!(unit_name: "bottles", item_symbol: "bottle")
-  ItemUnit.create!(unit_name: "gramss", item_symbol: "g")
+  ItemUnit.create!(unit_name: "grams", item_symbol: "g", equivalent: 1)
 end
 generate_item_unit
 
