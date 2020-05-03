@@ -8,14 +8,18 @@ module Api::V1
     def index
 
       # 0 - ALL;   1 - ONLY SELL; 2 - ONLY BUY; 3 - NONE;
-
-      range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i    
+      range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i
+      
+      # EXCLUDE CONSUMERS FROM HERE && REQUEST CHAIN
       relationships = Relationship.where("(user_id=#{current_user.id} AND friend_actions_state < 2 AND (actions_state = 0 || actions_state = 2)) OR (friend_id=#{current_user.id} AND actions_state < 2 AND (friend_actions_state = 0 || friend_actions_state = 2))")
+
       if (!current_user.is_producer? && relationships.count > 0 && range_degree > 0) || (params[:dashboard_type] == 'consumer')
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
-
+  
         # include only retailer relations if user is a consumer
-        if params[:dashboard_type] == 'consumer'
+        if params[:dashboard_type] != 'consumer'
+          users = users.select {|id| !User.find(id).only_consumer_retailer?}
+        else
           range_degree = 0
           users = users.select{|u| u != current_user.id && User.find(u).has_role?('retailer')}
         end
@@ -27,6 +31,10 @@ module Api::V1
             AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
           ))", users).uniq
 
+          if params[:dashboard_type] == 'consumer'
+            @items = @items.select{ |item| item.unit_options.length > 0}
+          end
+
           @items.each do |item|
             item.target_user_id = item.user_id
             if item.producer_owns?
@@ -35,7 +43,7 @@ module Api::V1
               if item.status == "reserved" && item.item_requests.count
                 adj_price = item.item_requests.where(user_id: current_user.id, status: "reserved").first&.price
               end
-              item.total_price = adj_price || item.price + helpers.get_relation_price(item.user_id, current_user.id)
+              item.total_price = adj_price || (item.price || 0) + helpers.get_relation_price(item.user_id, current_user.id)
             end
           end
   
@@ -71,7 +79,7 @@ module Api::V1
         requested_contracts = item.item_requests.where(user_id: current_user.id, status: [:pending, :reserved], sent: true).map(&:request_contract_id)
         requested_quantity = RequestContract.where(id: requested_contracts).sum(:quantity)
         item.quantity -= requested_quantity;
-        item if item.quantity > 0
+        item if item.quantity > 0 || current_user.is_consumer?
       }.compact
 
       # get pending requests
@@ -98,7 +106,7 @@ module Api::V1
 
     def all_items(step, related_user, before_user, target_user_id, route_price)
       relationships = Relationship.where("user_id = #{related_user} OR friend_id = #{related_user}")
-      users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
+      users = relationships.pluck(:user_id, :friend_id).flatten!.uniq.select {|id| !User.find(id).only_consumer_retailer?}
       users.delete(before_user)
       users.delete(related_user)
 
@@ -141,7 +149,8 @@ module Api::V1
       if @item.save
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
-            @item.inventory[0].unit_options.create(option)
+            size_params = JSON.parse(option)
+            @item.inventory[0].unit_options.create(price: size_params["price"].to_f, quantity: size_params["quantity"].to_f, item_unit_id: size_params["item_unit_id"].to_i)
           end 
         end
 
@@ -178,11 +187,16 @@ module Api::V1
         else
           result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
         end
+
+        if params[:unit_options].present?
+          params[:unit_options].each do |option|
+            size_params = JSON.parse(option)
+            @inventory.unit_options.create(price: size_params["price"].to_f, quantity: size_params["quantity"].to_f, item_unit_id: size_params["item_unit_id"].to_i) unless size_params["id"]
+          end
+        end
       elsif(params[:inventory_avatars].present?)
         result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
         @inventory.reload
-      elsif params[:unit_option].present?
-        result = @inventory.unit_options.create(unit_option_params)
       else
         result = @inventory.update_status(inventory_status_params)
       end

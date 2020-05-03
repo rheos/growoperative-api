@@ -7,4 +7,11 @@ class Relationship < ApplicationRecord
   has_many   :user_relationship_prices, dependent: :destroy
   has_many   :user_relationship_request_prices, dependent: :destroy
   has_many   :request_list_relationship_statuses, dependent: :destroy
+
+  # scope :excludeConsumers, -> (user_id, friend_id=nil) {
+  #   if friend_id
+  #     relations = Relationship.where("user_id = #{user_id} || friend_id=#{user_id}")
+  #   else
+  #   end
+  # }
 end

@@ -26,6 +26,9 @@ Rails.application.routes.draw do
           post 'get_contact_label'
           post 'destroy_relationship'
           post 'update_relation'
+          get 'category_sizes'
+          post 'create_category_size'
+          delete 'destroy_category_size'
         end
         member do 
           get 'get_invitation_limit'

@@ -12,6 +12,7 @@ module Api::V1
           item_requests.*, 
           request_contracts.status AS chain_status,
           request_contracts.quantity AS quantity,
+          request_contracts.unit AS unit,
           inventories.item_id,
           inventories.user_id AS inventory_owner_id,
           IF(request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
@@ -23,6 +24,7 @@ module Api::V1
         ")
         .uniq
       res = {}
+
       requests.each do |r|
         contract_chain_status = r.calculate_cahin_status
         r = r.as_json
@@ -34,7 +36,7 @@ module Api::V1
           r['contact_name'] = helpers.target_user_name(current_user.id, r['user_id'])
           r['direction'] = 'received'
         end
-
+        r['unit'] = ItemUnit.find(r['unit'].to_i) if r['unit']
         if res[r['request_contract_id']].nil?
           res[r['request_contract_id']] = {}
         end
@@ -55,7 +57,7 @@ module Api::V1
       end
 
       # check if inventory quanity is enough as much as requests
-      if request_params[:quantity].nil? || inventory.quantity < request_params[:quantity].to_f
+      if request_params[:quantity].nil? || (inventory.quantity < request_params[:quantity].to_f && request_params[:unit].nil?)
         render json: { message: 'not enough stock' }, status: 400
         return
       end
@@ -64,78 +66,118 @@ module Api::V1
         render json: { message: 'can not request own item' }, status: 400
         return
       end
-      
-      # check if inventory is available
+  
+      request_unit = nil
       contacts = [{ :user_id => current_user.id, :path => [], :prices => [], :total => 0, :route_price => 0 }]
       shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
       checked_contacts = {}
 
-      while contacts.size > 0 do
-        contact = contacts.shift
-        # mark as checked
-        checked_contacts[contact[:user_id]] = contact[:total];
+      # default request chain calculation 
+      if request_params[:unit].nil?
+        # check if inventory is available
+        contacts = [{ :user_id => current_user.id, :path => [], :prices => [], :total => 0, :route_price => 0 }]
+        shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
+        checked_contacts = {}
 
-        # check if selected user is current user, it means inventory is available
-        if contact[:user_id] == inventory.user_id
-          # add user mark up if he is not owner
-          unless inventory.producer_owns?
-            contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
-          end
+        while contacts.size > 0 do
+          contact = contacts.shift
+          # mark as checked
+          checked_contacts[contact[:user_id]] = contact[:total];
 
-          if contact[:total] < shortest[:total]            
-            shortest = contact
-          end
-        elsif contact[:path].size < MAX_DEPTH && 
-          (relationships = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")).size > 0
-          # find from contacts
-          relationships.pluck(:user_id, :friend_id).flatten!.uniq.each do |relation_id|
-            next if relation_id == contact[:user_id]
+          # check if selected user is current user, it means inventory is available
+          if contact[:user_id] == inventory.user_id
+            # add user mark up if he is not owner
+            unless inventory.producer_owns?
+              contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
+            end
 
-            total = contact[:total] + contact[:route_price]
-            if total < shortest[:total] && 
-              (checked_contacts[:relation_id].nil? || total < checked_contacts[:relation_id])
+            if contact[:total] < shortest[:total]            
+              shortest = contact
+            end
+          elsif contact[:path].size < MAX_DEPTH && 
+            (relationships = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")).size > 0
+            # find from contacts
+            relationships.pluck(:user_id, :friend_id).flatten!.uniq.select {|id| !User.find(id).only_consumer_retailer?}.each do |relation_id|
+              next if relation_id == contact[:user_id]
 
-              contacts.push({
-                :user_id => relation_id,
-                :path => contact[:path] + [contact[:user_id]],
-                :prices => contact[:prices] + [total],
-                :total => total,
-                :route_price => helpers.get_relation_price(relation_id, contact[:user_id]),
-              })
+              total = contact[:total] + contact[:route_price]
+              if total < shortest[:total] && 
+                (checked_contacts[:relation_id].nil? || total < checked_contacts[:relation_id])
+
+                contacts.push({
+                  :user_id => relation_id,
+                  :path => contact[:path] + [contact[:user_id]],
+                  :prices => contact[:prices] + [total],
+                  :total => total,
+                  :route_price => helpers.get_relation_price(relation_id, contact[:user_id]),
+                })
+              end
             end
           end
         end
-      end
 
-      # check if find a path
-      if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
-        render json: { message: 'path not found' }, status: 400
-        return
-      end
+        # check if find a path
+        if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
+          render json: { message: 'path not found' }, status: 400
+          return
+        end
 
-      # create request contract
-      request_contract = RequestContract.new
-      request_contract.user_id = current_user.id
-      request_contract.inventory_id = inventory.id
-      request_contract.item_id = inventory.item_id
-      request_contract.quantity = request_params[:quantity]
-      request_contract.steps = shortest[:prices].size
 
-      request_contract.save!
+        # create request contract
+        request_contract = RequestContract.new
+        request_contract.user_id = current_user.id
+        request_contract.inventory_id = inventory.id
+        request_contract.item_id = inventory.item_id
+        request_contract.quantity = request_params[:quantity]
+        request_contract.steps = shortest[:prices].size
 
-      # add source user id
-      shortest[:path] << inventory.user_id
-      # create requests
-      final_price = inventory.price + shortest[:total]
-      shortest[:prices].each_with_index do |price, index|
+        request_contract.save!
+
+        # add source user id
+        shortest[:path] << inventory.user_id
+        # create requests
+        final_price = inventory.price + shortest[:total]
+        shortest[:prices].each_with_index do |price, index|
+          request = ItemRequest.new
+          request.request_contract_id = request_contract.id
+          request.user_id = shortest[:path][index]
+          request.friend_id = shortest[:path][index + 1]
+          request.price = final_price - price
+          request.status = :pending
+          request.sent = request.user_id == current_user.id ? 1 : 0
+          request.step = shortest[:prices].size - index
+          request.save!
+        end
+      else
+        # request chain calculation for consumer -> retailer
+
+        item_quantity = inventory.quantity * inventory.item.item_unit.equivalent
+        unit = inventory.unit_options.find(request_params[:unit].to_i)
+        quantity = (unit.quantity * request_params[:quantity].to_f)*unit.item_unit.equivalent
+
+        if (quantity > item_quantity)
+          render json: { message: 'not enough stock' }, status: 400
+          return
+        end
+
+        # create request contract
+        request_contract = RequestContract.new
+        request_contract.user_id = current_user.id
+        request_contract.inventory_id = inventory.id
+        request_contract.item_id = inventory.item_id
+        request_contract.quantity = unit.quantity * request_params[:quantity].to_f
+        request_contract.steps = 1
+        request_contract.unit = unit.item_unit.id
+        request_contract.save!
+
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
-        request.user_id = shortest[:path][index]
-        request.friend_id = shortest[:path][index + 1]
-        request.price = final_price - price
+        request.user_id = current_user.id
+        request.friend_id = inventory.user.id
+        request.price = unit.price * request_params[:quantity].to_f
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
-        request.step = shortest[:prices].size - index
+        request.step = 1
         request.save!
       end
 
@@ -414,6 +456,7 @@ module Api::V1
           # binding.pry
           previous_request = item.item_requests.find_by(user_id: current_user.id)
           current_request = item.item_requests.find_by(friend_id: current_user.id)
+          # binding.pry
           json[:attributes]['total-price'] = previous_request.price if previous_request
           json[:attributes]['expected-price'] = (item.ref_price || current_request.price) if current_request
 
@@ -486,7 +529,7 @@ module Api::V1
 
     private
     def request_params
-      params.require(:request).permit(:quantity, :price)
+      params.require(:request).permit(:quantity, :price, :unit)
     end
 
     def reserve_params
