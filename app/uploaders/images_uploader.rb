@@ -51,6 +51,11 @@ class ImagesUploader < CarrierWave::Uploader::Base
 
   def update_thumbnail (thumbnail)
     begin
+      thumbnail.original_filename = thumbnail.original_filename.gsub 'thumb500_', ''
+    rescue
+    end
+
+    begin
       store!(thumbnail)
       resize_to_fit(200, 200)
       store!
