@@ -45,6 +45,14 @@ class ItemRequest < ApplicationRecord
 
         # decrease origin inventory quantity
         quantity_left = self.inventory.quantity - self.request_contract.quantity
+        if self.request_contract.unit && self.request_contract.unit.to_i != self.request_contract.inventory.item.item_unit_id
+          request_unit = ItemUnit.find(self.request_contract.unit.to_i)
+          self_unit = self.request_contract.inventory.item.item_unit
+          quantity_left = self.inventory.quantity - (self.request_contract.quantity * request_unit.equivalent)/self_unit.equivalent
+
+          converted_item = Item.create(self.inventory.item.attributes.merge({:unit => request_unit.unit_name, :id => nil}))
+          reserved.update(item_id: converted_item.id)
+        end
         self.inventory.update(quantity: quantity_left)
 
         # update inventory status if all item requests are accepted
@@ -155,7 +163,8 @@ class ItemRequest < ApplicationRecord
         'owner-id' => self.inventory.user_id,
         'producer' => self.inventory.item.producer_id,
         'order' => self.order_id,
-        'contract_chain_status' => calculate_cahin_status
+        'contract_chain_status' => calculate_cahin_status,
+        'unit' => self.request_contract.unit
       }
     }
   end

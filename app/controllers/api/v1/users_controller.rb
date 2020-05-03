@@ -304,6 +304,30 @@ module Api::V1
 
 		render json: { message: 'Success' }, status: 200
 	end
+
+	def category_sizes
+		render json: current_user.category_sizes.map {|s| s.as_json}, status: 200
+	end
+
+	def create_category_size
+		size = current_user.category_sizes.create(category_size_params)
+
+		if size
+			render json: size.as_json, status: 200
+		else
+			render json: { message: 'Unable to create category size!' }, status: 422
+		end
+	end
+
+	def destroy_category_size
+		size = CategorySize.find_by(id: params[:id])
+		if size && size.destroy
+			render json: { message: 'Category size was succesfully removed!' }, status: 200
+		else
+			render json: { message: 'Unable to dind or remove category size!' }, status: 422
+		end
+	end
+
 		private
 		def set_user
 			@user = User.find_by(id: params[:id])
@@ -321,6 +345,10 @@ module Api::V1
 		def user_params
 			# NOTE: Using `strong_parameters` gem
 			params.require(:user).permit(:password, :password_confirmation, :nickname, :current_password)
+		end
+
+		def category_size_params
+			params.permit(:quantity, :category_id, :item_unit_id, :price)
 		end
 
 	end

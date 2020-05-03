@@ -22,13 +22,21 @@ class User < ApplicationRecord
   has_many   :user_relationship_prices, dependent: :destroy
   has_many   :user_relationship_request_prices, dependent: :destroy
   has_many   :reviews, dependent: :destroy
+  has_many   :category_sizes, dependent: :destroy
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'
 
   attr_accessor :current_password
   # enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
   # call_backs
   before_create :set_parent
-  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship
+  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes
+
+  def set_category_sizes
+    CategorySize.where(user_id: nil).each do |c| 
+      self.category_sizes.create(quantity: c.quantity, item_unit_id: c.item_unit_id, category_id: c.category_id)
+    end
+  end
+
 	def email_required?
   	false
 	end
@@ -63,8 +71,26 @@ class User < ApplicationRecord
     end
   end
 
+  def is_consumer?
+    group_labels = self.user_groups.pluck(:group_label)
+    if group_labels.size == 1 && group_labels.include?("consumer")
+      true
+    else
+      false
+    end
+  end
+
   def has_role?(role)
     if self.user_groups.pluck(:group_label).include?(role)
+      true
+    else
+      false
+    end
+  end
+
+  def only_consumer_retailer?
+    groups = self.user_groups.pluck(:group_label)
+    if groups.length == 1 && (groups.include?('consumer') || groups.include?('retailer'))
       true
     else
       false

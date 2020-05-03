@@ -11,7 +11,8 @@ class UnitOption < ApplicationRecord
       id: id,
       quantity: quantity,
       price: price,
-      unit: self.item_unit.unit_name
+      unit: self.item_unit.unit_name,
+      unit_data: self.item_unit
     }
   end
 end

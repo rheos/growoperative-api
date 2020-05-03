@@ -22,6 +22,14 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "price", precision: 10
   end
 
+  create_table "category_sizes", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.integer "user_id"
+    t.integer "category_id", null: false
+    t.integer "item_unit_id", null: false
+    t.float "quantity"
+    t.float "price"
+  end
+
   create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
     t.integer "value", default: 3
     t.datetime "created_at", null: false
@@ -48,6 +56,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.json "avatars"
     t.string "gallery_map", default: "---\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n"
     t.float "ref_price"
+    t.text "description"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -108,6 +117,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "item_symbol"
+    t.integer "type"
+    t.float "equivalent"
   end
 
   create_table "items", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
@@ -181,6 +192,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "deleted_at"
     t.datetime "deleted_by"
     t.boolean "archived", default: false
+    t.string "unit"
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
@@ -206,6 +218,24 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["item_id"], name: "index_reviews_on_item_id"
     t.index ["item_name_id"], name: "index_reviews_on_item_name_id"
     t.index ["user_id"], name: "index_reviews_on_user_id"
+  end
+
+  create_table "unit_options", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.integer "inventory_id", null: false
+    t.integer "item_unit_id", null: false
+    t.float "price"
+    t.float "quantity"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "unit_options_columns", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+    t.integer "inventory_id", null: false
+    t.integer "item_unit_id", null: false
+    t.float "price"
+    t.float "quantity"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "user_category_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
