@@ -31,9 +31,9 @@ module Api::V1
             AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
           ))", users).uniq
 
-          if params[:dashboard_type] == 'consumer'
-            @items = @items.select{ |item| item.unit_options.length > 0}
-          end
+          # if params[:dashboard_type] == 'consumer'
+          #   @items = @items.select{ |item| item.generate_options.length > 0}
+          # end
 
           @items.each do |item|
             item.target_user_id = item.user_id

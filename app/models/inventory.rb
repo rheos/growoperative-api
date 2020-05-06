@@ -69,10 +69,25 @@ class Inventory < ApplicationRecord
         'producer' => self.item.producer_id,
         'status' => self.status,
         'action-request' => self.item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count > 0,
-        'unit-options' => self.unit_options.map{|opt| opt.to_json},
+        'unit-options' => generate_options,
         'description' => self.description
       }
     }
+  end
+
+  def generate_options
+    if self.unit_options.length > 0
+      self.unit_options.map{|opt| opt.to_json}
+    else
+      (self.user.category_sizes.where(category_id: self.item.category_id) || []).map { |s| {
+        id: s.id,
+        quantity: s.quantity,
+        price: s.price,
+        unit: s.item_unit.unit_name,
+        unit_data: s.item_unit,
+        hidden: true
+      }}
+    end
   end
 
   def avatars_with_item

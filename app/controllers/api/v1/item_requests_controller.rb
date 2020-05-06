@@ -150,9 +150,8 @@ module Api::V1
         end
       else
         # request chain calculation for consumer -> retailer
-
         item_quantity = inventory.quantity * inventory.item.item_unit.equivalent
-        unit = inventory.unit_options.find(request_params[:unit].to_i)
+        unit = inventory.unit_options.find_by(id: request_params[:unit].to_i) || inventory.user.category_sizes.find_by(id: request_params[:unit].to_i)
         quantity = (unit.quantity * request_params[:quantity].to_f)*unit.item_unit.equivalent
 
         if (quantity > item_quantity)
