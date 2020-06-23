@@ -27,6 +27,7 @@ class Item < ApplicationRecord
   end
 
   def set_item_unit
+    return unless self.unit
     i_unit = ItemUnit.find_or_create_by(unit_name: self.unit)
     i_unit.save
     if self.item_unit_id != i_unit.id
