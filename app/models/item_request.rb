@@ -152,7 +152,7 @@ class ItemRequest < ApplicationRecord
         'grade-id' => self.inventory.item.grade_id,
         'item-unit-id' => self.inventory.item.item_unit_id,
         'inventory_id' => self.inventory.id,
-        'unit-name' => self.inventory.item.item_unit.unit_name,
+        'unit-name' => self.inventory.item.item_unit.item_symbol,
         'item-name-id' => self.inventory.item.item_name_id,
         'date-available' => self.inventory.item.date_available,
         'total-quantity' => self.inventory.quantity,

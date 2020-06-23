@@ -59,7 +59,7 @@ class Inventory < ApplicationRecord
         'name' => self.item.name, 
         'grade-id' => self.item.grade_id,
         'item-unit-id' => self.item.item_unit_id, 
-        'unit-name' => self.item.item_unit.unit_name, 
+        'unit-name' => self.item.item_unit.item_symbol, 
         'item-name-id' => self.item.item_name_id, 
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 

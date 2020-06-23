@@ -310,7 +310,12 @@ module Api::V1
 	end
 
 	def create_category_size
-		size = current_user.category_sizes.create(category_size_params)
+		if params[:size_id]
+			size = CategorySize.find(params[:size_id])
+			size.update(category_size_params)
+		else
+			size = current_user.category_sizes.create(category_size_params)
+		end
 
 		if size
 			render json: size.as_json, status: 200
