@@ -154,6 +154,11 @@ module Api::V1
           end 
         end
 
+        if(inventory_avatar_params[:inventory_avatars].present?)
+          @item.inventory.first.update_avatars(inventory_avatar_params, current_user.id)
+          @item.reload
+        end
+
         render json: {
           data: @item.inventory[0].to_json(current_user)
         }, status: 200
