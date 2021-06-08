@@ -1,6 +1,6 @@
 module Api::V1
   class UserRelationshipRequestPricesController < ApiController
-    before_action :authenticate_user!
+    # before_action :authenticate_user!
 
     # This action will create UserCategoryPrice
     # url       : /v1/user_relationship_request_prices

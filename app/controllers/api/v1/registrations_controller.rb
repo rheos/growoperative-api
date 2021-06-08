@@ -6,8 +6,8 @@ class Api::V1::RegistrationsController < Devise::RegistrationsController
   def create
     user = User.new(sign_up_params)
     if user.save
-      sign_in(user)
-      render :json => user.as_json, status: 201
+      assign_jwt_cookies(user)
+      render json: UserSerializer.new(user), status: 201
     else
       warden.custom_failure!
       render :json=> user.errors, :status=>422
