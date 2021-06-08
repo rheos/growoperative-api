@@ -1,6 +1,6 @@
 module Api::V1
 	class UsersController < ApiController
-		before_action :authenticate_user!
+		# before_action :authenticate_user!
 		before_action :is_admin_user, only: [:index, :get_invitation_limit, :set_invitation_limit, :chain_limit, :set_chain_limit]
 		before_action :set_user, only: [:item_list, :get_invitation_limit, :set_invitation_limit, :chain_limit, :get_nickname, :set_nickname]
 		# GET /v1/users
