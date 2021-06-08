@@ -1,6 +1,6 @@
 module Api::V1
 	class GlobalSettingsController < ApiController
-		before_action :authenticate_user!
+		# before_action :authenticate_user!
 		before_action :is_admin_user, :set_global_setting
 
 		def get_chain_limit
