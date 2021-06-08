@@ -1,6 +1,7 @@
 module Api::V1
   class ItemsController < ApiController
-    before_action :authenticate_user!, :check_user_type
+    # before_action :authenticate_user!
+    before_action :check_user_type
     before_action :set_inventory, only: [:update, :destroy]
 
     # GET : /v1/items?range_degree=:integer 
@@ -78,7 +79,7 @@ module Api::V1
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}.map{ |item| 
         requested_contracts = item.item_requests.where(user_id: current_user.id, status: [:pending, :reserved], sent: true).map(&:request_contract_id)
         requested_quantity = RequestContract.where(id: requested_contracts).sum(:quantity)
-        item.quantity -= requested_quantity;
+        item.quantity -= requested_quantity
         item if item.quantity > 0 || current_user.is_consumer?
       }.compact
 
@@ -99,9 +100,7 @@ module Api::V1
         item.to_json(current_user)
       end
 
-      render json: {
-        data: result
-      }, status: 200
+      render json: { data: result }, status: 200
     end
 
     def all_items(step, related_user, before_user, target_user_id, route_price)

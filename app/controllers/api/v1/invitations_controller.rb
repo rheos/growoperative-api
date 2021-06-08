@@ -1,6 +1,6 @@
 module Api::V1
 	class InvitationsController < ApiController
-		before_action :authenticate_user!
+		# before_action :authenticate_user!
 		before_action :set_invitation, only: [:update]
 		# This api will return all invitation code of login user
 		# url : v1/invitations

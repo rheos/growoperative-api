@@ -11,16 +11,17 @@ Rails.application.routes.draw do
                registrations: 'api/v1/registrations'
              }
     scope module: 'api' do
-    namespace :v1 , defaults: { format: :json } do
+    namespace :v1, defaults: { format: :json } do
       # mount_devise_token_auth_for 'User', at: 'auth'
       # devise_for :users
       get 'get_chain_limit' => 'global_settings#get_chain_limit'
       post 'set_chain_limit' => 'global_settings#set_chain_limit'
+      resource :sessions, only: %i[show create destroy]
       resources :users, only: [:index, :show] do 
         collection do
           get 'generate_invitation'
           get 'contact_list'
-          post 'accept_invition'
+          post 'accept_invitation'
           patch 'update_password'
           patch 'edit_contact_label'
           post 'get_contact_label'

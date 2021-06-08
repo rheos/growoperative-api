@@ -1,6 +1,5 @@
 module Api::V1
   class ItemRequestsController < ApiController
-    before_action :authenticate_user!
     before_action :set_request, only: [:accept, :cancel, :ship, :sign]
    
     MAX_DEPTH = 5
