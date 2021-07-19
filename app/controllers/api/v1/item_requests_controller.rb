@@ -451,10 +451,8 @@ module Api::V1
         inventory_ids = value.map{|i| i[:attributes]['inventory_id']}
         items = Inventory.where(id: inventory_ids).map{|item|
           json = item.to_json(current_user)
-          # binding.pry
           previous_request = item.item_requests.find_by(user_id: current_user.id)
           current_request = item.item_requests.find_by(friend_id: current_user.id)
-          # binding.pry
           json[:attributes]['total-price'] = previous_request.price if previous_request
           json[:attributes]['expected-price'] = (item.ref_price || current_request.price) if current_request
 
@@ -504,6 +502,7 @@ module Api::V1
         current_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
         json[:attributes]['total-price'] = previous_request.price if previous_request
         json[:attributes]['expected-price'] = (item.inventory.ref_price || current_request.price) if current_request
+        # binding.pry
         json[:id] = item.inventory.id
         json[:attributes]['signed'] = item.signed_at?
         json
