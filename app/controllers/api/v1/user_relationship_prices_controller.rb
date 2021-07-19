@@ -1,6 +1,6 @@
 module Api::V1
   class UserRelationshipPricesController < ApiController
-    before_action :authenticate_user!
+    # before_action :authenticate_user!
 
     # This will return all item name
     # URl : v1/user_relationship_prices

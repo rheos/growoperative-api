@@ -1,5 +1,5 @@
 class Api::V1::HomeController < Api::V1::ApiController
-	before_action :authenticate_user!, only: [:available_user_type]
+  skip_before_action :authenticate!, except: [:available_user_type]
 	def verify_invitation_code
 		@invitation = Invitation.find_by(invitation_code: params[:invitation_token])
 		if @invitation

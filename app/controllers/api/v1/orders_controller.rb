@@ -1,6 +1,6 @@
 module Api::V1
   class OrdersController < ApiController
-    before_action :authenticate_user!
+    # before_action :authenticate_user!
 
     def create
       # binding.pry
