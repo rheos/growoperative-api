@@ -20,7 +20,7 @@ class Item < ApplicationRecord
   # This method will set item_name in item if not present
   def set_item_name
     if self.item_name_id.nil?
-      item_name = ItemName.find_or_create_by(name: self.name, category_id: self.category_id)
+      item_name = ItemName.create(name: self.name, category_id: self.category_id)
       item_name.save
       self.item_name_id = item_name.id
     end
