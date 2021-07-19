@@ -186,10 +186,14 @@ module Api::V1
       if(params[:item].present?)
         data = item_params
 
-        if data[:description].present? || data[:description] == ""
+        if data[:description].present? || data[:description] == ''
           result = @inventory.update(description: data[:description])
-        else
+        elsif item_params.keys.length > 1
           result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+        elsif item_params.keys.length == 1 && (data[:price] || data[:quantity])
+          result = @inventory.update(data)
+        else
+          result = @inventory.item.update(data)
         end
 
         if params[:unit_options].present?
