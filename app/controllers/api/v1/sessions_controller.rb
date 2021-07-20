@@ -7,8 +7,9 @@ class Api::V1::SessionsController < Api::V1::ApiController
 
   def create
     if user&.valid_password?(create_params[:password])
-      assign_jwt_cookies(user)
-      render json: UserSerializer.new(user), status: 200
+      time = assign_jwt_cookies(user)
+      expire = (time - Time.now.utc).to_i
+      render json: UserSerializer.new(user, params: {expire: expire}), status: 200
     else
       render json: { error: 'Username or password are invalid' }, status: 401
     end
