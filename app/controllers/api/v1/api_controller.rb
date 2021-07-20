@@ -38,8 +38,9 @@ class Api::V1::ApiController < ApplicationController
     return unless user
 
     token = JwtGenerationService.new(user_id: user.id).token
-    time = 1.year.from_now
+    time = 1.minute.from_now
     cookies.signed[:jwt] = { value: token, expires: time, httponly: true }
+    time
   end
 
   private
