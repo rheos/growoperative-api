@@ -5,8 +5,4 @@ class UserSerializer
   attributes :user_types do |object|
     object.user_groups
   end
-
-  attributes :expire do |object, params|
-    params[:expire] if params[:expire].present?
-  end
 end
