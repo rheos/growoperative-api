@@ -76,6 +76,7 @@ Rails.application.routes.draw do
       get 'current_user_types' => 'users#current_user_types'
       get 'private/*file_path' => 'resources#index'
       resources :item_units, only: [:index]
+      resources :change_passwords, only: [:update]
     end
   end
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html
