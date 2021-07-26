@@ -81,7 +81,7 @@ module Api::V1
         while contacts.size > 0 do
           contact = contacts.shift
           # mark as checked
-          checked_contacts[contact[:user_id]] = contact[:total];
+          checked_contacts[contact[:user_id]] = contact[:total]
 
           # check if selected user is current user, it means inventory is available
           if contact[:user_id] == inventory.user_id
@@ -163,7 +163,7 @@ module Api::V1
         request_contract.user_id = current_user.id
         request_contract.inventory_id = inventory.id
         request_contract.item_id = inventory.item_id
-        request_contract.quantity = unit.quantity * request_params[:quantity].to_f
+        request_contract.quantity = request_params[:quantity].to_f
         request_contract.steps = 1
         request_contract.unit = unit.item_unit.id
         request_contract.save!
@@ -172,7 +172,7 @@ module Api::V1
         request.request_contract_id = request_contract.id
         request.user_id = current_user.id
         request.friend_id = inventory.user.id
-        request.price = unit.price * request_params[:quantity].to_f
+        request.price = unit.price
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
         request.step = 1
