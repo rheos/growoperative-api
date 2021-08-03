@@ -151,7 +151,7 @@ module Api::V1
 		# url : v1/users/accept_invition
 		# parameter : invited_code
 		# method : POST
-		def accept_invition
+		def accept_invitation
 			unless params[:invited_code].present?
 				render json: {
 					message: "Invitation code can't be blanck."
