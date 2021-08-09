@@ -11,7 +11,7 @@ class Item < ApplicationRecord
 
   validates :quantity, presence:true, numericality: true
 
-  attr_accessor :unit
+  attr_accessor :unit, :with_inventory
   
   # callbacks
   before_create :set_item_name
@@ -36,8 +36,9 @@ class Item < ApplicationRecord
   end
 
   def add_inventory
+    return if with_inventory
     inventory = self.inventory.new do |m|
-      m.user_id = self.user_id 
+      m.user_id = self.user_id
       m.quantity = self.quantity
       m.price = self.price
       m.status = :available
