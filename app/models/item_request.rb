@@ -51,6 +51,7 @@ class ItemRequest < ApplicationRecord
           quantity_left = self.inventory.quantity - (self.request_contract.quantity * request_unit.equivalent)/self_unit.equivalent
 
           converted_item = Item.new(self.inventory.item.attributes.merge({:unit => request_unit.unit_name, :id => nil}))
+          converted_item.avatars = self.inventory.item.avatars
           converted_item.with_inventory = true
           converted_item.save
           reserved.update(item_id: converted_item.id)

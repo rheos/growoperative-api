@@ -73,7 +73,6 @@ module Api::V1
 
           @items = (@items + request_items)
         end
-
       end
 
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}.map{ |item| 
