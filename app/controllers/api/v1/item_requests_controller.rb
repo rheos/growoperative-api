@@ -51,18 +51,18 @@ module Api::V1
 
       # check if inventory exists
       if inventory.nil? || inventory.status != 'available'
-        render json: { message: 'inventory is not available' }, status: 404
+        render json: { message: 'Inventory is not available' }, status: 404
         return
       end
 
       # check if inventory quanity is enough as much as requests
       if request_params[:quantity].nil? || (inventory.quantity < request_params[:quantity].to_f && request_params[:unit].nil?)
-        render json: { message: 'not enough stock' }, status: 400
+        render json: { message: 'Not enough stock' }, status: 400
         return
       end
 
       if inventory.user_id == current_user.id
-        render json: { message: 'can not request own item' }, status: 400
+        render json: { message: 'Can not request own item' }, status: 400
         return
       end
   
@@ -117,7 +117,7 @@ module Api::V1
 
         # check if find a path
         if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
-          render json: { message: 'path not found' }, status: 400
+          render json: { message: 'Path not found' }, status: 400
           return
         end
 
@@ -151,12 +151,9 @@ module Api::V1
         # request chain calculation for consumer -> retailer
         item_quantity = inventory.quantity * inventory.item.item_unit.equivalent
         unit = inventory.unit_options.find_by(id: request_params[:unit].to_i) || inventory.user.category_sizes.find_by(id: request_params[:unit].to_i)
-        quantity = (unit.quantity * request_params[:quantity].to_f)*unit.item_unit.equivalent
+        quantity = request_params[:quantity].to_f / unit.item_unit.equivalent
 
-        if (quantity > item_quantity)
-          render json: { message: 'not enough stock' }, status: 400
-          return
-        end
+        return render json: { message: 'Not enough stock' }, status: 400 if (quantity >= item_quantity)
 
         # create request contract
         request_contract = RequestContract.new
