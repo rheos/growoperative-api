@@ -11,7 +11,7 @@ class Item < ApplicationRecord
 
   validates :quantity, presence:true, numericality: true
 
-  attr_accessor :unit
+  attr_accessor :unit, :with_inventory
   
   # callbacks
   before_create :set_item_name
@@ -20,7 +20,7 @@ class Item < ApplicationRecord
   # This method will set item_name in item if not present
   def set_item_name
     if self.item_name_id.nil?
-      item_name = ItemName.create(name: self.name, category_id: self.category_id)
+      item_name = ItemName.find_or_create_by(name: self.name, category_id: self.category_id)
       item_name.save
       self.item_name_id = item_name.id
     end
@@ -36,8 +36,9 @@ class Item < ApplicationRecord
   end
 
   def add_inventory
+    return if with_inventory
     inventory = self.inventory.new do |m|
-      m.user_id = self.user_id 
+      m.user_id = self.user_id
       m.quantity = self.quantity
       m.price = self.price
       m.status = :available
