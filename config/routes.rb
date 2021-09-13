@@ -3,12 +3,7 @@ Rails.application.routes.draw do
              path: '',
              path_names: {
                sign_in: 'login',
-               sign_out: 'logout',
-               registration: 'signup'
-             },
-             controllers: {
-               sessions: 'api/v1/sessions',
-               registrations: 'api/v1/registrations'
+               sign_out: 'logout'
              }
     scope module: 'api' do
     namespace :v1, defaults: { format: :json } do
@@ -16,6 +11,7 @@ Rails.application.routes.draw do
       # devise_for :users
       get 'get_chain_limit' => 'global_settings#get_chain_limit'
       post 'set_chain_limit' => 'global_settings#set_chain_limit'
+      post 'signup' => 'registrations#create'
       resource :sessions, only: %i[show create destroy]
       resources :users, only: [:index, :show] do 
         collection do
@@ -76,6 +72,7 @@ Rails.application.routes.draw do
       get 'current_user_types' => 'users#current_user_types'
       get 'private/*file_path' => 'resources#index'
       resources :item_units, only: [:index]
+      resources :change_passwords, only: [:update]
     end
   end
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html

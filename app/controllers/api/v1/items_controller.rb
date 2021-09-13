@@ -73,7 +73,6 @@ module Api::V1
 
           @items = (@items + request_items)
         end
-
       end
 
       @items = @items.sort_by{ |item| item.total_price.to_f }.uniq{ |item| item.id}.map{ |item| 
@@ -180,7 +179,6 @@ module Api::V1
 
     end
 
-  
     def update
       result = false
       if(params[:item].present?)
@@ -189,10 +187,12 @@ module Api::V1
         if data[:description].present? || data[:description] == ''
           result = @inventory.update(description: data[:description])
         elsif item_params.keys.length > 1
+          change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
           result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
         elsif item_params.keys.length == 1 && (data[:price] || data[:quantity])
           result = @inventory.update(data)
         else
+          change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
           result = @inventory.item.update(data)
         end
 
@@ -303,6 +303,13 @@ module Api::V1
     end
 
     private
+
+    def change_item_name(inventory_for_update, name)
+      item_name = ItemName.find_or_create_by(name: name, category_id: inventory_for_update.item.category_id)
+      inventory_for_update.item.update(item_name_id: item_name.id, name: item_name.name)
+      item_params.delete(:name)
+    end
+
     def set_inventory
       @inventory = current_user.is_admin? ? Inventory.find(params[:id]) : Inventory.find_by(id: params[:id], user_id: current_user.id)
       unless @inventory
@@ -313,7 +320,7 @@ module Api::V1
     end
 
     def item_params
-      params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, :description)
+      @item_params ||= params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, :description)
     end
 
     def unit_option_params
