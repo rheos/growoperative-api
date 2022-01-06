@@ -183,17 +183,17 @@ module Api::V1
       result = false
       if(params[:item].present?)
         data = item_params
-
-        if data[:description].present? || data[:description] == ''
+        data_without_description = data.except('description')
+        if (data[:description].present? || data[:description] == '') && !(item_params.keys.length > 1)
           result = @inventory.update(description: data[:description])
         elsif item_params.keys.length > 1
           change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
-          result = @inventory.update(price: data[:price], quantity: data[:quantity]) && @inventory.item.update(data)
+          result = @inventory.update(price: data[:price], quantity: data[:quantity], description: data[:description]) && @inventory.item.update(data_without_description)
         elsif item_params.keys.length == 1 && (data[:price] || data[:quantity])
-          result = @inventory.update(data)
+          result = @inventory.update(data_without_description)
         else
           change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
-          result = @inventory.item.update(data)
+          result = @inventory.item.update(data_without_description)
         end
 
         if params[:unit_options].present?
