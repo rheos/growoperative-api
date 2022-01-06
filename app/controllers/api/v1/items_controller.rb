@@ -142,8 +142,8 @@ module Api::V1
       if params[:dtype].to_i == 1
         data[:producer_id] = current_user.id
       end
-
-      @item = current_user.items.new(data)
+      data_without_description = data.except('description')
+      @item = current_user.items.new(data_without_description)
       if @item.save
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
