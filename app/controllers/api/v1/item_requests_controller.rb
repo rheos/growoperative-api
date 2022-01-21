@@ -399,8 +399,19 @@ module Api::V1
           order = Order.find(key)
           # add inventory without an order, of there are still unconfirmed requests, or previous chain member still waiting for delivery
           current_user_requests = order.item_requests.joins(:inventory).where("item_requests.user_id = #{current_user.id} AND inventories.user_id != item_requests.friend_id")
+          request_ids = []
           if current_user_requests.count > 0 || order.request_contracts.where.not(status: :accepted).count > 0
-            items_without_order += value
+            values_without_order = []
+            current_user_requests.each do |request|
+              request_ids << request.inventory.id
+            end
+            value.each do |request|
+              values_without_order << request if request_ids.include?(request[:id])
+            end
+            value.delete_if { |request| request_ids.include?(request[:id]) }
+            items_without_order += values_without_order
+            res = order.as_json
+            (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
           else
             res = order.as_json
             (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
@@ -409,7 +420,6 @@ module Api::V1
       end
 
       result.push(items_without_order) if items_without_order.length > 0
-
       render json: {
         data: result.compact
       }, status: 200
