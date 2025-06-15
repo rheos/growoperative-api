@@ -8,6 +8,11 @@ RUN apt-get update -qq && apt-get install -y \
     libpq-dev \
     nodejs \
     default-mysql-client \
+    curl \
+    && curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
+    && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
+    && apt-get update \
+    && apt-get install -y yarn \
     && rm -rf /var/lib/apt/lists/*
 
 # Install bundler
@@ -25,8 +30,14 @@ RUN chmod +x bin/wait-for-db.sh
 RUN chmod +x entrypoint.sh
 RUN chmod +x entrypoint.prod.sh
 
-# Precompile assets for production
-RUN SECRET_KEY_BASE=dummy RAILS_ENV=production bundle exec rake assets:precompile
+# Install React dependencies
+RUN yarn install
+
+# Precompile assets only in production
+ARG RAILS_ENV=development
+RUN if [ "$RAILS_ENV" = "production" ]; then \
+    SECRET_KEY_BASE=dummy bundle exec rake assets:precompile; \
+    fi
 
 # Use different entrypoints based on environment
 ENV RAILS_ENV=${RAILS_ENV:-development}
