@@ -13,20 +13,21 @@ default: &default
   adapter: mysql2
   encoding: utf8
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  username: newuser
-  password: password
+  username: <%= ENV.fetch("DATABASE_USERNAME") { "buddy" } %>
+  password: <%= ENV.fetch("DATABASE_PASSWORD") { "password" } %>
+  host: <%= ENV.fetch("DATABASE_HOST") { "localhost" } %>
   # socket: /var/run/mysqld/mysqld.sock
 
 development:
   <<: *default
-  database: reactgoper_development
+  database: growoperative_development
 
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: reactgoper_test
+  database: growoperative_test
 
 # As with config/secrets.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
@@ -49,6 +50,7 @@ test:
 #
 production:
   <<: *default
-  database: reactgoper_production
-  username: goper
-  password: <%= ENV['GOPER_DATABASE_PASSWORD'] %>
+  database: growoperative_production
+  username: <%= ENV['DATABASE_USERNAME'] %>
+  password: <%= ENV['DATABASE_PASSWORD'] %>
+  host: <%= ENV['DATABASE_HOST'] %>
