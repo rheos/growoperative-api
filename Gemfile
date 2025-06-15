@@ -1,23 +1,23 @@
 source 'https://rubygems.org'
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
-ruby '2.5.1'
+ruby '2.7.8'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 5.2.1'
 # Use sqlite3 as the database for Active Record
-gem 'mysql2', '0.4.10'
+gem 'mysql2', '0.5.5'
 # Use Puma as the app server
-gem 'puma', '~> 3.11'
+gem 'puma', '~> 5.6'
 # Use SCSS for stylesheets
-gem 'sass-rails', '~> 5.0'
+gem 'sassc-rails', '~> 2.1'
 # Use Uglifier as compressor for JavaScript assets
-gem 'uglifier', '>= 1.3.0'
+gem 'uglifier', '>= 4.2.0'
 # See https://github.com/rails/execjs#readme for more supported runtimes
 # gem 'mini_racer', platforms: :ruby
 gem 'jquery-ui-rails'
 # Use CoffeeScript for .coffee assets and views
-gem 'coffee-rails', '~> 4.2'
+gem 'coffee-rails', '~> 5.0'
 # Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
 gem 'turbolinks', '~> 5'
 # Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
@@ -36,49 +36,49 @@ gem 'fast_jsonapi'
 # gem 'capistrano-rails', group: :development
 
 # Reduces boot times through caching; required in config/boot.rb
-gem 'bootsnap', '>= 1.1.0', require: false
+gem 'bootsnap', '>= 1.17.0', require: false
 # gem 'devise_token_auth'
 # gem 'omniauth'
-gem 'active_model_serializers'
+gem 'active_model_serializers', '~> 0.10.0'
 gem "font-awesome-rails"
 gem 'jquery-rails'
-gem 'devise',           '~> 4.2'
+gem 'devise',           '~> 4.9'
 gem 'devise-jwt'
-gem 'dotenv-rails'
-gem 'carrierwave', '>= 2.0.0.rc', '< 3.0'
-gem "rmagick"
-gem 'spawnling', '~>2.1'
-# gem 'devise_invitable', '~> 1.7.0'
+gem 'carrierwave', '~> 2.0'
+gem "rmagick", '~> 5.0'
+gem 'spawnling', '~>2.1.6'
+gem 'devise_invitable', '~> 2.0'
 
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
-  gem 'dotenv-rails'
-  gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
-  gem 'rspec-rails'
-  gem 'factory_bot_rails'
-  gem 'pry-rails'
-  gem 'pry-byebug'
-  gem 'pry-stack_explorer'
+  gem 'dotenv-rails', '~> 2.7'
+  gem 'byebug', '~> 11.1'
+  gem 'rspec-rails', '~> 4.1'
+  gem 'factory_bot_rails', '~> 6.1'
+  gem 'pry-rails', '~> 0.3'
+  gem 'pry-byebug', '~> 3.10'
+  gem 'pry-stack_explorer', '~> 0.4'
 end
 
 group :development do
   # Access an interactive console on exception pages or by calling 'console' anywhere in the code.
-  gem 'web-console', '>= 3.3.0'
-  gem 'listen', '>= 3.0.5', '< 3.2'
+  gem 'web-console', '~> 3.7'
+  gem 'listen', '~> 3.8'
   # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
-  gem 'spring'
+  gem 'spring', '~> 2.1'
   gem 'spring-watcher-listen', '~> 2.0.0'
 end
 
 group :test do
   # Adds support for Capybara system testing and selenium driver
-  gem 'capybara', '>= 2.15'
-  gem 'selenium-webdriver'
+  gem 'nokogiri', '~> 1.13.10'
+  gem 'capybara', '~> 3.35'
+  gem 'selenium-webdriver', '~> 4.8'
   # Easy installation and use of chromedriver to run system tests with Chrome
-  gem 'chromedriver-helper'
-  gem 'database_cleaner'
+  gem 'webdrivers', '~> 4.7.0'
+  gem 'database_cleaner', '~> 2.0'
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data', platforms: [:mingw, :mswin, :x64_mingw, :jruby]
-gem 'rack-cors', require: 'rack/cors'
+gem 'tzinfo-data', '~> 1.2023.3'
+gem 'rack-cors', '~> 1.1'
