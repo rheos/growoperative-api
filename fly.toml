@@ -1,4 +1,4 @@
-app = "growoperative-backend"
+app = "railsbackend"
 primary_region = "lax"
 
 [build]

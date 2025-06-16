@@ -21,10 +21,9 @@ services:
       - bundle_data:/usr/local/bundle
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      DATABASE_HOST: db
-      DATABASE_USERNAME: buddy
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-password}
       RAILS_ENV: development
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
     depends_on:
