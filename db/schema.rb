@@ -12,7 +12,7 @@
 
 ActiveRecord::Schema.define(version: 201811070122202) do
 
-  create_table "categories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "categories", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "category_name"
     t.integer "default_unit"
     t.integer "default_consumer_unit"
@@ -22,7 +22,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "price", precision: 10
   end
 
-  create_table "category_sizes", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "category_sizes", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.integer "user_id"
     t.integer "category_id", null: false
     t.integer "item_unit_id", null: false
@@ -30,21 +30,21 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.float "price"
   end
 
-  create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.integer "value", default: 3
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "setting", default: ""
   end
 
-  create_table "grades", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "grades", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "name"
     t.string "value"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
   end
 
-  create_table "inventories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "inventories", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
     t.float "quantity"
@@ -61,7 +61,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
-  create_table "invitations", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "invitations", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "invitation_code"
     t.bigint "user_id"
     t.integer "status"
@@ -75,7 +75,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
 
-  create_table "item_names", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "item_names", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "name"
     t.bigint "category_id"
     t.text "description"
@@ -84,7 +84,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["category_id"], name: "index_item_names_on_category_id"
   end
 
-  create_table "item_relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "item_relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "item_id"
     t.bigint "relationship_id"
     t.boolean "status"
@@ -94,7 +94,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["relationship_id"], name: "index_item_relationships_on_relationship_id"
   end
 
-  create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.decimal "price", precision: 10
     t.integer "status"
@@ -112,16 +112,16 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
 
-  create_table "item_units", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "item_units", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "unit_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "item_symbol"
     t.integer "type"
     t.float "equivalent"
+    t.string "item_symbol"
   end
 
-  create_table "items", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "items", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.decimal "quantity", precision: 10, scale: 5
     t.bigint "category_id"
@@ -143,13 +143,13 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_items_on_user_id"
   end
 
-  create_table "jwt_blacklist", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "jwt_blacklist", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "jti", null: false
     t.datetime "exp", null: false
     t.index ["jti"], name: "index_jwt_blacklist_on_jti"
   end
 
-  create_table "orders", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "orders", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "user_id"
     t.string "friend_id"
     t.string "order_label"
@@ -165,7 +165,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.text "note"
   end
 
-  create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.integer "friend_id"
     t.integer "status", default: 0
     t.integer "action_user_id"
@@ -179,7 +179,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_relationships_on_user_id"
   end
 
-  create_table "request_contracts", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "request_contracts", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
     t.decimal "quantity", precision: 10, scale: 5
@@ -197,7 +197,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
 
-  create_table "request_list_relationship_statuses", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "request_list_relationship_statuses", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "relationship_id"
     t.string "status"
     t.datetime "created_at", null: false
@@ -207,7 +207,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["relationship_id"], name: "index_request_list_relationship_statuses_on_relationship_id"
   end
 
-  create_table "reviews", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "reviews", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_name_id"
     t.bigint "item_id"
@@ -220,7 +220,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_reviews_on_user_id"
   end
 
-  create_table "unit_options", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "unit_options", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.integer "inventory_id", null: false
     t.integer "item_unit_id", null: false
     t.float "price"
@@ -229,16 +229,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
   end
 
-  create_table "unit_options_columns", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
-    t.integer "inventory_id", null: false
-    t.integer "item_unit_id", null: false
-    t.float "price"
-    t.float "quantity"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "user_category_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "user_category_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "category_id"
     t.decimal "price", precision: 10, scale: 2
@@ -249,7 +240,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_category_prices_on_user_id"
   end
 
-  create_table "user_groups", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "user_groups", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "group_label"
     t.datetime "created_at", null: false
@@ -257,7 +248,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_groups_on_user_id"
   end
 
-  create_table "user_relationship_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "user_relationship_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "friend_id"
     t.bigint "category_id"
@@ -272,7 +263,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_relationship_prices_on_user_id"
   end
 
-  create_table "user_relationship_request_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "user_relationship_request_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "friend_id"
     t.bigint "relationship_id"
@@ -285,7 +276,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_relationship_request_prices_on_user_id"
   end
 
-  create_table "users", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8", force: :cascade do |t|
+  create_table "users", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.string "encrypted_password", default: "", null: false
     t.string "reset_password_token"
     t.datetime "reset_password_sent_at"
