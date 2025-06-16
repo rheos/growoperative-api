@@ -44,4 +44,4 @@ ENV RAILS_ENV=${RAILS_ENV:-development}
 ENTRYPOINT ["./entrypoint.sh"]
 
 # Start the Rails server
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8080"]
