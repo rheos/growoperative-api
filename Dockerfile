@@ -41,7 +41,8 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
 
 # Use different entrypoints based on environment
 ENV RAILS_ENV=${RAILS_ENV:-development}
-ENTRYPOINT ["./entrypoint.sh"]
+ENV PORT=8080
+ENTRYPOINT ["./entrypoint.prod.sh"]
 
 # Start the Rails server
 CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8080"]
