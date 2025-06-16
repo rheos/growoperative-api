@@ -11,7 +11,7 @@ primary_region = "lax"
   RAILS_SERVE_STATIC_FILES = "true"
   FRONTEND_URL = "https://growoperative.app"
   # MySQL configuration will be set by fly mysql attach or manually
-  DATABASE_HOST = "db.foaf.ai"
+  DATABASE_HOST = "growoperative-mysql.internal"
 
 [http_service]
   internal_port = 8080
