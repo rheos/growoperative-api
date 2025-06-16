@@ -12,8 +12,6 @@ primary_region = "lax"
   FRONTEND_URL = "https://growoperative.app"
   # MySQL configuration will be set by fly mysql attach or manually
   DATABASE_HOST = "db.foaf.ai"
-  DATABASE_USERNAME = "buddy"
-  DATABASE_PASSWORD = ""  # Set this via fly secrets set
 
 [http_service]
   internal_port = 8080
