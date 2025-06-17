@@ -10,8 +10,10 @@ primary_region = "lax"
   RAILS_LOG_TO_STDOUT = "true"
   RAILS_SERVE_STATIC_FILES = "true"
   FRONTEND_URL = "https://growoperative.app"
-  # MySQL configuration will be set by fly mysql attach or manually
   DATABASE_HOST = "growoperative-mysql.internal"
+  DATABASE_USERNAME = "buddy"
+  DATABASE_PASSWORD = "Notwito@27b-6"
+  DATABASE_NAME = "growoperative_production"
 
 [http_service]
   internal_port = 8080
