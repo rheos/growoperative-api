@@ -37,19 +37,23 @@ primary_region = "lax"
   internal_port = 8080
   processes = ["app"]
 
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
   [services.concurrency]
     type = "connections"
     hard_limit = 25
     soft_limit = 20
 
-  [[services.tcp_checks]]
-    interval = "60s"
-    timeout = "10s"
-    grace_period = "30s" 
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "get"
+    path = "/up"
+    protocol = "http"
+    tls_skip_verify = false
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"] 
