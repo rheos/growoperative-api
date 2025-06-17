@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  root to: 'api/v1/home#root'
+
   devise_for :users,
              path: '',
              path_names: {
