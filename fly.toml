@@ -50,15 +50,15 @@ primary_region = "lax"
     soft_limit = 20
 
   [[services.http_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
+    interval = "60s"
+    timeout = "10s"
+    grace_period = "30s"
     method = "get"
     path = "/"
     protocol = "http"
     tls_skip_verify = false
 
   [[services.tcp_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s" 
+    interval = "60s"
+    timeout = "10s"
+    grace_period = "30s" 
