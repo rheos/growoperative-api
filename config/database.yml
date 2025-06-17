@@ -49,8 +49,11 @@ test:
 #     url: <%= ENV['DATABASE_URL'] %>
 #
 production:
-  <<: *default
+  adapter: mysql2
+  encoding: utf8
+  pool: 5
   database: growoperative_production
-  username: <%= ENV['DATABASE_USERNAME'] %>
-  password: <%= ENV['DATABASE_PASSWORD'] %>
-  host: <%= ENV['DATABASE_HOST'] %>
+  username: buddy
+  password: REMOVED_FOR_PUBLICATION
+  host: 2600:1f14:34c5:8b00:d3a1:f066:ebda:77f
+  port: 3306
