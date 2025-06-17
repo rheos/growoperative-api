@@ -1,5 +1,21 @@
 class Api::V1::HomeController < Api::V1::ApiController
   skip_before_action :authenticate!, except: [:available_user_type]
+
+  def root
+    render json: {
+      status: 'ok',
+      api_version: 'v1',
+      environment: Rails.env,
+      timestamp: Time.current,
+      endpoints: {
+        base_url: '/api/v1',
+        auth: '/api/v1/login',
+        items: '/api/v1/items',
+        users: '/api/v1/users'
+      }
+    }
+  end
+
 	def verify_invitation_code
 		@invitation = Invitation.find_by(invitation_code: params[:invitation_token])
 		if @invitation
