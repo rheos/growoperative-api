@@ -55,5 +55,5 @@ production:
   database: growoperative_production
   username: buddy
   password: Notwito@27b-6
-  host: growoperative-mysql.internal
+  host: 2600:1f14:34c5:8b00:d3a1:f066:ebda:77f
   port: 3306
