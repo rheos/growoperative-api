@@ -52,8 +52,8 @@ production:
   adapter: mysql2
   encoding: utf8
   pool: 5
-  database: growoperative_production
-  username: buddy
-  password: REMOVED_FOR_PUBLICATION
-  host: growoperative-mysql.internal
+  database: <%= ENV.fetch("DATABASE_NAME") { "growoperative_production" } %>
+  username: <%= ENV.fetch("DATABASE_USERNAME") { "buddy" } %>
+  password: <%= ENV.fetch("DATABASE_PASSWORD") { "REMOVED_FOR_PUBLICATION" } %>
+  host: <%= ENV.fetch("DATABASE_HOST") { "growoperative-mysql.internal" } %>
   port: 3306
