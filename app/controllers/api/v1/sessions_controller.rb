@@ -22,10 +22,10 @@ class Api::V1::SessionsController < Api::V1::ApiController
   private
 
   def user
-    @user ||= User.find_by(user_name: create_params[:user_name])
+    @user ||= User.find_by(user_name: create_params[:username])
   end
 
   def create_params
-    params.permit(:user_name, :password)
+    params.permit(:username, :password)
   end
 end
