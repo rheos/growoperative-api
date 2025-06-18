@@ -89,6 +89,12 @@ Rails.application.configure do
     config.logger    = ActiveSupport::TaggedLogging.new(logger)
   end
 
+  # Ensure logs are written to STDOUT
+  config.logger = ActiveSupport::Logger.new(STDOUT)
+  config.logger.formatter = proc do |severity, datetime, progname, msg|
+    "#{datetime}: #{severity} #{msg}\n"
+  end
+
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
   config.serve_static_assets = true

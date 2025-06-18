@@ -6,11 +6,16 @@ class Api::V1::SessionsController < Api::V1::ApiController
   end
 
   def create
+    Rails.logger.debug("Login attempt - Params: #{params.inspect}")
+    
     user = User.find_by(user_name: params[:user_name])
+    Rails.logger.debug("User found: #{user.present?}")
     
     if user&.valid_password?(params[:password])
+      Rails.logger.debug("Password valid for user: #{user.user_name}")
       begin
         token = JwtGenerationService.new(user.id).token
+        Rails.logger.debug("JWT token generated successfully")
         render json: { token: token }, status: :ok
       rescue JwtGenerationService::JWTGenerationError => e
         Rails.logger.error("JWT Generation failed: #{e.message}")
