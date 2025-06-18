@@ -87,7 +87,8 @@ Rails.application.routes.draw do
     "There is no spoon.",
     "Shall we play a game?",
     "I'm sorry, Dave. I'm afraid I can't do that.",
-    "These aren't the droids you're looking for."
+    "These aren't the droids you're looking for.",
+    "This page will self-destruct in five seconds."
   ]
 
   match "/.env", to: proc { [404, {}, [quotes.sample]] }, via: :all
