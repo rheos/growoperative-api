@@ -39,7 +39,14 @@ class Api::V1::ApiController < ApplicationController
 
     token = JwtGenerationService.new(user_id: user.id).token
     time = 1.year.from_now
-    cookies.signed[:jwt] = { value: token, expires: time, httponly: true }
+    cookies.signed[:jwt] = {
+      value: token,
+      expires: time,
+      httponly: true,
+      domain: '.foaf.ai',
+      same_site: :none,
+      secure: true
+    }
   end
 
   private
