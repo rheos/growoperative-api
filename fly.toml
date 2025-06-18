@@ -57,4 +57,4 @@ primary_region = "lax"
     handlers = ["http"]
   [[services.ports]]
     port = 443
-    handlers = ["tls", "http"] 
+    handlers = ["tls", "http"]

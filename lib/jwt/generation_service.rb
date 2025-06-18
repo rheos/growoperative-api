@@ -13,7 +13,7 @@ class JwtGenerationService
     raise JWTGenerationError, "User ID is required" if @user_id.nil?
     
     begin
-      JWT.encode(payload, secret, SIGNING_ALGORITHM)
+    JWT.encode(payload, secret, SIGNING_ALGORITHM)
     rescue JWT::EncodeError => e
       Rails.logger.error("JWT Generation Error: #{e.message}")
       raise JWTGenerationError, "Failed to generate JWT token: #{e.message}"
