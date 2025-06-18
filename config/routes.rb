@@ -93,4 +93,7 @@ Rails.application.routes.draw do
 
   match "/.env", to: proc { [404, {}, [quotes.sample]] }, via: :all
   match "/.env.*", to: proc { [404, {}, [quotes.sample]] }, via: :all
+  match "/.git", to: proc { [404, {}, [quotes.sample]] }, via: :all
+  match "/.git/*", to: proc { [404, {}, [quotes.sample]] }, via: :all
+  
 end
