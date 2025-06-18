@@ -14,7 +14,7 @@ primary_region = "lax"
   DATABASE_USERNAME = "buddy"
   DATABASE_PASSWORD = "REMOVED_FOR_PUBLICATION"
   DATABASE_NAME = "growoperative_production"
-  SEED_DATABASE = "true"
+  # SEED_DATABASE = "true"
 
 [http_service]
   internal_port = 8080
