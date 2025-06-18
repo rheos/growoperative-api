@@ -8,7 +8,7 @@ class Api::V1::SessionsController < Api::V1::ApiController
   def create
     Rails.logger.debug("Login attempt - Params: #{params.inspect}")
     
-    user = User.find_by(user_name: params[:user_name])
+    user = User.find_by(user_name: params[:username])
     Rails.logger.debug("User found: #{user.present?}")
     
     if user&.valid_password?(params[:password])
@@ -25,7 +25,7 @@ class Api::V1::SessionsController < Api::V1::ApiController
         render json: { error: "An unexpected error occurred during login" }, status: :internal_server_error
       end
     else
-      Rails.logger.warn("Failed login attempt for user: #{params[:user_name]}")
+      Rails.logger.warn("Failed login attempt for username: #{params[:username]}")
       render json: { error: "Username or password are invalid" }, status: :unauthorized
     end
   end
