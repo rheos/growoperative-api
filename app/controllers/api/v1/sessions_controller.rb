@@ -13,17 +13,8 @@ class Api::V1::SessionsController < Api::V1::ApiController
     
     if user&.valid_password?(params[:password])
       Rails.logger.debug("Password valid for user: #{user.user_name}")
-      begin
-        token = JwtGenerationService.new(user.id).token
-        Rails.logger.debug("JWT token generated successfully")
-        render json: { token: token }, status: :ok
-      rescue JwtGenerationService::JWTGenerationError => e
-        Rails.logger.error("JWT Generation failed: #{e.message}")
-        render json: { error: "Authentication failed: #{e.message}" }, status: :internal_server_error
-      rescue StandardError => e
-        Rails.logger.error("Unexpected error during login: #{e.message}")
-        render json: { error: "An unexpected error occurred during login" }, status: :internal_server_error
-      end
+      assign_jwt_cookies(user)
+      render json: UserSerializer.new(user), status: 200
     else
       Rails.logger.warn("Failed login attempt for username: #{params[:username]}")
       render json: { error: "Username or password are invalid" }, status: :unauthorized
