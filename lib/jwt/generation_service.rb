@@ -18,6 +18,6 @@ class JwtGenerationService
   end
 
   def secret
-    ENV['RAILS_SECRET_KEY_BASE']
+    ENV['SECRET_KEY_BASE']
   end
 end

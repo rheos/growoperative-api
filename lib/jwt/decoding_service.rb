@@ -12,6 +12,6 @@ class JwtDecodingService
   private
 
   def secret
-    ENV['RAILS_SECRET_KEY_BASE']
+    ENV['SECRET_KEY_BASE']
   end
 end
