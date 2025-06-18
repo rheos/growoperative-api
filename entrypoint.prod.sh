@@ -14,11 +14,13 @@ if [ "$RAILS_ENV" = "production" ]; then
   echo "📦 Migrating DB..."
   bundle exec rails db:migrate
 
+
   if [ "$SEED_DATABASE" = "true" ]; then
     echo "🌱 Seeding DB..."
     bundle exec rails db:seed
   fi
 fi
+
 
 # ✅ Fallback if CMD is not passed (Fly does this sometimes!)
 if [ "$#" -eq 0 ]; then
@@ -28,3 +30,5 @@ else
   echo "🎯 CMD passed. Executing: $@"
   exec "$@"
 fi
+
+
