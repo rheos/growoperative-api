@@ -80,6 +80,16 @@ Rails.application.routes.draw do
     end
   end
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html
-  match "/.env", to: proc { [404, {}, ["Negative!   I am a meat popsicle!"]] }, via: :all
-  match "/.env.*", to: proc { [404, {}, ["Negative!   I am a meat popsicle!"]] }, via: :all
+  quotes = [
+    "Negative!  I am a meat popsicle!",
+    "Not without a 27B/6!",
+    "This is your receipt for your husband... and this is my receipt for your receipt.",
+    "There is no spoon.",
+    "Shall we play a game?",
+    "I'm sorry, Dave. I'm afraid I can't do that.",
+    "These aren't the droids you're looking for."
+  ]
+
+  match "/.env", to: proc { [404, {}, [quotes.sample]] }, via: :all
+  match "/.env.*", to: proc { [404, {}, [quotes.sample]] }, via: :all
 end
