@@ -9,24 +9,22 @@ if [ -f ./bin/wait-for-db.sh ]; then
   ./bin/wait-for-db.sh "${DATABASE_HOST:-db}"
 fi
 
-# Safe DB init for development
-if [ "$RAILS_ENV" = "development" ]; then
-  echo "🔍 Checking for existing database..."
-  if ! bundle exec rails db:version >/dev/null 2>&1; then
-    echo "📦 Database not found — creating and migrating..."
-    bundle exec rails db:create db:migrate
-    if [ "$SEED_DATABASE" = "true" ]; then
-      echo "🌱 Seeding database..."
-      bundle exec rails db:seed
-    fi
-  else
-    echo "✅ Database exists — skipping creation"
-  fi
-else
-  echo "🔧 Running production DB setup..."
-  bundle exec rails db:migrate
-  if [ "$SEED_DATABASE" = "true" ]; then
+# Create DB if needed
+if ! bundle exec rails db:version >/dev/null 2>&1; then
+  echo "📦 Database not found — creating..."
+  bundle exec rails db:create
+fi
+
+# Always run migrations
+bundle exec rails db:migrate
+
+# Only seed if SEED_DATABASE=true
+if [ "$SEED_DATABASE" = "true" ]; then
+  if ! bundle exec rails runner "exit User.any? ? 0 : 1"; then
+    echo "🌱 Seeding database (no users found)..."
     bundle exec rails db:seed
+  else
+    echo "✅ Users exist — skipping db:seed"
   fi
 fi
 
