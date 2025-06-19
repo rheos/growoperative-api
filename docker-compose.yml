@@ -1,17 +1,30 @@
-version: '3.8'
+# =============================
+# Docker Compose for Local Dev
+#
+# Services:
+#   db:       MySQL 5.7 database
+#   backend:  Rails API server
+#   frontend: React app (dev server)
+#
+# Key environment variables:
+#   DATABASE_PASSWORD: MySQL user password (set here and in database.yml)
+#   FRONTEND_URL:      URL for CORS and backend/frontend integration
+#   SEED_DATABASE:     If "true", seeds DB on startup (dev only)
+# =============================
+
 
 services:
   db:
     image: mysql:5.7
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: growoperative_development
-      MYSQL_USER: buddy
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: rDKftaN-64  # Root password for MySQL (dev only)
+      MYSQL_DATABASE: growoperative_development  # Default DB name
+      MYSQL_USER: buddy                # App DB user
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:-Notwito@27b-6}  # App DB user password
     volumes:
       - db_data:/var/lib/mysql
     ports:
-      - "3306:3306"
+      - "3306:3306"  # Expose MySQL for local tools
 
   backend:
     build: .
@@ -20,14 +33,35 @@ services:
       - .:/app
       - bundle_data:/usr/local/bundle
     ports:
-      - "3000:3000"
+      - "3000:8080"  # Rails API on localhost:3000
     env_file:
       - .env
     environment:
       RAILS_ENV: development
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}  # Used for CORS
+      SEED_DATABASE: "true"  # Auto-seed DB if empty (dev only)
+      DATABASE_USERNAME: buddy
+      DATABASE_PASSWORD: Notwito@27b-6
+      DATABASE_HOST: db
+      DISABLE_SPRING: 1
+      SECRET_KEY_BASE: 4d276941759d5c7ade35b526be2a4d7537ea5265819e671af9718b6d20f54d250029e1fcc300155e68d5e36bfa96569bfb344e1149fb35969fbdeb650ee33ac6
+      COOKIE_DOMAIN: localhost
     depends_on:
       - db
+
+  frontend:
+    build: ../platform
+    ports:
+      - "3001:3000"  # React dev server on localhost:3001
+    env_file:
+      - ../platform/.env.local
+    environment:
+      - CHOKIDAR_USEPOLLING=true  # For hot reload on some filesystems
+    volumes:
+      - ../platform:/app
+      - /app/node_modules
+    depends_on:
+      - backend
 
 volumes:
   db_data:

@@ -25,11 +25,6 @@ RUN bundle install
 # Copy the rest of the application
 COPY . .
 
-# Make scripts executable
-RUN chmod +x bin/wait-for-db.sh
-RUN chmod +x entrypoint.sh
-RUN chmod +x entrypoint.prod.sh
-
 # Install React dependencies
 RUN yarn install
 
@@ -42,7 +37,7 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
 # Use different entrypoints based on environment
 ENV RAILS_ENV=${RAILS_ENV:-development}
 ENV PORT=8080
-ENTRYPOINT ["./entrypoint.prod.sh"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Start the Rails server
 #CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "8080"]
