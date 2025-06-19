@@ -43,7 +43,7 @@ class Api::V1::ApiController < ApplicationController
       value: token,
       expires: time,
       httponly: true,
-      domain: ENV.fetch('COOKIE_DOMAIN', '.foaf.ai'),
+      domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app'),
       same_site: :none,
       secure: true
     }

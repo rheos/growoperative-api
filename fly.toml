@@ -14,7 +14,7 @@ primary_region = "lax"
   DATABASE_USERNAME = "buddy"
   DATABASE_PASSWORD = "Notwito@27b-6"
   DATABASE_NAME = "growoperative_production"
-  COOKIE_DOMAIN = ".foaf.ai"
+  COOKIE_DOMAIN = ".growoperative.app"
   # SEED_DATABASE = "true"
 
 [http_service]
