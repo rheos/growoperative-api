@@ -30,8 +30,30 @@ class Api::V1::ApiController < ApplicationController
     jwt = cookies.signed[:jwt]
     return unless jwt
 
-    decoded = JwtDecodingService.new(jwt).decrypt!
-    @current_user ||= User.find_by(id: decoded['sub']['user_id'])
+    begin
+      decoded = JwtDecodingService.new(jwt).decrypt!
+      
+      # Debug logging
+      Rails.logger.debug("Decoded JWT: #{decoded.inspect}")
+      
+      # Check if token is blacklisted
+      return if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
+      
+      # Handle nested user_id structure
+      user_id = decoded['sub']
+      if user_id.is_a?(Hash)
+        user_id = user_id['user_id']
+        # Handle double nesting if it exists
+        user_id = user_id['user_id'] if user_id.is_a?(Hash)
+      end
+      
+      Rails.logger.debug("Extracted user_id: #{user_id.inspect}")
+      
+      @current_user ||= User.find_by(id: user_id)
+    rescue JwtDecodingService::JWTDecodingError => e
+      Rails.logger.error("JWT Decoding Error: #{e.message}")
+      return nil
+    end
   end
 
   def assign_jwt_cookies(user)
