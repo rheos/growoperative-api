@@ -102,7 +102,7 @@ class Inventory < ApplicationRecord
     end
     avatars.compact.map{ |i| 
       if Rails.env.production?
-        i.url  # S3 URLs are complete URLs
+        i.file.public_url  # Use public_url which generates a direct, unsigned URL. This works because the bucket policy grants public access.
       else
         '/v1'+i.url.gsub(Rails.root.to_s, '')  # Local development URLs
       end
