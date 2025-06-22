@@ -26,7 +26,12 @@ class JwtGenerationService
   private
 
   def payload
-    @payload ||= { iat: Time.now.to_i, sub: @user_id }
+    @payload ||= { 
+      iat: Time.now.to_i, 
+      exp: 1.year.from_now.to_i,
+      sub: { user_id: @user_id },
+      jti: SecureRandom.uuid  # Add unique JWT ID for blacklisting
+    }
   end
 
   def secret

@@ -22,7 +22,26 @@ class Api::V1::SessionsController < Api::V1::ApiController
   end
 
   def destroy
-    cookies.delete :jwt
+    # Get the current JWT token before deleting the cookie
+    jwt = cookies.signed[:jwt]
+    
+    # Add the token to the blacklist if it exists
+    if jwt.present?
+      begin
+        decoded = JwtDecodingService.new(jwt).decrypt!
+        # Add to blacklist using datetime instead of Unix timestamp
+        JWTBlacklist.create!(
+          jti: decoded['jti'] || SecureRandom.uuid,
+          exp: Time.at(decoded['exp'] || 1.year.from_now.to_i)  # Convert to datetime
+        )
+      rescue JwtDecodingService::JWTDecodingError => e
+        Rails.logger.warn("Failed to blacklist JWT on logout due to decoding error: #{e.message}")
+      end
+    end
+    
+    # Delete the cookie
+    cookies.delete :jwt, domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app')
+    
     head :ok
   end
 
