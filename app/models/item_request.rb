@@ -162,7 +162,7 @@ class ItemRequest < ApplicationRecord
         'organic' => self.inventory.item.organic,
         'created-at' => self.created_at,
         'sent' => self.user_id == current_user.id,
-        'avatars' => ((self.inventory.avatars.length > 0 && self.inventory.avatars) || self.inventory.item.avatars || []).map { |i| '/v1'+i.url.gsub(Rails.root.to_s, '') },
+        'avatars' => self.inventory.avatars_with_item,
         'owner-id' => self.inventory.user_id,
         'producer' => self.inventory.item.producer_id,
         'order' => self.order_id,
