@@ -16,6 +16,7 @@ primary_region = "lax"
   DATABASE_NAME = "growoperative_production"
   COOKIE_DOMAIN = ".growoperative.app"
   # SEED_DATABASE = "true"
+  AWS_REGION = "us-west-2"
 
 [http_service]
   internal_port = 8080
@@ -30,9 +31,9 @@ primary_region = "lax"
   cpus = 1
   memory_mb = 1024
 
-[mounts]
-  source = "growoperative_data"
-  destination = "/data"
+# [mounts] - Removed since using S3 for file storage
+#   source = "growoperative_data"
+#   destination = "/data"
 
 [[services]]
   protocol = "tcp"
