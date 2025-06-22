@@ -91,6 +91,15 @@ class Item < ApplicationRecord
   end
 
   def get_avatars_for_inventory
-    self.avatars.map {|img| img.url.split('/').last}
+    # Always store just the filename, not the full URL
+    self.avatars.map {|img| 
+      if Rails.env.production?
+        # For S3, extract just the filename from the URL
+        img.identifier  # This gives us just the filename
+      else
+        # For local files, extract filename from path
+        img.url.split('/').last
+      end
+    }
   end
 end

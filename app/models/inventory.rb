@@ -96,6 +96,7 @@ class Inventory < ApplicationRecord
       avatars = self.item.avatars
     else
       self.gallery_map.each do |name|
+        # Find by identifier (filename) not by URL
         avatars.push((self.avatars && self.avatars.find {|n| n.identifier == name}) || (self.item.avatars && self.item.avatars.find {|n| n.identifier == name}) || nil)
       end
     end
@@ -120,18 +121,23 @@ class Inventory < ApplicationRecord
       
       ((args[:source_images] || []).select {|arg| arg != 'null'}).each_with_index do |image, i|
         if image.is_a? String
-          img_name = image.split('/').last.split('thumb500_').last
-          present_avatar = self.avatars.find {|img| img && img.url.split('/').last == img_name}
+          # Extract just the filename, removing any S3 query parameters
+          img_name = image.split('/').last.split('?').first.split('thumb500_').last
+          present_avatar = self.avatars.find {|img| img && img.identifier == img_name}
           if present_avatar
             updated_list.push(present_avatar) 
-            order_map.push(img_name)
+            order_map.push(present_avatar.identifier)  # Use identifier, not URL
           else
-            item_avatar = self.item.avatars.find {|img| img && img.url.split('/').last == img_name}
-            order_map.push(img_name) if item_avatar
-            was_deleted = true if !item_avatar
+            item_avatar = self.item.avatars.find {|img| img && img.identifier == img_name}
+            if item_avatar
+              order_map.push(item_avatar.identifier)  # Use identifier, not URL
+            else
+              was_deleted = true
+            end
           end
         else
           updated_list.push(image)
+          # Store just the filename, not the full path
           order_map.push(image.original_filename)
         end
       end
