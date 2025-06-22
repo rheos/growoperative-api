@@ -7,7 +7,7 @@ CarrierWave.configure do |config|
       region:                ENV['AWS_REGION'] || 'us-west-2',
     }
     config.fog_directory  = ENV['AWS_S3_BUCKET'] || 'growoperative-uploads-production'
-    config.fog_public     = false
+    config.fog_public     = true
     config.fog_attributes = { cache_control: "public, max-age=#{365.days.to_i}" }
   end
 end 
