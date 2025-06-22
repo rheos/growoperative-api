@@ -99,7 +99,13 @@ class Inventory < ApplicationRecord
         avatars.push((self.avatars && self.avatars.find {|n| n.identifier == name}) || (self.item.avatars && self.item.avatars.find {|n| n.identifier == name}) || nil)
       end
     end
-    avatars.compact.map{ |i| '/v1'+i.url.gsub(Rails.root.to_s, '') }
+    avatars.compact.map{ |i| 
+      if Rails.env.production?
+        i.url  # S3 URLs are complete URLs
+      else
+        '/v1'+i.url.gsub(Rails.root.to_s, '')  # Local development URLs
+      end
+    }
   end
 
   def update_avatars (args, current_user_id)

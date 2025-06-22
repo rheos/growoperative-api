@@ -25,6 +25,12 @@ gem 'jbuilder', '~> 2.5'
 gem 'jwt'
 gem 'fast_jsonapi'
 gem 'react-rails', '~> 2.7'
+
+
+gem 'aws-sdk-s3', '~> 1.130.0', require: false
+
+
+
 # Use Redis adapter to run Action Cable in production
 # gem 'redis', '~> 4.0'
 # Use ActiveModel has_secure_password
@@ -46,6 +52,7 @@ gem 'jquery-rails'
 gem 'devise',           '~> 4.9'
 gem 'devise-jwt'
 gem 'carrierwave', '~> 2.0'
+gem 'fog-aws'
 gem "rmagick", '~> 5.0'
 gem 'spawnling', '~>2.1.6'
 gem 'devise_invitable', '~> 2.0'
