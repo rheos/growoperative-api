@@ -1,21 +1,62 @@
+# Trustlines API Controller - Mutual Credit System Management
+#
+# Provides REST API endpoints for managing trustlines (credit relationships)
+# and processing payments through the mutual credit network.
+#
+# Authentication: All endpoints require authenticated user
+# Authorization: Users can only manage their own trustlines
+#
+# Core Endpoints:
+# - CRUD operations for trustlines
+# - Payment processing (direct and multi-hop)
+# - Path finding for network payments
+# - User credit summaries and transaction history
+#
+# Payment Flow Example:
+#   1. GET /summary - Check available credit
+#   2. POST /find_path - Find route to recipient
+#   3. POST /execute_path_payment - Execute the payment
+#   4. GET /summary - Verify updated balances
+
 class Api::V1::TrustlinesController < Api::V1::ApiController
   before_action :authenticate_user!
   before_action :set_trustline, only: [:show, :update, :destroy]
   before_action :set_other_user, only: [:create]
   
+  # === CRUD OPERATIONS ===
+  
+  # Lists all active trustlines for the current user
   # GET /api/v1/trustlines
+  #
+  # Returns: Array of trustline objects with:
+  # - other_user: {id, name}
+  # - credit_limits: my_credit_limit, their_credit_limit
+  # - balances: current_balance, my_available_credit
+  # - metadata: is_active, established_date, last_activity, notes
   def index
     @trustlines = current_user.trustlines.active.includes(:user_a, :user_b)
     
     render json: @trustlines.map { |trustline| serialize_trustline(trustline) }
   end
   
+  # Shows details of a specific trustline
   # GET /api/v1/trustlines/:id
+  #
+  # Returns: Full trustline object with balance and credit information
   def show
     render json: serialize_trustline(@trustline)
   end
   
+  # Creates a new trustline between current user and another user
   # POST /api/v1/trustlines
+  #
+  # Parameters:
+  # - other_user_id: ID of user to establish trustline with
+  # - my_credit_limit: Credit limit I extend to them
+  # - their_credit_limit: Credit limit they extend to me
+  # - notes: Optional notes about the relationship
+  #
+  # Returns: Created trustline object or validation errors
   def create
     @trustline = current_user.establish_trustline_with(
       @other_user,
@@ -31,7 +72,16 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # Updates credit limits or notes for an existing trustline
   # PATCH/PUT /api/v1/trustlines/:id
+  #
+  # Parameters:
+  # - credit_limit_a_to_b: New limit from user A to user B
+  # - credit_limit_b_to_a: New limit from user B to user A
+  # - notes: Updated relationship notes
+  # - is_active: Activate/deactivate the trustline
+  #
+  # Returns: Updated trustline object or validation errors
   def update
     if @trustline.update(trustline_params)
       render json: serialize_trustline(@trustline)
@@ -40,7 +90,13 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # Deactivates a trustline (soft delete)
   # DELETE /api/v1/trustlines/:id
+  #
+  # Note: Trustlines are deactivated rather than deleted to preserve
+  # transaction history and audit trail
+  #
+  # Returns: Success message or error
   def destroy
     if @trustline.update(is_active: false)
       render json: { message: 'Trustline deactivated successfully' }
@@ -49,7 +105,18 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # === FINANCIAL SUMMARY ===
+  
+  # Provides comprehensive financial summary for current user
   # GET /api/v1/trustlines/summary
+  #
+  # Returns:
+  # - total_trustlines: Number of active trustlines
+  # - total_credit_owed: Amount user owes to others
+  # - total_credit_owed_to_me: Amount others owe to user
+  # - net_credit_position: Net position (positive = creditor)
+  # - available_credit: Total credit available for spending
+  # - recent_transactions: Last 5 transactions initiated by user
   def summary
     summary_data = {
       total_trustlines: current_user.active_trustlines.count,
@@ -66,7 +133,22 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     render json: summary_data
   end
   
+  # === PAYMENT PROCESSING ===
+  
+  # Processes a direct payment through a specific trustline
   # POST /api/v1/trustlines/:id/payment
+  #
+  # Parameters:
+  # - amount: Payment amount (must be positive)
+  # - description: Optional payment description
+  # - originating_request_id: Optional ItemRequest that triggered payment
+  #
+  # Returns:
+  # - message: Success confirmation
+  # - new_balance: Updated trustline balance
+  # - trustline: Updated trustline object
+  #
+  # Errors: Insufficient credit, invalid amount, or processing failure
   def payment
     @trustline = current_user.trustlines.find(params[:id])
     amount = params[:amount].to_f
@@ -97,7 +179,23 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # === NETWORK PAYMENT ROUTING ===
+  
+  # Finds a payment path through the trustline network
   # POST /api/v1/trustlines/find_path
+  #
+  # Parameters:
+  # - to_user_id: Destination user ID
+  # - amount: Payment amount to route
+  # - max_hops: Maximum number of intermediate users (default: 5)
+  #
+  # Returns:
+  # - path_found: Boolean indicating if path exists
+  # - path: Array of user objects in payment route
+  # - path_length: Number of hops (trustlines) in path
+  # - estimated_cost: Total cost (may include fees in future)
+  #
+  # Use Case: Check if payment is possible before attempting execution
   def find_path
     to_user = User.find(params[:to_user_id])
     amount = params[:amount].to_f
@@ -120,7 +218,24 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # Executes a multi-hop payment through the trustline network
   # POST /api/v1/trustlines/execute_path_payment
+  #
+  # Parameters:
+  # - to_user_id: Destination user ID
+  # - amount: Payment amount
+  # - description: Payment description
+  # - max_hops: Maximum hops to allow (default: 5)
+  # - originating_request_id: Optional ItemRequest ID
+  #
+  # Process:
+  # 1. Finds optimal payment path using breadth-first search
+  # 2. Validates all trustlines in path can handle the amount
+  # 3. Executes atomic transaction across all trustlines
+  # 4. Records transaction history for each hop
+  #
+  # Returns: Success confirmation with path details
+  # Errors: No path found, insufficient credit, or transaction failure
   def execute_path_payment
     to_user = User.find(params[:to_user_id])
     amount = params[:amount].to_f
@@ -158,22 +273,33 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   
   private
   
+  # === HELPER METHODS ===
+  
+  # Finds and sets trustline for member actions
+  # Ensures user can only access their own trustlines
   def set_trustline
     @trustline = current_user.trustlines.find(params[:id])
   rescue ActiveRecord::RecordNotFound
     render json: { errors: ['Trustline not found'] }, status: :not_found
   end
   
+  # Finds and sets other user for trustline creation
   def set_other_user
     @other_user = User.find(params[:other_user_id])
   rescue ActiveRecord::RecordNotFound
     render json: { errors: ['User not found'] }, status: :not_found
   end
   
+  # Strong parameters for trustline updates
   def trustline_params
     params.permit(:credit_limit_a_to_b, :credit_limit_b_to_a, :notes, :is_active)
   end
   
+  # === SERIALIZATION METHODS ===
+  
+  # Serializes trustline object from current user's perspective
+  # @param trustline [Trustline] - The trustline to serialize
+  # @return [Hash] - JSON-ready hash with trustline data
   def serialize_trustline(trustline)
     other_user = trustline.other_user(current_user)
     
@@ -194,6 +320,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     }
   end
   
+  # Serializes transaction object for API responses
+  # @param transaction [TrustlineTransaction] - The transaction to serialize
+  # @return [Hash] - JSON-ready hash with transaction data
   def serialize_transaction(transaction)
     {
       id: transaction.id,

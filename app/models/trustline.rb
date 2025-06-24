@@ -1,14 +1,36 @@
+# Trustline Model - Core Mutual Credit System Implementation
+#
+# A Trustline represents a bidirectional credit relationship between two users.
+# This is the foundation of the mutual credit system where users can extend
+# credit limits to each other and make payments through the network.
+#
+# Key Concepts:
+# - Each trustline has two credit limits (A→B and B→A)
+# - Current balance tracks net position between users
+# - Positive balance means user_a owes user_b
+# - Negative balance means user_b owes user_a
+# - Users can make payments up to their available credit limit
+#
+# Example:
+#   Alice ←→ Bob trustline with limits: Alice $1000, Bob $500
+#   If Alice pays Bob $300, balance becomes +$300 (Alice owes Bob)
+#   Alice's available credit: $1000 - $300 = $700
+#   Bob's available credit: $500 (unchanged, as he's owed money)
+
 class Trustline < ApplicationRecord
+  # === ASSOCIATIONS ===
   belongs_to :user_a, class_name: 'User'
   belongs_to :user_b, class_name: 'User'
   has_many :trustline_transactions, dependent: :destroy
   
+  # === VALIDATIONS ===
   validates :credit_limit_a_to_b, :credit_limit_b_to_a, :current_balance, 
             presence: true, numericality: true
   validates :user_a_id, uniqueness: { scope: :user_b_id }
   validate :different_users
   validate :user_order_constraint
   
+  # === SCOPES ===
   scope :active, -> { where(is_active: true) }
   scope :for_user, ->(user) { where("user_a_id = ? OR user_b_id = ?", user.id, user.id) }
   scope :between_users, ->(user1, user2) do
@@ -16,23 +38,37 @@ class Trustline < ApplicationRecord
     where(user_a_id: user_a_id, user_b_id: user_b_id)
   end
   
+  # === CALLBACKS ===
   before_validation :ensure_user_order, on: :create
   before_create :set_established_date
   
-  # Core mutual credit methods
+  # === CORE MUTUAL CREDIT METHODS ===
   
+  # Returns the other user in this trustline relationship
+  # @param current_user [User] - One of the users in the trustline
+  # @return [User] - The other user in the trustline
+  # @raise [ArgumentError] - If current_user is not part of this trustline
   def other_user(current_user)
     return user_b if current_user.id == user_a_id
     return user_a if current_user.id == user_b_id
     raise ArgumentError, "User #{current_user.id} is not part of this trustline"
   end
   
+  # Returns the credit limit that a specific user can borrow
+  # @param user [User] - The user whose credit limit to retrieve
+  # @return [BigDecimal] - The credit limit for this user
+  # @raise [ArgumentError] - If user is not part of this trustline
   def credit_limit_for(user)
     return credit_limit_a_to_b if user.id == user_a_id
     return credit_limit_b_to_a if user.id == user_b_id
     raise ArgumentError, "User #{user.id} is not part of this trustline"
   end
   
+  # Calculates how much credit a user has available to spend
+  # Takes into account their credit limit and current balance
+  # @param user [User] - The user whose available credit to calculate
+  # @return [BigDecimal] - Available credit amount
+  # @raise [ArgumentError] - If user is not part of this trustline
   def available_credit_for(user)
     if user.id == user_a_id
       # User A can borrow up to credit_limit_a_to_b
@@ -47,6 +83,10 @@ class Trustline < ApplicationRecord
     end
   end
   
+  # Returns the current balance from a specific user's perspective
+  # @param user [User] - The user whose perspective to show
+  # @return [BigDecimal] - Balance (positive = user owes, negative = user is owed)
+  # @raise [ArgumentError] - If user is not part of this trustline
   def balance_for(user)
     if user.id == user_a_id
       current_balance  # Positive = A owes B, Negative = B owes A
@@ -57,17 +97,31 @@ class Trustline < ApplicationRecord
     end
   end
   
+  # Checks if this trustline can handle a payment of specified amount
+  # @param amount [Numeric] - The payment amount to check
+  # @param from_user [User] - The user making the payment
+  # @return [Boolean] - Whether the payment can be processed
   def can_handle_payment?(amount, from_user)
     return false unless is_active?
     available_credit_for(from_user) >= amount
   end
   
+  # Processes a payment through this trustline with full transaction recording
+  # This is the core payment processing method that updates balances atomically
+  # @param amount [Numeric] - The payment amount
+  # @param from_user [User] - The user making the payment
+  # @param to_user [User] - The user receiving the payment
+  # @param description [String] - Optional payment description
+  # @param originating_request [ItemRequest] - Optional item request that triggered this
+  # @param order [Order] - Optional order associated with this payment
+  # @return [BigDecimal] - New balance after payment
+  # @raise [ArgumentError] - If users are invalid or insufficient credit
   def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil)
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
     raise ArgumentError, "Insufficient credit" unless can_handle_payment?(amount, from_user)
     
     transaction do
-      # Calculate new balance
+      # Calculate new balance based on payment direction
       if from_user.id == user_a_id
         # A is paying B, increase current_balance (A owes more)
         new_balance = current_balance + amount
@@ -76,7 +130,7 @@ class Trustline < ApplicationRecord
         new_balance = current_balance - amount
       end
       
-      # Create transaction record
+      # Create transaction record for audit trail
       trustline_transactions.create!(
         amount: amount,
         description: description || "Payment from #{from_user.user_name} to #{to_user.user_name}",
@@ -87,7 +141,7 @@ class Trustline < ApplicationRecord
         balance_after: new_balance
       )
       
-      # Update balance and activity timestamp
+      # Update balance and activity timestamp atomically
       update!(
         current_balance: new_balance,
         last_activity: Time.current
@@ -97,15 +151,29 @@ class Trustline < ApplicationRecord
     end
   end
   
+  # Checks if this trustline involves the specified two users
+  # @param user1 [User] - First user to check
+  # @param user2 [User] - Second user to check
+  # @return [Boolean] - Whether both users are part of this trustline
   def involves_users?(user1, user2)
     user_ids = [user1.id, user2.id].sort
     user_ids == [user_a_id, user_b_id]
   end
   
+  # === CLASS METHODS FOR TRUSTLINE MANAGEMENT ===
+  
+  # Finds existing trustline or creates new one between two users
+  # Automatically handles user ordering to prevent duplicate relationships
+  # @param user1 [User] - First user
+  # @param user2 [User] - Second user  
+  # @param credit_limit_1_to_2 [Numeric] - Credit limit from user1 to user2
+  # @param credit_limit_2_to_1 [Numeric] - Credit limit from user2 to user1
+  # @return [Trustline] - The found or created trustline
   def self.find_or_create_between(user1, user2, credit_limit_1_to_2: 0, credit_limit_2_to_1: 0)
     user_a_id, user_b_id = [user1.id, user2.id].sort
     
     find_or_create_by(user_a_id: user_a_id, user_b_id: user_b_id) do |trustline|
+      # Handle credit limits based on actual user order vs requested order
       if user1.id == user_a_id
         trustline.credit_limit_a_to_b = credit_limit_1_to_2
         trustline.credit_limit_b_to_a = credit_limit_2_to_1
@@ -116,12 +184,19 @@ class Trustline < ApplicationRecord
     end
   end
   
-  # Payment routing methods for multi-hop payments
+  # === PAYMENT ROUTING METHODS FOR MULTI-HOP PAYMENTS ===
   
+  # Finds a payment path between two users through the trustline network
+  # Uses breadth-first search to find shortest path that can handle the amount
+  # @param from_user [User] - Starting user
+  # @param to_user [User] - Destination user
+  # @param amount [Numeric] - Payment amount to route
+  # @param max_hops [Integer] - Maximum number of hops allowed (default: 5)
+  # @return [Array<User>, nil] - Array of users in path, or nil if no path found
   def self.find_payment_path(from_user, to_user, amount, max_hops: 5)
     return nil if from_user == to_user
     
-    # Simple breadth-first search for now
+    # Breadth-first search for shortest viable path
     queue = [[from_user]]
     visited = Set.new([from_user.id])
     
@@ -129,17 +204,19 @@ class Trustline < ApplicationRecord
       current_path = queue.shift
       current_user = current_path.last
       
-      # Find all trustlines for current user
+      # Find all active trustlines for current user
       trustlines = Trustline.active.for_user(current_user)
       
       trustlines.each do |trustline|
         next_user = trustline.other_user(current_user)
+        # Skip if this hop can't handle the payment amount
         next unless trustline.can_handle_payment?(amount, current_user)
+        # Skip if we've already visited this user (prevent cycles)
         next if visited.include?(next_user.id)
         
         new_path = current_path + [next_user]
         
-        # Found target
+        # Found target - return the complete path
         return new_path if next_user == to_user
         
         # Add to queue for further exploration
@@ -148,13 +225,22 @@ class Trustline < ApplicationRecord
       end
     end
     
-    nil # No path found
+    nil # No viable path found within constraints
   end
   
+  # Executes a multi-hop payment along a predetermined path
+  # All payments are processed atomically - if any fails, all are rolled back
+  # @param path [Array<User>] - Array of users representing the payment path
+  # @param amount [Numeric] - Payment amount
+  # @param description [String] - Payment description
+  # @param originating_request [ItemRequest] - Optional item request
+  # @return [Boolean] - Success status
+  # @raise [StandardError] - If path is invalid or any payment fails
   def self.execute_payment_path(path, amount, description: nil, originating_request: nil)
     raise ArgumentError, "Path must have at least 2 users" if path.length < 2
     
     transaction do
+      # Process payment for each consecutive pair in the path
       path.each_cons(2) do |from_user, to_user|
         trustline = Trustline.between_users(from_user, to_user).first
         raise "No trustline found between #{from_user.user_name} and #{to_user.user_name}" unless trustline
@@ -174,14 +260,21 @@ class Trustline < ApplicationRecord
   
   private
   
+  # === VALIDATION METHODS ===
+  
+  # Ensures users are different (can't create trustline with yourself)
   def different_users
     errors.add(:user_b, "cannot be the same as User A") if user_a_id == user_b_id
   end
   
+  # Validates user ordering constraint (user_a_id must be less than user_b_id)
+  # This prevents duplicate trustlines between the same pair of users
   def user_order_constraint
     errors.add(:user_a, "ID must be less than User B ID") if user_a_id && user_b_id && user_a_id >= user_b_id
   end
   
+  # Ensures proper user ordering before creation
+  # Automatically swaps users and credit limits if needed
   def ensure_user_order
     if user_a_id && user_b_id && user_a_id > user_b_id
       self.user_a_id, self.user_b_id = user_b_id, user_a_id
@@ -189,6 +282,7 @@ class Trustline < ApplicationRecord
     end
   end
   
+  # Sets the establishment date when creating new trustlines
   def set_established_date
     self.established_date ||= Time.current
   end
