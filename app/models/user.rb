@@ -25,9 +25,11 @@ class User < ApplicationRecord
   has_many   :category_sizes, dependent: :destroy
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'
   
-  # Trustline associations for mutual credit system
+  # === MUTUAL CREDIT SYSTEM ASSOCIATIONS ===
+  # Trustline relationships where this user is either user_a or user_b
   has_many   :trustlines_as_user_a, class_name: 'Trustline', foreign_key: 'user_a_id', dependent: :destroy
   has_many   :trustlines_as_user_b, class_name: 'Trustline', foreign_key: 'user_b_id', dependent: :destroy
+  # Transactions initiated by this user
   has_many   :initiated_trustline_transactions, class_name: 'TrustlineTransaction', foreign_key: 'initiated_by_id', dependent: :destroy
 
   attr_accessor :current_password
@@ -163,20 +165,29 @@ class User < ApplicationRecord
     @invitation = Invitation.find_by(invitation_code: self.invited_code)
   end
   
-  # Mutual credit / trustline methods
+  # === MUTUAL CREDIT SYSTEM METHODS ===
   
+  # Returns all trustlines associated with this user (both as user_a and user_b)
+  # @return [ActiveRecord::Relation] - All trustlines for this user
   def trustlines
     Trustline.for_user(self)
   end
   
+  # Returns only active trustlines for this user
+  # @return [ActiveRecord::Relation] - Active trustlines only
   def active_trustlines
     trustlines.active
   end
   
+  # Finds the trustline between this user and another user
+  # @param other_user [User] - The other user in the relationship
+  # @return [Trustline, nil] - The trustline or nil if none exists
   def trustline_with(other_user)
     Trustline.between_users(self, other_user).first
   end
   
+  # Calculates total amount this user owes to others
+  # @return [BigDecimal] - Total amount owed (positive balances)
   def total_credit_owed
     # Sum of positive balances (what I owe others)
     trustlines.sum do |trustline|
@@ -185,6 +196,8 @@ class User < ApplicationRecord
     end
   end
   
+  # Calculates total amount owed to this user by others
+  # @return [BigDecimal] - Total amount owed to user (negative balances)
   def total_credit_owed_to_me
     # Sum of negative balances (what others owe me)
     trustlines.sum do |trustline|
@@ -193,29 +206,43 @@ class User < ApplicationRecord
     end
   end
   
+  # Calculates net credit position (positive = creditor, negative = debtor)
+  # @return [BigDecimal] - Net position in the network
   def net_credit_position
     # Positive = more is owed to me, Negative = I owe more
     total_credit_owed_to_me - total_credit_owed
   end
   
+  # Calculates total available credit across all active trustlines
+  # @return [BigDecimal] - Total credit available for spending
   def available_credit_total
     # Total credit I can still use across all trustlines
     trustlines.active.sum { |trustline| trustline.available_credit_for(self) }
   end
   
+  # Checks if user can make a payment of specified amount
+  # @param amount [Numeric] - The payment amount to check
+  # @param to_user [User, nil] - Specific target user, or nil to check total capacity
+  # @return [Boolean] - Whether the payment is possible
   def can_pay?(amount, to_user = nil)
     return false if amount <= 0
     
     if to_user
-      # Check direct trustline
+      # Check direct trustline capacity
       trustline = trustline_with(to_user)
       return trustline&.can_handle_payment?(amount, self) || false
     else
-      # Check total available credit
+      # Check total network capacity
       available_credit_total >= amount
     end
   end
   
+  # Establishes a new trustline with another user or returns existing one
+  # @param other_user [User] - The user to establish trustline with
+  # @param my_credit_limit [Numeric] - Credit limit I extend to them
+  # @param their_credit_limit [Numeric] - Credit limit they extend to me
+  # @param notes [String] - Optional notes about the relationship
+  # @return [Trustline, false] - The trustline or false if failed
   def establish_trustline_with(other_user, my_credit_limit: 0, their_credit_limit: 0, notes: nil)
     return false if self == other_user
     return trustline_with(other_user) if trustline_with(other_user)
