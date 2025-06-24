@@ -61,14 +61,26 @@ class Api::V1::ApiController < ApplicationController
 
     token = JwtGenerationService.new(user_id: user.id).token
     time = 1.year.from_now
-    cookies.signed[:jwt] = {
-      value: token,
-      expires: time,
-      httponly: true,
-      domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app'),
-      same_site: :none,
-      secure: true
-    }
+    
+    # For development with IP addresses, we need different cookie settings
+    if Rails.env.development?
+      cookies.signed[:jwt] = {
+        value: token,
+        expires: time,
+        httponly: true,
+        same_site: :lax,
+        secure: false  # Allow HTTP for development
+      }
+    else
+      cookies.signed[:jwt] = {
+        value: token,
+        expires: time,
+        httponly: true,
+        domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app'),
+        same_site: :none,
+        secure: true
+      }
+    end
   end
 
   private

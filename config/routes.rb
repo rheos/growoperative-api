@@ -71,6 +71,18 @@ Rails.application.routes.draw do
       resources :user_relationship_prices,            only: [:index, :create]
       resources :user_relationship_request_prices,    only: [:create]
       resources :orders
+      
+      # Mutual Credit / Trustlines System
+      resources :trustlines do
+        member do
+          post 'payment'
+        end
+        collection do
+          get 'summary'
+          post 'find_path'
+          post 'execute_path_payment'
+        end
+      end
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'

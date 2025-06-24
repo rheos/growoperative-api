@@ -24,6 +24,11 @@ class User < ApplicationRecord
   has_many   :reviews, dependent: :destroy
   has_many   :category_sizes, dependent: :destroy
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'
+  
+  # Trustline associations for mutual credit system
+  has_many   :trustlines_as_user_a, class_name: 'Trustline', foreign_key: 'user_a_id', dependent: :destroy
+  has_many   :trustlines_as_user_b, class_name: 'Trustline', foreign_key: 'user_b_id', dependent: :destroy
+  has_many   :initiated_trustline_transactions, class_name: 'TrustlineTransaction', foreign_key: 'initiated_by_id', dependent: :destroy
 
   attr_accessor :current_password
   # enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
@@ -156,5 +161,72 @@ class User < ApplicationRecord
   end
   def find_invitation
     @invitation = Invitation.find_by(invitation_code: self.invited_code)
+  end
+  
+  # Mutual credit / trustline methods
+  
+  def trustlines
+    Trustline.for_user(self)
+  end
+  
+  def active_trustlines
+    trustlines.active
+  end
+  
+  def trustline_with(other_user)
+    Trustline.between_users(self, other_user).first
+  end
+  
+  def total_credit_owed
+    # Sum of positive balances (what I owe others)
+    trustlines.sum do |trustline|
+      balance = trustline.balance_for(self)
+      balance > 0 ? balance : 0
+    end
+  end
+  
+  def total_credit_owed_to_me
+    # Sum of negative balances (what others owe me)
+    trustlines.sum do |trustline|
+      balance = trustline.balance_for(self)
+      balance < 0 ? balance.abs : 0
+    end
+  end
+  
+  def net_credit_position
+    # Positive = more is owed to me, Negative = I owe more
+    total_credit_owed_to_me - total_credit_owed
+  end
+  
+  def available_credit_total
+    # Total credit I can still use across all trustlines
+    trustlines.active.sum { |trustline| trustline.available_credit_for(self) }
+  end
+  
+  def can_pay?(amount, to_user = nil)
+    return false if amount <= 0
+    
+    if to_user
+      # Check direct trustline
+      trustline = trustline_with(to_user)
+      return trustline&.can_handle_payment?(amount, self) || false
+    else
+      # Check total available credit
+      available_credit_total >= amount
+    end
+  end
+  
+  def establish_trustline_with(other_user, my_credit_limit: 0, their_credit_limit: 0, notes: nil)
+    return false if self == other_user
+    return trustline_with(other_user) if trustline_with(other_user)
+    
+    Trustline.find_or_create_between(
+      self, 
+      other_user, 
+      credit_limit_1_to_2: my_credit_limit,
+      credit_limit_2_to_1: their_credit_limit
+    ).tap do |trustline|
+      trustline.update(notes: notes) if notes
+    end
   end
 end

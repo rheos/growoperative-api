@@ -40,7 +40,11 @@ class Api::V1::SessionsController < Api::V1::ApiController
     end
     
     # Delete the cookie
-    cookies.delete :jwt, domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app')
+    if Rails.env.development?
+      cookies.delete :jwt  # No domain needed for development
+    else
+      cookies.delete :jwt, domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app')
+    end
     
     head :ok
   end

@@ -33,30 +33,30 @@ services:
       - .:/app
       - bundle_data:/usr/local/bundle
     ports:
-      - "3000:8080"  # Rails API on localhost:3000
+      - "3001:8080"  # Rails API on localhost:3001
     env_file:
       - .env
     environment:
       RAILS_ENV: development
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3001}  # Used for CORS
+      FRONTEND_URL: ${FRONTEND_URL:-http://10.0.1.6:3000}  # Used for CORS
       SEED_DATABASE: "true"  # Auto-seed DB if empty (dev only)
       DATABASE_USERNAME: buddy
       DATABASE_PASSWORD: REMOVED_FOR_PUBLICATION
       DATABASE_HOST: db
       DISABLE_SPRING: 1
       SECRET_KEY_BASE: REMOVED_FOR_PUBLICATION
-      COOKIE_DOMAIN: localhost
+      COOKIE_DOMAIN: 10.0.1.6
     depends_on:
       - db
 
   frontend:
     build: ../platform
     ports:
-      - "3001:3000"  # React dev server on localhost:3001
+      - "3000:3000"  # React dev server on localhost:3000
     env_file:
       - ../platform/.env.local
     environment:
-      - WDS_SOCKET_PORT=3001
+      - WDS_SOCKET_PORT=3000
       - CHOKIDAR_USEPOLLING=true  # For hot reload on some filesystems
     volumes:
       - ../platform:/app

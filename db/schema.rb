@@ -220,6 +220,47 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_reviews_on_user_id"
   end
 
+  create_table "trustline_transactions", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "trustline_id", null: false
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.text "description"
+    t.bigint "originating_request_id"
+    t.bigint "order_id"
+    t.json "path_info"
+    t.string "transaction_type", null: false
+    t.bigint "initiated_by_id", null: false
+    t.decimal "balance_after", precision: 10, scale: 2
+    t.boolean "is_reversed", default: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_trustline_transactions_on_created_at"
+    t.index ["initiated_by_id"], name: "index_trustline_transactions_on_initiated_by_id"
+    t.index ["is_reversed"], name: "index_trustline_transactions_on_is_reversed"
+    t.index ["order_id"], name: "index_trustline_transactions_on_order_id"
+    t.index ["originating_request_id"], name: "index_trustline_transactions_on_originating_request_id"
+    t.index ["transaction_type"], name: "index_trustline_transactions_on_transaction_type"
+    t.index ["trustline_id"], name: "index_trustline_transactions_on_trustline_id"
+  end
+
+  create_table "trustlines", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "user_a_id", null: false
+    t.bigint "user_b_id", null: false
+    t.decimal "credit_limit_a_to_b", precision: 10, scale: 2, default: "0.0", null: false
+    t.decimal "credit_limit_b_to_a", precision: 10, scale: 2, default: "0.0", null: false
+    t.decimal "current_balance", precision: 10, scale: 2, default: "0.0", null: false
+    t.boolean "is_active", default: true, null: false
+    t.datetime "established_date", null: false
+    t.datetime "last_activity"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["established_date"], name: "index_trustlines_on_established_date"
+    t.index ["is_active"], name: "index_trustlines_on_is_active"
+    t.index ["user_a_id", "user_b_id"], name: "index_trustlines_on_user_pair", unique: true
+    t.index ["user_a_id"], name: "index_trustlines_on_user_a_id"
+    t.index ["user_b_id"], name: "index_trustlines_on_user_b_id"
+  end
+
   create_table "unit_options", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.integer "inventory_id", null: false
     t.integer "item_unit_id", null: false
@@ -331,6 +372,12 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "reviews", "item_names"
   add_foreign_key "reviews", "items"
   add_foreign_key "reviews", "users"
+  add_foreign_key "trustline_transactions", "item_requests", column: "originating_request_id"
+  add_foreign_key "trustline_transactions", "orders"
+  add_foreign_key "trustline_transactions", "trustlines"
+  add_foreign_key "trustline_transactions", "users", column: "initiated_by_id"
+  add_foreign_key "trustlines", "users", column: "user_a_id"
+  add_foreign_key "trustlines", "users", column: "user_b_id"
   add_foreign_key "user_category_prices", "categories"
   add_foreign_key "user_category_prices", "users"
   add_foreign_key "user_groups", "users"
