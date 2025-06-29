@@ -1,0 +1,75 @@
+# Project Coding Standards & Migration Guidelines
+
+## Development Environment
+- **Docker Setup**: This project runs in Docker Compose with hot reload enabled
+- **No Local Commands**: Don't suggest running `npm start`, `npm run dev`, or other local development commands
+- **Testing Changes**: Code changes are automatically reflected via hot reload in the Docker environment
+- **File Watching**: The Docker setup handles file watching and rebuilding automatically
+
+## CSS Cleanup & Refactoring
+- **Remove Legacy Styles**: When replacing component-specific styles with reusable components, always remove the old CSS rules from their original locations
+- **Avoid Style Accumulation**: Don't let unused CSS rules pile up - clean up old styles when implementing new components
+- **Style Consolidation**: When creating reusable components (like Button), identify and remove duplicate/similar styles from other SCSS files
+- **Clean Refactoring**: Each component update should result in net reduction of CSS, not addition
+
+## React Native Migration Strategy
+- **Hybrid Styling Approach**: Use CSS for reusable patterns, inline styles for one-offs
+- **Positioning Logic**: Keep dynamic positioning (top, left, zIndex) in JavaScript objects
+- **Base Styles**: Keep visual consistency (colors, sizes, transitions) in CSS classes
+- **Icon Management**: Use Lucide React icons with HoverIcon wrapper for consistent behavior
+
+## Styling Best Practices
+### CSS Classes For:
+- Typography (font families, sizes, weights)
+- Color schemes and themes
+- Layout patterns and common spacing
+- Component base styles (buttons, forms)
+- Hover effects and transitions
+- Reusable visual patterns
+
+### Inline Styles For:
+- Dynamic positioning (absolute positioning, z-index)
+- Component-specific measurements
+- Conditional styling based on props/state
+- Mobile vs desktop responsive positioning
+- One-off customizations
+
+## Icon Implementation Standards
+- **Library**: Use Lucide React icons exclusively
+- **Sizing**: Numeric values (20, 24, 28) not strings
+- **Colors**: Use className for CSS-controlled colors when possible
+- **Hover Effects**: Implement via CSS classes for reusability
+- **Positioning**: Use JavaScript positioning objects for React Native compatibility
+
+## Code Organization
+- **Positioning objects**: Create `positioning` objects for dynamic layouts
+- **Style consistency**: Use CSS classes for visual consistency across components
+- **Mobile responsiveness**: Use conditional logic in positioning objects
+- **Future-proofing**: Structure code for easy React Native StyleSheet conversion
+
+## Documentation & Commenting Standards
+- **File-level comments**: Large comment blocks only at the top to describe what the file does as a whole
+- **Inline Parameter Comments**: Use inline comments for function parameters instead of JSDoc blocks
+  ```javascript
+  const MyComponent = ({
+    itemData,          // Complete item information
+    onUpdate,          // Callback when item is updated
+    isLoading          // Loading state indicator
+  }) => {
+  ```
+- **Function comments**: Brief comments above functions are fine, but avoid giant comment blocks
+- **Inline explanations**: Prefer short inline comments for complex logic
+- **Section comments**: Use clear section headers with separators for major code blocks
+- **Avoid**: Large JSDoc blocks, verbose documentation for simple functions
+
+## File Structure
+- Keep reusable styles in SCSS files
+- Use descriptive CSS class names (e.g., `overlay-button`)
+- Organize positioning logic near component definitions
+- Comment migration-ready patterns
+
+## Migration Readiness
+- Numeric style values (not strings with units)
+- Avoid CSS-specific features (cascading, pseudo-selectors in dynamic styles)
+- Structure for easy StyleSheet.create() conversion
+- Keep positioning and styling concerns separated 
