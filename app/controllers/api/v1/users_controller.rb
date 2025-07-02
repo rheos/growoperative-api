@@ -154,7 +154,7 @@ module Api::V1
 		def accept_invitation
 			unless params[:invited_code].present?
 				render json: {
-					message: "Invitation code can't be blanck."
+					message: "Invitation code can't be blank."
 				}, status: 422
 				return
 			end

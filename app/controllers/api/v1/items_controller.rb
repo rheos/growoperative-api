@@ -142,9 +142,15 @@ module Api::V1
       if params[:dtype].to_i == 1
         data[:producer_id] = current_user.id
       end
+      description = data['description'] # Save description before removing it
       data_without_description = data.except('description')
       @item = current_user.items.new(data_without_description)
       if @item.save
+        # Save description to the inventory record
+        if description.present?
+          @item.inventory.first.update(description: description)
+        end
+        
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
             size_params = JSON.parse(option)
