@@ -226,18 +226,28 @@ module Api::V1
 
     def destroy
       # check if there is a user using this item
-      # destory if there is only owner, else destory owner's inventory only
+      # destroy if there is only owner, else destroy owner's inventory only
       # binding.pry
-      if current_user.is_admin? || Inventory.where("item_id = #{@inventory.item_id}").size == 1
-        RequestContract.where(inventory_id: @inventory.id).destroy_all
-        @inventory.item.destroy!
+      
+      # First destroy any request contracts for this specific inventory
+      RequestContract.where(inventory_id: @inventory.id).destroy_all
+      
+      # Check if this is the last inventory for the item AND user owns the item
+      item = @inventory.item
+      remaining_inventories = Inventory.where(item_id: item.id).where.not(id: @inventory.id)
+      
+      if (current_user.is_admin? || item.user_id == current_user.id) && remaining_inventories.count == 0
+        # This is the last inventory and user owns the item, so delete the item too
+        @inventory.destroy
+        item.destroy!
       else
+        # Just delete this inventory record
         @inventory.destroy
       end
       
       render json: {
         message: "Item has been deleted successfully."
-      }, staus: 200
+      }, status: 200
     end
 
     # GET: /v1/items/around

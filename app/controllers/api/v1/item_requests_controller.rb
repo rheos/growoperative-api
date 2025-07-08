@@ -256,10 +256,22 @@ module Api::V1
       end
 
       if @request.status == 'reserved'
-        @request.request_contract.inventory.update(status: :unavailable)
+        inventory = @request.request_contract.inventory
+        Rails.logger.info "Cancel reserved request - Inventory ID: #{inventory.id}, Status: #{inventory.status}, Ref ID: #{inventory.ref_id}"
+        
+        # Mark contract as cancelled first so update_status will work properly
+        @request.request_contract.update(status: :cancelled)
+        
+        # Use update_status to trigger quantity merge back to original inventory
+        result = inventory.update_status(status: 'available')
+        Rails.logger.info "Update status result: #{result}"
+        
         order = Order.find_by(id: @request.order_id)
         order.destroy if order && ItemRequest.where(order_id: order.id).count == 1
-        @request.request_contract.destroy
+        
+        # Only destroy contract if inventory wasn't already destroyed by update_status
+        @request.request_contract.destroy if RequestContract.exists?(@request.request_contract.id)
+        
         render json: { message: 'Request has been cancelled' }, status: 200
         return
       end
@@ -271,7 +283,8 @@ module Api::V1
       @request.request_contract.status = :cancelled
       @request.request_contract.save
       request_contract = @request.request_contract
-      request_contract.inventory.update(status: :unavailable) if (request_contract.inventory.status == 'reserved')
+      # Use update_status to trigger quantity merge if inventory was reserved
+      request_contract.inventory.update_status(status: 'available') if (request_contract.inventory.status == 'reserved')
 
       render json: { message: 'Request has been cancelled' }, status: 200
     end
