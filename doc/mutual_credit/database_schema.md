@@ -4,9 +4,11 @@ This document describes the database schema for the mutual credit system.
 
 ## Overview
 
-The mutual credit system consists of two main tables:
+The mutual credit system consists of four main tables:
 - `trustlines` - Stores bidirectional credit relationships between users
 - `trustline_transactions` - Records all credit movements for audit trail
+- `credloop_clearings` - Records automatic credit cycle clearing events
+- `credloop_adjustments` - Tracks individual debt adjustments from clearings
 
 ## Tables
 
@@ -142,6 +144,103 @@ CREATE TABLE trustline_transactions (
 | `adjustment` | Manual balance correction by admin |
 | `reversal` | Reversal of a previous transaction |
 
+### credloop_clearings
+
+Records automatic credit cycle clearings in the network.
+
+```sql
+CREATE TABLE credloop_clearings (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  
+  -- Clearing details
+  amount_cleared DECIMAL(10,2) NOT NULL,
+  participants_count INTEGER NOT NULL,
+  
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  
+  -- Indexes
+  INDEX index_credloop_clearings_on_created_at (created_at)
+);
+```
+
+#### Column Descriptions
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `amount_cleared` | DECIMAL(10,2) | The amount reduced from each debt in the cycle |
+| `participants_count` | INTEGER | Number of users/debts in the loop (2, 3, 4, etc.) |
+| `created_at` | DATETIME | When the clearing occurred |
+
+### credloop_adjustments
+
+Links individual debt adjustments to clearing events. Each clearing has N adjustments (one per participant).
+
+```sql
+CREATE TABLE credloop_adjustments (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  
+  -- References
+  credloop_clearing_id BIGINT NOT NULL,
+  debt_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  
+  -- Adjustment details
+  amount_reduced DECIMAL(10,2) NOT NULL,
+  before_amount DECIMAL(10,2) NOT NULL,
+  after_amount DECIMAL(10,2) NOT NULL,
+  position_in_loop INTEGER NOT NULL,
+  
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  
+  -- Indexes
+  INDEX index_credloop_adjustments_on_credloop_clearing_id (credloop_clearing_id),
+  INDEX index_credloop_adjustments_on_debt_id (debt_id),
+  INDEX index_credloop_adjustments_on_user_id (user_id),
+  
+  -- Foreign keys
+  FOREIGN KEY (credloop_clearing_id) REFERENCES credloop_clearings(id),
+  FOREIGN KEY (debt_id) REFERENCES debts(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+#### Column Descriptions
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `credloop_clearing_id` | BIGINT | Reference to the clearing event |
+| `debt_id` | BIGINT | Which debt was reduced |
+| `user_id` | BIGINT | The user whose debt was reduced (the debtor) |
+| `amount_reduced` | DECIMAL(10,2) | How much this debt was reduced (equals amount_cleared) |
+| `before_amount` | DECIMAL(10,2) | Debt amount before clearing |
+| `after_amount` | DECIMAL(10,2) | Debt amount after clearing |
+| `position_in_loop` | INTEGER | Position in the cycle (1, 2, 3...) for visualization |
+
+#### Credloop Clearing Process
+
+When a credit loop is detected:
+1. Find minimum amount in the cycle
+2. Create `CredLoopClearing` record
+3. Create `CredLoopAdjustment` for each debt in the cycle
+4. Reduce all debts by minimum amount atomically
+5. Remove fully cleared debts (amount = 0)
+
+**Example:**
+```
+Alice owes Bob $10
+Bob owes Carol $8
+Carol owes Alice $6
+
+→ Loop detected, min=$6
+→ Create clearing record: amount_cleared=$6, participants=3
+→ Create 3 adjustments:
+  - Alice→Bob: $10→$4 (position=1)
+  - Bob→Carol: $8→$2 (position=2)
+  - Carol→Alice: $6→$0 (position=3, debt removed)
+```
+
 ## Relationships
 
 ### Entity Relationship Diagram
@@ -166,6 +265,16 @@ item_requests (originating_request)
 trustline_transactions
   ↓ (many-to-one, optional)
 orders
+
+debts
+  ↓ (one-to-many)
+credloop_adjustments
+  ↓ (many-to-one)
+credloop_clearings
+
+credloop_adjustments
+  ↓ (many-to-one)
+users (debtor)
 ```
 
 ### Key Relationships
@@ -175,6 +284,9 @@ orders
 3. **Transactions ↔ Users**: Each transaction is initiated by exactly one user
 4. **Transactions ↔ ItemRequests**: Transactions can optionally link to item requests
 5. **Transactions ↔ Orders**: Transactions can optionally link to orders
+6. **CredLoopClearings ↔ CredLoopAdjustments**: Each clearing has multiple adjustments (one per participant)
+7. **CredLoopAdjustments ↔ Debts**: Each adjustment reduces a specific debt
+8. **CredLoopAdjustments ↔ Users**: Each adjustment shows impact for a specific user (debtor)
 
 ## Data Integrity
 

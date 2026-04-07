@@ -88,6 +88,26 @@ Users can track:
 - Available credit across all trustlines
 - Recent transaction history
 
+### 4. Credloop Clearing
+
+**Automatic Cycle Detection**:
+- System automatically detects credit cycles (loops) in the debt network
+- Uses recursive depth-first search to find circular debt paths
+- Handles loops of any length (2 users, 3 users, 10+ users)
+- Runs after every debt creation or modification
+
+**Automatic Clearing**:
+- All debts in a cycle are reduced by the minimum amount in the loop
+- Clearing happens atomically in a database transaction
+- Fully cleared debts are automatically removed
+- Example: Alice owes Bob $10, Bob owes Carol $8, Carol owes Alice $6 → all reduced by $6
+
+**Complete Audit Trail**:
+- Every clearing event is recorded with timestamp and participants count
+- Each individual debt adjustment is tracked with before/after amounts
+- Users see their perspective of each clearing in transaction history
+- Full transparency showing why balances changed and which loop was closed
+
 ## Integration with Item System
 
 The mutual credit system is deeply integrated with the existing food distribution platform:
