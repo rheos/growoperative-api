@@ -377,6 +377,231 @@ original_transaction.update!(is_reversed: true)
 trustline.update!(current_balance: adjusted_balance)
 ```
 
+## 7. Credloop Clearing Flow
+
+Automatic detection and clearing of credit cycles in the debt network.
+
+### Prerequisites
+
+- Credit cycles exist in the network
+- System enabled for automatic clearing
+- Sufficient audit trail capacity
+
+### What is a Credloop?
+
+A **credloop** (credit loop/cycle) occurs when users owe each other in a circular pattern:
+
+```
+Alice owes Bob $10
+Bob owes Carol $8  
+Carol owes Alice $6
+
+→ This forms a cycle: Alice → Bob → Carol → Alice
+```
+
+The system automatically detects these cycles and clears them by reducing all debts by the minimum amount in the loop.
+
+### Flow Diagram
+
+```
+[User A] --$10--> [User B] --$8--> [User C]
+    ↑                                  |
+    |                                  |
+    +---------------$6-----------------+
+                  (Credit Loop)
+                       |
+                  Auto-Detect
+                       |
+                  Clear Loop
+                       |
+                  Result:
+    [User A] --$4--> [User B] --$2--> [User C]
+           (All debts reduced by $6)
+```
+
+### Automatic Trigger
+
+Credloop clearing runs automatically after any debt creation or modification:
+
+```ruby
+# app/models/debt.rb
+class Debt < ApplicationRecord
+  after_commit :clear_credloops, on: [:create, :update]
+  
+  private
+  
+  def clear_credloops
+    CredLoopService.find_and_clear_all_loops_involving(debtor, creditor)
+  end
+end
+```
+
+No API calls needed - the system handles clearing transparently.
+
+### Detection Algorithm
+
+Uses recursive depth-first search to find cycles of any length:
+
+```ruby
+def find_credloop(start_user, current_user, path, visited_in_path)
+  # Base case: we've circled back to the start
+  if current_user == start_user && path.length > 1
+    return path
+  end
+  
+  # Recursive case: explore all debts this user owes
+  current_user.debts_as_debtor.each do |debt|
+    next_user = debt.creditor
+    
+    # Skip if already visited (prevents infinite loops)
+    next if visited_in_path.include?(next_user.id)
+    
+    # Recurse down this path
+    result = find_credloop(
+      start_user,
+      next_user,
+      path + [debt],
+      visited_in_path + Set[next_user.id]
+    )
+    
+    return result if result.present?
+  end
+  
+  nil # No loop found
+end
+```
+
+### Database Operations
+
+```ruby
+# Process credloop clearing
+ActiveRecord::Base.transaction do
+  # Find minimum amount in loop
+  min_amount = debts_in_loop.map(&:amount).min
+  
+  # Create clearing record
+  clearing = CredLoopClearing.create!(
+    amount_cleared: min_amount,
+    participants_count: debts_in_loop.length
+  )
+  
+  # Reduce each debt atomically
+  debts_in_loop.each_with_index do |debt, index|
+    before = debt.amount
+    debt.amount -= min_amount
+    after = debt.amount
+    
+    # Record adjustment
+    CredLoopAdjustment.create!(
+      credloop_clearing: clearing,
+      debt: debt,
+      user: debt.debtor,
+      amount_reduced: min_amount,
+      before_amount: before,
+      after_amount: after,
+      position_in_loop: index + 1
+    )
+    
+    # Remove fully cleared debts
+    if debt.amount <= 0
+      debt.destroy
+    else
+      debt.save!
+    end
+  end
+end
+```
+
+### User Visibility
+
+Each user sees credloop clearings in their transaction history:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Credloop Clearing #127                              │
+│ January 15, 2025 at 3:42 PM                         │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│ Your debt to Bob Gardener:                          │
+│ $10.00 → $5.00 (-$5.00)                             │
+│                                                      │
+│ This was cleared because a credit loop was closed:  │
+│                                                      │
+│  1. Alice Chen owed you $5.00                       │
+│  2. You owed Bob Gardener $5.00                     │
+│  3. Bob Gardener owed Alice Chen $5.00              │
+│                                                      │
+│ All three debts were reduced by $5.00               │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### Examples
+
+**2-Party Loop (Mutual Debts):**
+```ruby
+# Before clearing
+Alice owes Bob $100
+Bob owes Alice $75
+
+# After automatic clearing
+Alice owes Bob $25
+Bob owes Alice $0 (debt removed)
+```
+
+**3-Party Loop:**
+```ruby
+# Before clearing
+Alice owes Bob $50
+Bob owes Carol $40
+Carol owes Alice $30
+
+# After automatic clearing (min=$30)
+Alice owes Bob $20
+Bob owes Carol $10
+Carol owes Alice $0 (debt removed)
+```
+
+**Multi-Loop Scenario:**
+```ruby
+# User participates in multiple loops simultaneously
+# Each loop is detected and cleared independently
+# All operations are atomic
+```
+
+### Audit Trail
+
+Complete transparency with two-table system:
+
+1. **CredLoopClearing** - Records each clearing event
+   - Amount cleared
+   - Participants count
+   - Timestamp
+
+2. **CredLoopAdjustment** - Records each debt adjustment
+   - Before/after amounts
+   - User perspective
+   - Position in loop
+
+Every user can see:
+- Which of their debts was reduced
+- Why it was reduced (the complete loop)
+- By how much it was reduced
+- When it occurred
+
+### Performance
+
+For MVP (< 1000 users):
+- **Synchronous execution** - runs immediately after debt creation
+- **Fast detection** - milliseconds for typical networks
+- **Minimal overhead** - only searches involving transaction users
+
+For scale (1000+ users):
+- **Background jobs** - async processing with Sidekiq
+- **Caching** - store known loop-free segments
+- **Rate limiting** - prevent DoS from rapid transactions
+- **Incremental search** - only check new paths
+
 ## Error Handling and Edge Cases
 
 ### Insufficient Credit
