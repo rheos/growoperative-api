@@ -5,7 +5,7 @@ class ImagesUploader < CarrierWave::Uploader::Base
   include CarrierWave::RMagick
 
   # Choose what kind of storage to use for this uploader:
-  if Rails.env.production?
+  if Rails.env.production? || ENV['AWS_S3_BUCKET'].present?
     storage :fog
   else
     storage :file
@@ -14,7 +14,7 @@ class ImagesUploader < CarrierWave::Uploader::Base
   # Override the directory where uploaded files will be stored.
   # This is a sensible default for uploaders that are meant to be mounted:
   def store_dir
-    if Rails.env.production?
+    if Rails.env.production? || ENV['AWS_S3_BUCKET'].present?
       "uploads/#{model.class.to_s.underscore}/#{mounted_as}/#{model.id}"
     else
       "../private/uploads/#{model.class.to_s.underscore}/#{mounted_as}/#{model.id}"
