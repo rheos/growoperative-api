@@ -45,7 +45,7 @@ services:
       DATABASE_HOST: db
       DISABLE_SPRING: 1
       SECRET_KEY_BASE: REMOVED_FOR_PUBLICATION
-      COOKIE_DOMAIN: 10.0.1.6
+      COOKIE_DOMAIN: localhost
     depends_on:
       - db
 

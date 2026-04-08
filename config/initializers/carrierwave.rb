@@ -1,5 +1,5 @@
 CarrierWave.configure do |config|
-  if Rails.env.production?
+  if Rails.env.production? || ENV['AWS_S3_BUCKET'].present?
     config.fog_credentials = {
       provider:              'AWS',
       aws_access_key_id:     ENV['AWS_ACCESS_KEY_ID'],
@@ -10,4 +10,4 @@ CarrierWave.configure do |config|
     config.fog_public     = false
     config.fog_attributes = { cache_control: "public, max-age=#{365.days.to_i}" }
   end
-end 
+end

@@ -100,9 +100,9 @@ class Inventory < ApplicationRecord
         avatars.push((self.avatars && self.avatars.find {|n| n.identifier == name}) || (self.item.avatars && self.item.avatars.find {|n| n.identifier == name}) || nil)
       end
     end
-    avatars.compact.map{ |i| 
-      if Rails.env.production?
-        i.file.public_url  # Use public_url which generates a direct, unsigned URL. This works because the bucket policy grants public access.
+    avatars.compact.map{ |i|
+      if Rails.env.production? || ENV['AWS_S3_BUCKET'].present?
+        i.url  # S3 signed URL
       else
         '/v1'+i.url.gsub(Rails.root.to_s, '')  # Local development URLs
       end
