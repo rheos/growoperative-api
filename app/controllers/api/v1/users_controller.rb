@@ -180,6 +180,14 @@ module Api::V1
 				}, status: 422
 				return
 			end
+
+			# Prevent non-demo users from accepting demo invitations (and vice versa)
+			if invitation.user.demo? != current_user.demo?
+				render json: {
+					message: "This invitation is not available"
+				}, status: 422
+				return
+			end
 			
 			# create a relationship if not exists
 			relationship = Relationship.where("(user_id = #{invitation.user.id} AND friend_id = #{current_user.id}) 
