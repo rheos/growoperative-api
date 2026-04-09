@@ -42,6 +42,10 @@ class User < ApplicationRecord
     user_groups.exists?(group_label: 'demo')
   end
 
+  def superuser?
+    user_groups.exists?(group_label: 'superuser')
+  end
+
   # call_backs
   before_create :set_parent
   after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group

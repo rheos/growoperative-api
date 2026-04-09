@@ -40,9 +40,9 @@ class Api::V1::DemoController < Api::V1::ApiController
   end
 
   # POST /v1/demo/reset
-  # Reset demo data from snapshot (admin only)
+  # Reset demo data from snapshot (superuser only)
   def reset
-    unless current_user&.is_admin?
+    unless current_user&.superuser?
       return render json: { error: 'Forbidden' }, status: :forbidden
     end
 
