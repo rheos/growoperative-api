@@ -1,6 +1,6 @@
 module Api::V1
   class ResourcesController < ApiController
-    # before_action :authenticate_user_by_cookie
+    skip_before_action :authenticate!
 
     def index
       
