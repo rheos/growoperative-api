@@ -9,6 +9,15 @@ class Item < ApplicationRecord
 
   mount_uploaders :avatars, ImagesUploader
 
+  # Prevent S3 image deletion for demo users — images are shared across resets
+  skip_callback :destroy, :before, :remove_avatars!
+  before_destroy :remove_avatars_unless_demo
+
+  def remove_avatars_unless_demo
+    return if user&.demo?
+    remove_avatars!
+  end
+
   validates :quantity, presence:true, numericality: true
 
   attr_accessor :unit, :with_inventory
