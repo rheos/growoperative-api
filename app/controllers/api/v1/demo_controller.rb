@@ -1,5 +1,5 @@
 class Api::V1::DemoController < Api::V1::ApiController
-  skip_before_action :authenticate!, only: [:users, :login]
+  skip_before_action :authenticate!, only: [:users, :login, :setup]
 
   CORE_DEMO_USERNAMES = %w[bob dianna peter paul sara mary bruce arthur clark oliver barry mark john].freeze
 
@@ -37,6 +37,63 @@ class Api::V1::DemoController < Api::V1::ApiController
     else
       render json: { error: 'Demo user not found' }, status: :not_found
     end
+  end
+
+  # POST /v1/demo/setup
+  # One-time bootstrap: mark demo users, create superuser, take snapshot.
+  # Controlled by GlobalSetting 'demo_setup_enabled' — disable after use.
+  def setup
+    setting = GlobalSetting.find_or_create_by!(setting: 'demo_setup_enabled') { |s| s.value = 1 }
+    unless setting.value == 1
+      return render json: { error: 'Setup endpoint is disabled. Set demo_setup_enabled=1 in global_settings to re-enable.' }, status: :forbidden
+    end
+
+    results = []
+
+    # 1. Mark demo users
+    count = 0
+    CORE_DEMO_USERNAMES.each do |name|
+      user = User.find_by(user_name: name)
+      if user
+        user.user_groups.find_or_create_by!(group_label: :demo)
+        count += 1
+      end
+    end
+    results << "Marked #{count} demo users"
+
+    # 2. Create superuser if params provided
+    if params[:superuser_name].present? && params[:superuser_password].present?
+      su = User.find_by(user_name: params[:superuser_name])
+      if su
+        su.user_groups.find_or_create_by!(group_label: :superuser)
+        results << "Added superuser group to existing user '#{params[:superuser_name]}'"
+      else
+        su = User.new(
+          user_name: params[:superuser_name],
+          password: params[:superuser_password],
+          invite_limit: 0,
+          depth: 0,
+          invitations_count: 0,
+        )
+        su.save!(validate: false)
+        su.update_columns(invitation_limit: 0)
+        su.user_groups.create!(group_label: :superuser)
+        results << "Created superuser '#{params[:superuser_name]}'"
+      end
+    end
+
+    # 3. Capture snapshot
+    DemoSnapshotService.new.capture
+    results << "Snapshot saved"
+
+    # 4. Disable this endpoint
+    setting.update!(value: 0)
+    results << "Setup endpoint disabled"
+
+    render json: { message: results.join('. ') }
+  rescue StandardError => e
+    Rails.logger.error("Demo setup failed: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
+    render json: { error: "Setup failed: #{e.message}" }, status: :internal_server_error
   end
 
   # POST /v1/demo/reset
