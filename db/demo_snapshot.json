@@ -1,0 +1,405 @@
+{
+  "captured_at": "2026-04-09T20:16:15Z",
+  "core_usernames": [
+    "bob",
+    "dianna",
+    "peter",
+    "paul",
+    "sara",
+    "mary",
+    "bruce",
+    "arthur",
+    "clark",
+    "oliver",
+    "barry",
+    "mark",
+    "john"
+  ],
+  "users": [
+    {
+      "user_name": "bob",
+      "name": null,
+      "nickname": null,
+      "depth": 0,
+      "invite_limit": 1000000,
+      "invitation_limit": null,
+      "invitations_count": 4,
+      "parent_user_name": null
+    },
+    {
+      "user_name": "dianna",
+      "name": null,
+      "nickname": null,
+      "depth": 1,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "bob"
+    },
+    {
+      "user_name": "peter",
+      "name": null,
+      "nickname": null,
+      "depth": 1,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 3,
+      "parent_user_name": "bob"
+    },
+    {
+      "user_name": "paul",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "peter"
+    },
+    {
+      "user_name": "sara",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "peter"
+    },
+    {
+      "user_name": "mary",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "peter"
+    },
+    {
+      "user_name": "bruce",
+      "name": null,
+      "nickname": null,
+      "depth": 1,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 2,
+      "parent_user_name": "bob"
+    },
+    {
+      "user_name": "arthur",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 1,
+      "parent_user_name": "bruce"
+    },
+    {
+      "user_name": "mark",
+      "name": null,
+      "nickname": null,
+      "depth": 3,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "arthur"
+    },
+    {
+      "user_name": "clark",
+      "name": null,
+      "nickname": null,
+      "depth": 1,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 1,
+      "parent_user_name": "bob"
+    },
+    {
+      "user_name": "oliver",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "clark"
+    },
+    {
+      "user_name": "barry",
+      "name": null,
+      "nickname": null,
+      "depth": 2,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 1,
+      "parent_user_name": "bruce"
+    },
+    {
+      "user_name": "john",
+      "name": null,
+      "nickname": null,
+      "depth": 3,
+      "invite_limit": 3,
+      "invitation_limit": null,
+      "invitations_count": 0,
+      "parent_user_name": "barry"
+    }
+  ],
+  "user_groups": [
+    {
+      "user_name": "bob",
+      "group_label": "admin"
+    },
+    {
+      "user_name": "dianna",
+      "group_label": "producer"
+    },
+    {
+      "user_name": "peter",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "paul",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "sara",
+      "group_label": "producer"
+    },
+    {
+      "user_name": "mary",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "bruce",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "arthur",
+      "group_label": "retailer"
+    },
+    {
+      "user_name": "mark",
+      "group_label": "consumer"
+    },
+    {
+      "user_name": "clark",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "oliver",
+      "group_label": "retailer"
+    },
+    {
+      "user_name": "barry",
+      "group_label": "broker"
+    },
+    {
+      "user_name": "barry",
+      "group_label": "retailer"
+    },
+    {
+      "user_name": "john",
+      "group_label": "producer"
+    },
+    {
+      "user_name": "bob",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "dianna",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "peter",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "paul",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "sara",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "mary",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "bruce",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "arthur",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "clark",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "oliver",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "barry",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "mark",
+      "group_label": "demo"
+    },
+    {
+      "user_name": "john",
+      "group_label": "demo"
+    }
+  ],
+  "relationships": [
+    {
+      "user_name": "bob",
+      "friend_user_name": "dianna",
+      "status": "accepted",
+      "action_user_name": "bob",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "bob",
+      "friend_user_name": "peter",
+      "status": "accepted",
+      "action_user_name": "bob",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "peter",
+      "friend_user_name": "paul",
+      "status": "accepted",
+      "action_user_name": "peter",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "peter",
+      "friend_user_name": "sara",
+      "status": "accepted",
+      "action_user_name": "peter",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "peter",
+      "friend_user_name": "mary",
+      "status": "accepted",
+      "action_user_name": "peter",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "bob",
+      "friend_user_name": "bruce",
+      "status": "accepted",
+      "action_user_name": "bob",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "bruce",
+      "friend_user_name": "arthur",
+      "status": "accepted",
+      "action_user_name": "bruce",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "arthur",
+      "friend_user_name": "mark",
+      "status": "accepted",
+      "action_user_name": "arthur",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "bob",
+      "friend_user_name": "clark",
+      "status": "accepted",
+      "action_user_name": "bob",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "clark",
+      "friend_user_name": "oliver",
+      "status": "accepted",
+      "action_user_name": "clark",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "bruce",
+      "friend_user_name": "barry",
+      "status": "accepted",
+      "action_user_name": "bruce",
+      "user_label": "",
+      "friend_label": null
+    },
+    {
+      "user_name": "oliver",
+      "friend_user_name": "barry",
+      "status": "accepted",
+      "action_user_name": "barry",
+      "user_label": null,
+      "friend_label": null
+    },
+    {
+      "user_name": "barry",
+      "friend_user_name": "john",
+      "status": "accepted",
+      "action_user_name": "barry",
+      "user_label": "",
+      "friend_label": null
+    }
+  ],
+  "trustlines": [
+
+  ],
+  "trustline_transactions": [
+
+  ],
+  "items": [
+
+  ],
+  "inventories": [
+
+  ],
+  "unit_options": [
+
+  ],
+  "request_contracts": [
+
+  ],
+  "item_requests": [
+
+  ],
+  "orders": [
+
+  ],
+  "user_category_prices": [
+
+  ],
+  "user_relationship_prices": [
+
+  ],
+  "user_relationship_request_prices": [
+
+  ],
+  "category_sizes": [
+
+  ],
+  "reviews": [
+
+  ]
+}
