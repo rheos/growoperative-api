@@ -94,6 +94,15 @@ end
 # Test data
 generate_sample_data
 
+# Mark all seed users as demo
+def mark_demo_users
+  %w[bob dianna peter paul sara mary bruce arthur clark oliver barry mark john].each do |name|
+    user = User.find_by(user_name: name)
+    user&.user_groups&.find_or_create_by!(group_label: 'demo')
+  end
+end
+mark_demo_users
+
 # Generate category seed data
 def generate_category
   Category.create!([{category_name: "herbs and greens", default_unit: 1, default_consumer_unit:2, default_node_price: 1.0},

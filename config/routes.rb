@@ -83,6 +83,11 @@ Rails.application.routes.draw do
           post 'execute_path_payment'
         end
       end
+      # Demo mode
+      get  'demo/users' => 'demo#users'
+      post 'demo/login' => 'demo#login'
+      post 'demo/reset' => 'demo#reset'
+
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'
