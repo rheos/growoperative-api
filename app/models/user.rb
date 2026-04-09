@@ -34,9 +34,17 @@ class User < ApplicationRecord
 
   attr_accessor :current_password
   # enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
+
+  # Demo user support
+  scope :demo, -> { joins(:user_groups).where(user_groups: { group_label: 'demo' }).distinct }
+
+  def demo?
+    user_groups.exists?(group_label: 'demo')
+  end
+
   # call_backs
   before_create :set_parent
-  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes
+  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group
 
   def set_category_sizes
     CategorySize.where(user_id: nil).each do |c| 
@@ -163,6 +171,14 @@ class User < ApplicationRecord
   end
   def find_invitation
     @invitation = Invitation.find_by(invitation_code: self.invited_code)
+  end
+
+  # If the inviting user is a demo user, the new user inherits the demo group
+  def inherit_demo_group
+    parent = User.find_by(id: parent_id)
+    if parent&.demo?
+      user_groups.find_or_create_by!(group_label: 'demo')
+    end
   end
   
   # === MUTUAL CREDIT SYSTEM METHODS ===
