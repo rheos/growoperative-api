@@ -87,6 +87,7 @@ Rails.application.routes.draw do
       get  'demo/users' => 'demo#users'
       post 'demo/login' => 'demo#login'
       post 'demo/reset' => 'demo#reset'
+      post 'demo/setup' => 'demo#setup'
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'

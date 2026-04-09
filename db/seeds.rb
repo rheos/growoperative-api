@@ -26,6 +26,9 @@ def generate_global_setting
   degree = GlobalSetting.find_or_initialize_by(setting: "RangeDegree")
   degree.value = 4
   degree.save
+  demo_setup = GlobalSetting.find_or_initialize_by(setting: "demo_setup_enabled")
+  demo_setup.value = 1
+  demo_setup.save
 end
 # This will generate seed for global setting
 generate_global_setting
