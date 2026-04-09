@@ -8,6 +8,15 @@ class Inventory < ApplicationRecord
   mount_uploaders :avatars, ImagesUploader
   serialize :gallery_map, Array
 
+  # Prevent S3 image deletion for demo users — images are shared across resets
+  skip_callback :destroy, :before, :remove_avatars!
+  before_destroy :remove_avatars_unless_demo
+
+  def remove_avatars_unless_demo
+    return if user&.demo?
+    remove_avatars!
+  end
+
   enum status: [ :unavailable, :available, :reserved, :in_order ]
 
   attr_accessor :target_user_id
