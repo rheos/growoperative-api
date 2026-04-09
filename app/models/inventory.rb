@@ -102,7 +102,7 @@ class Inventory < ApplicationRecord
     end
     avatars.compact.map{ |i|
       if Rails.env.production? || ENV['AWS_S3_BUCKET'].present?
-        i.url  # S3 signed URL
+        i.file.public_url  # Unsigned URL — old app manipulates filenames for thumbnails
       else
         '/v1'+i.url.gsub(Rails.root.to_s, '')  # Local development URLs
       end
