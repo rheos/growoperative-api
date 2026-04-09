@@ -29,6 +29,7 @@ class Trustline < ApplicationRecord
   validates :user_a_id, uniqueness: { scope: :user_b_id }
   validate :different_users
   validate :user_order_constraint
+  validate :demo_boundary
   
   # === SCOPES ===
   scope :active, -> { where(is_active: true) }
@@ -265,6 +266,14 @@ class Trustline < ApplicationRecord
   # Ensures users are different (can't create trustline with yourself)
   def different_users
     errors.add(:user_b, "cannot be the same as User A") if user_a_id == user_b_id
+  end
+
+  # Prevent trustlines between demo and non-demo users
+  def demo_boundary
+    return unless user_a && user_b
+    if user_a.demo? != user_b.demo?
+      errors.add(:base, 'Cannot create trustlines between demo and non-demo users')
+    end
   end
   
   # Validates user ordering constraint (user_a_id must be less than user_b_id)
