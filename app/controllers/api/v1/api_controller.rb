@@ -62,14 +62,15 @@ class Api::V1::ApiController < ApplicationController
     token = JwtGenerationService.new(user_id: user.id).token
     time = 1.year.from_now
     
-    # For development with IP addresses, we need different cookie settings
+    # For development, SameSite=None so cookies work cross-origin
+    # (e.g. localhost:8081 frontend → localhost:3001 backend)
     if Rails.env.development?
       cookies.signed[:jwt] = {
         value: token,
         expires: time,
         httponly: true,
-        same_site: :lax,
-        secure: false  # Allow HTTP for development
+        same_site: :none,
+        secure: false
       }
     else
       cookies.signed[:jwt] = {
