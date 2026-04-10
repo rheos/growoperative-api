@@ -27,7 +27,9 @@ class Api::V1::ApiController < ApplicationController
   end
 
   def current_user
+    # Try cookie first, fall back to Authorization Bearer header
     jwt = cookies.signed[:jwt]
+    jwt ||= request.headers['Authorization']&.sub(/^Bearer\s+/, '')
     return unless jwt
 
     begin
