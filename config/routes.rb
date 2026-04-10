@@ -23,6 +23,7 @@ Rails.application.routes.draw do
           get 'contact_list'
           post 'accept_invitation'
           patch 'update_password'
+          patch 'update_avatar'
           patch 'edit_contact_label'
           post 'get_contact_label'
           post 'destroy_relationship'

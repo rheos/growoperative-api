@@ -6,6 +6,10 @@ class User < ApplicationRecord
 
 	devise :database_authenticatable, :registerable,
 				 :recoverable, :rememberable, :validatable, :jwt_authenticatable, jwt_revocation_strategy: JWTBlacklist, authentication_keys: [:user_name]
+
+	# Avatar upload (uses existing `image` column)
+	mount_uploader :image, ImagesUploader
+
 	# Validation
   validates :user_name, presence: :true, uniqueness: { case_sensitive: false }
   validates :invitations_count, numericality: { only_integer: true }
@@ -275,5 +279,11 @@ class User < ApplicationRecord
     ).tap do |trustline|
       trustline.update(notes: notes) if notes
     end
+  end
+
+  # Returns the avatar URL (thumbnail version if available)
+  def avatar_url
+    return nil unless image.present?
+    image.thumb500.url
   end
 end

@@ -243,6 +243,25 @@ module Api::V1
 			end
 		end
 
+		# Upload or update user avatar
+		# URL : v1/users/update_avatar
+		# Method : PATCH
+		# Parameter : multipart form with `avatar` file
+		def update_avatar
+			if params[:avatar].present?
+				if current_user.update(image: params[:avatar])
+					render json: {
+						message: "Avatar updated successfully.",
+						avatar_url: current_user.avatar_url
+					}
+				else
+					render json: { error: current_user.errors.full_messages.join(', ') }, status: 422
+				end
+			else
+				render json: { error: "No avatar file provided" }, status: 422
+			end
+		end
+
 		# This api will update userlabel
 		# URL : v1/users/edit_contact_label
 		# Method : PATCH

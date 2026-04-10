@@ -5,4 +5,8 @@ class UserSerializer
   attributes :user_types do |object|
     object.user_groups
   end
+
+  attribute :avatar_url do |object|
+    object.avatar_url
+  end
 end
