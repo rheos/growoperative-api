@@ -7,7 +7,7 @@ class Api::V1::DemoController < Api::V1::ApiController
   # Returns graph data (nodes + edges) for the demo network map
   def users
     demo_users = User.where(user_name: CORE_DEMO_USERNAMES)
-                     .includes(:user_groups)
+                     .includes(:user_groups, items: :item_unit)
     demo_ids = demo_users.pluck(:id)
 
     nodes = demo_users.map { |u| serialize_node(u) }
@@ -33,7 +33,8 @@ class Api::V1::DemoController < Api::V1::ApiController
     user = User.demo.find_by(id: params[:user_id])
     if user
       assign_jwt_cookies(user)
-      render json: UserSerializer.new(user), status: 200
+      token = JwtGenerationService.new(user_id: user.id).token
+      render json: UserSerializer.new(user).serializable_hash.merge(token: token), status: 200
     else
       render json: { error: 'Demo user not found' }, status: :not_found
     end
@@ -120,7 +121,8 @@ class Api::V1::DemoController < Api::V1::ApiController
       name: user.name || user.user_name.capitalize,
       roles: roles,
       parent_id: user.parent_id,
-      depth: user.depth || 0
+      depth: user.depth || 0,
+      items: user.items.map { |i| "#{i.quantity.to_i}#{i.item_unit&.item_symbol} #{i.name}" }
     }
   end
 end
