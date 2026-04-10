@@ -208,7 +208,13 @@ module Api::V1
             @inventory.unit_options.create(price: size_params["price"].to_f, quantity: size_params["quantity"].to_f, item_unit_id: size_params["item_unit_id"].to_i) unless size_params["id"]
           end
         end
-      elsif(params[:inventory_avatars].present?)
+
+        # Process images even when item attributes are also being updated
+        if inventory_avatar_params[:inventory_avatars].present? || inventory_avatar_params[:source_images].present?
+          @inventory.update_avatars(inventory_avatar_params, current_user.id)
+          @inventory.reload
+        end
+      elsif(params[:inventory_avatars].present? || params[:source_images].present?)
         result = @inventory.update_avatars(inventory_avatar_params, current_user.id)
         @inventory.reload
       else
