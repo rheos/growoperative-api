@@ -90,6 +90,8 @@ Rails.application.routes.draw do
       post 'demo/login' => 'demo#login'
       post 'demo/reset' => 'demo#reset'
       post 'demo/setup' => 'demo#setup'
+      get  'demo/snapshots' => 'demo#snapshots'
+      post 'demo/snapshot' => 'demo#save_snapshot'
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'

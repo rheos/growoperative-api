@@ -104,11 +104,42 @@ class Api::V1::DemoController < Api::V1::ApiController
       return render json: { error: 'Forbidden' }, status: :forbidden
     end
 
-    DemoResetService.new.call
-    render json: { message: 'Demo data reset successfully' }
+    snapshot_name = params[:snapshot_name] || 'default'
+    DemoResetService.new(snapshot_name: snapshot_name).call
+    render json: { message: "Demo data reset to '#{snapshot_name}'" }
   rescue StandardError => e
     Rails.logger.error("Demo reset failed: #{e.message}")
     render json: { error: "Reset failed: #{e.message}" }, status: :internal_server_error
+  end
+
+  # GET /v1/demo/snapshots
+  # List available snapshots (superuser only)
+  def snapshots
+    unless current_user&.superuser?
+      return render json: { error: 'Forbidden' }, status: :forbidden
+    end
+
+    render json: DemoSnapshotService.list
+  end
+
+  # POST /v1/demo/snapshot
+  # Save current demo state as a named snapshot (superuser only)
+  def save_snapshot
+    unless current_user&.superuser?
+      return render json: { error: 'Forbidden' }, status: :forbidden
+    end
+
+    name = params[:name]
+    if name.blank?
+      return render json: { error: 'Snapshot name is required' }, status: :unprocessable_entity
+    end
+
+    include_requests = params[:include_requests] != false && params[:include_requests] != 'false'
+    DemoSnapshotService.new(name: name, include_requests: include_requests).capture
+    render json: { message: "Snapshot '#{name}' saved" }
+  rescue StandardError => e
+    Rails.logger.error("Snapshot save failed: #{e.message}")
+    render json: { error: "Save failed: #{e.message}" }, status: :internal_server_error
   end
 
   private
