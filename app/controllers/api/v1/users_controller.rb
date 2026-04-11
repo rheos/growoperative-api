@@ -5,7 +5,12 @@ module Api::V1
 		before_action :set_user, only: [:item_list, :get_invitation_limit, :set_invitation_limit, :chain_limit, :get_nickname, :set_nickname]
 		# GET /v1/users
 		def index
-			render json: User.all, include: [:user_groups]
+			users = if current_user.is_superuser?
+				User.all
+			else
+				User.joins(:user_groups).where(user_groups: { group_label: 'demo' }).distinct
+			end
+			render json: users, include: [:user_groups]
 		end
 
 		# GET /v1/users/{id}
