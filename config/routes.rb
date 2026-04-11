@@ -77,6 +77,7 @@ Rails.application.routes.draw do
       resources :trustlines do
         member do
           post 'payment'
+          get 'transactions'
         end
         collection do
           get 'summary'
