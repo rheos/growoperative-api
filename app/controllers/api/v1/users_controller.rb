@@ -10,7 +10,7 @@ module Api::V1
 			else
 				User.joins(:user_groups).where(user_groups: { group_label: 'demo' }).distinct
 			end
-			render json: users, include: [:user_groups]
+			render json: users, include: [:user_groups], methods: [:invited_by_name]
 		end
 
 		# GET /v1/users/{id}

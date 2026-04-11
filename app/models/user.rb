@@ -86,6 +86,13 @@ class User < ApplicationRecord
     self.user_groups.pluck(:group_label).include?("superuser")
   end
 
+  def invited_by_name
+    return nil if invited_code.blank?
+    invitation = Invitation.find_by(invitation_code: invited_code)
+    return nil unless invitation
+    User.find_by(id: invitation.user_id)&.user_name
+  end
+
   def is_producer?
     group_labels = self.user_groups.pluck(:group_label)
     if group_labels.size == 1 && group_labels.include?("producer")
