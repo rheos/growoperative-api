@@ -1,12 +1,10 @@
 class DemoResetService
-  SNAPSHOT_PATH = Rails.root.join('db', 'demo_snapshot.json')
+  def initialize(snapshot_name: 'default')
+    @snapshot_name = snapshot_name
+  end
 
   def call
-    unless File.exist?(SNAPSHOT_PATH)
-      raise "Snapshot file not found at #{SNAPSHOT_PATH}. Run `rake demo:snapshot` first."
-    end
-
-    @snapshot = JSON.parse(File.read(SNAPSHOT_PATH))
+    @snapshot = DemoSnapshotService.load(@snapshot_name)
     @core_usernames = @snapshot['core_usernames']
 
     ActiveRecord::Base.transaction do
@@ -187,7 +185,7 @@ class DemoResetService
     (@snapshot['items'] || []).each do |i|
       uid = @name_to_id[i['user_name']]
       next unless uid
-      item = Item.create!(
+      item = Item.new(
         user_id: uid,
         category_id: Category.find_by(category_name: i['category_name'])&.id,
         item_name_id: ItemName.find_by(name: i['item_name_value'])&.id,
@@ -198,9 +196,16 @@ class DemoResetService
         date_available: i['date_available'],
         organic: i['organic'],
         name: i['name'],
-        avatars: i['avatars'],
         producer_id: @name_to_id[i['producer_user_name']],
       )
+      # Force original ID so CarrierWave S3 paths match existing files
+      item.id = i['original_id'] if i['original_id']
+      item.save!
+      # Write avatars via SQL — update_columns double-escapes the JSON for CarrierWave
+      if i['avatars_raw'].present?
+        escaped = ActiveRecord::Base.connection.quote(i['avatars_raw'])
+        ActiveRecord::Base.connection.execute("UPDATE items SET avatars = #{escaped} WHERE id = #{item.id}")
+      end
       @item_ids << item.id
     end
 
@@ -211,9 +216,13 @@ class DemoResetService
       inventory = Inventory.create!(
         user_id: uid, item_id: item_id,
         quantity: inv['quantity'], price: inv['price'],
-        status: inv['status'], avatars: inv['avatars'],
+        status: inv['status'],
         description: inv['description'], ref_price: inv['ref_price'],
       )
+      if inv['avatars_raw'].present?
+        escaped = ActiveRecord::Base.connection.quote(inv['avatars_raw'])
+        ActiveRecord::Base.connection.execute("UPDATE inventories SET avatars = #{escaped} WHERE id = #{inventory.id}")
+      end
       @inventory_ids << inventory.id
     end
 
@@ -239,28 +248,42 @@ class DemoResetService
       )
     end
 
+    @request_contract_ids = []
     (@snapshot['request_contracts'] || []).each do |rc|
       uid = @name_to_id[rc['user_name']]
       item_id = rc['item_index'] ? @item_ids[rc['item_index']] : nil
       inv_id = rc['inventory_index'] ? @inventory_ids[rc['inventory_index']] : nil
       next unless uid
-      RequestContract.create!(
+      contract = RequestContract.create!(
         user_id: uid, item_id: item_id, inventory_id: inv_id,
         quantity: rc['quantity'], status: rc['status'],
         steps: rc['steps'], current_step: rc['current_step'], unit: rc['unit'],
       )
+      @request_contract_ids << contract.id
     end
 
-    (@snapshot['item_requests'] || []).each do |ir|
-      ItemRequest.create!(
-        user_id: @name_to_id[ir['user_name']],
-        friend_id: @name_to_id[ir['friend_user_name']],
-        price: ir['price'], status: ir['status'],
-        step: ir['step'], sent: ir['sent'],
-        accepted_at: ir['accepted_at'],
-        shipped_at: ir['shipped_at'],
-        signed_at: ir['signed_at'],
-      )
+    # Assign requests to contracts by walking through each contract's step count
+    contracts = @snapshot['request_contracts'] || []
+    all_requests = @snapshot['item_requests'] || []
+    req_index = 0
+    contracts.each_with_index do |rc, ci|
+      steps = rc['steps'].to_i
+      steps.times do
+        ir = all_requests[req_index]
+        break unless ir
+        req = ItemRequest.new(
+          user_id: @name_to_id[ir['user_name']],
+          friend_id: @name_to_id[ir['friend_user_name']],
+          request_contract_id: @request_contract_ids[ci],
+          price: ir['price'], status: ir['status'],
+          step: ir['step'], sent: ir['sent'],
+          accepted_at: ir['accepted_at'],
+          shipped_at: ir['shipped_at'],
+          signed_at: ir['signed_at'],
+        )
+        req.save!
+        req_index += 1
+      end
     end
   end
 

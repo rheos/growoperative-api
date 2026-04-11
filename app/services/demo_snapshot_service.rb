@@ -1,14 +1,25 @@
 class DemoSnapshotService
   CORE_DEMO_USERNAMES = %w[bob dianna peter paul sara mary bruce arthur clark oliver barry mark john].freeze
-  SNAPSHOT_PATH = Rails.root.join('db', 'demo_snapshot.json')
+  SNAPSHOTS_DIR = Rails.root.join('db', 'demo_snapshots')
+  # Legacy single-file path (used as fallback)
+  LEGACY_PATH = Rails.root.join('db', 'demo_snapshot.json')
+
+  def initialize(name: nil, include_requests: true)
+    @name = name
+    @include_requests = include_requests
+  end
 
   def capture
+    FileUtils.mkdir_p(SNAPSHOTS_DIR)
+
     demo_users = User.where(user_name: CORE_DEMO_USERNAMES)
     demo_ids = demo_users.pluck(:id)
     demo_id_to_name = demo_users.pluck(:id, :user_name).to_h
 
     snapshot = {
       captured_at: Time.current.iso8601,
+      name: @name || 'default',
+      include_requests: @include_requests,
       core_usernames: CORE_DEMO_USERNAMES,
       users: snapshot_users(demo_users),
       user_groups: snapshot_user_groups(demo_ids, demo_id_to_name),
@@ -18,9 +29,6 @@ class DemoSnapshotService
       items: snapshot_items(demo_ids, demo_id_to_name),
       inventories: snapshot_inventories(demo_ids, demo_id_to_name),
       unit_options: snapshot_unit_options(demo_ids),
-      request_contracts: snapshot_request_contracts(demo_ids, demo_id_to_name),
-      item_requests: snapshot_item_requests(demo_ids, demo_id_to_name),
-      orders: snapshot_orders(demo_ids, demo_id_to_name),
       user_category_prices: snapshot_user_category_prices(demo_ids, demo_id_to_name),
       user_relationship_prices: snapshot_user_relationship_prices(demo_ids, demo_id_to_name),
       user_relationship_request_prices: snapshot_user_relationship_request_prices(demo_ids, demo_id_to_name),
@@ -28,8 +36,66 @@ class DemoSnapshotService
       reviews: snapshot_reviews(demo_ids, demo_id_to_name),
     }
 
-    File.write(SNAPSHOT_PATH, JSON.pretty_generate(snapshot))
+    if @include_requests
+      snapshot[:request_contracts] = snapshot_request_contracts(demo_ids, demo_id_to_name)
+      snapshot[:item_requests] = snapshot_item_requests(demo_ids, demo_id_to_name)
+      snapshot[:orders] = snapshot_orders(demo_ids, demo_id_to_name)
+    else
+      snapshot[:request_contracts] = []
+      snapshot[:item_requests] = []
+      snapshot[:orders] = []
+    end
+
+    filename = sanitize_name(@name || 'default') + '.json'
+    File.write(SNAPSHOTS_DIR.join(filename), JSON.pretty_generate(snapshot))
     snapshot
+  end
+
+  # List all saved snapshots (name, date, counts)
+  def self.list
+    dir = SNAPSHOTS_DIR
+    files = Dir.glob(dir.join('*.json')).sort_by { |f| File.mtime(f) }.reverse
+
+    # Include legacy file if it exists and no named snapshots contain its data
+    if File.exist?(LEGACY_PATH) && !files.any? { |f| File.basename(f) == 'default.json' }
+      files.unshift(LEGACY_PATH.to_s)
+    end
+
+    files.map do |path|
+      snap = JSON.parse(File.read(path))
+      {
+        name: snap['name'] || File.basename(path, '.json'),
+        filename: File.basename(path),
+        captured_at: snap['captured_at'],
+        include_requests: snap['include_requests'] != false,
+        items: (snap['items'] || []).size,
+        orders: (snap['orders'] || []).size,
+        item_requests: (snap['item_requests'] || []).size,
+        relationships: (snap['relationships'] || []).size,
+      }
+    end
+  end
+
+  # Load a snapshot by name
+  def self.load(name)
+    filename = name.gsub(/[^a-zA-Z0-9_\-]/, '_') + '.json'
+    path = SNAPSHOTS_DIR.join(filename)
+
+    # Fallback to legacy path
+    unless File.exist?(path)
+      if name == 'default' && File.exist?(LEGACY_PATH)
+        return JSON.parse(File.read(LEGACY_PATH))
+      end
+      raise "Snapshot '#{name}' not found"
+    end
+
+    JSON.parse(File.read(path))
+  end
+
+  private
+
+  def sanitize_name(name)
+    name.gsub(/[^a-zA-Z0-9_\-]/, '_').downcase
   end
 
   private
@@ -103,6 +169,7 @@ class DemoSnapshotService
   def snapshot_items(demo_ids, id_to_name)
     Item.where(user_id: demo_ids).map do |item|
       {
+        original_id: item.id,
         user_name: id_to_name[item.user_id],
         category_name: item.category&.category_name,
         item_name_value: item.item_name&.name,
@@ -113,7 +180,7 @@ class DemoSnapshotService
         date_available: item.date_available&.iso8601,
         organic: item.organic,
         name: item.name,
-        avatars: item.avatars,
+        avatars_raw: item.read_attribute_before_type_cast(:avatars),
         producer_user_name: id_to_name[item.producer_id],
       }
     end
@@ -127,7 +194,7 @@ class DemoSnapshotService
         quantity: inv.quantity,
         price: inv.price.to_f,
         status: inv.status,
-        avatars: inv.avatars,
+        avatars_raw: inv.read_attribute_before_type_cast(:avatars),
         description: inv.description,
         ref_price: inv.ref_price.to_f,
       }
@@ -162,10 +229,12 @@ class DemoSnapshotService
   end
 
   def snapshot_item_requests(demo_ids, id_to_name)
+    rc_ids = RequestContract.where(user_id: demo_ids).pluck(:id)
     ItemRequest.where(user_id: demo_ids).or(ItemRequest.where(friend_id: demo_ids)).map do |ir|
       {
         user_name: id_to_name[ir.user_id],
         friend_user_name: id_to_name[ir.friend_id],
+        request_contract_index: rc_ids.index(ir.request_contract_id),
         price: ir.price.to_f,
         status: ir.status,
         step: ir.step,

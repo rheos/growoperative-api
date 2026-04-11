@@ -381,11 +381,9 @@
       "date_available": "2025-06-22T06:39:54Z",
       "organic": true,
       "name": "Black Krim",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/1751364851823black_krim2.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/thumb500_1751364851823black_krim2.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/thumbnail_1751364851823black_krim2.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/1751364866030black_krim.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/thumb500_1751364866030black_krim.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/4/thumbnail_1751364866030black_krim.jpg"}}
-      ],
-      "producer_user_name": null
+      "producer_user_name": null,
+      "original_id": 4,
+      "avatars_raw": "[\"1751364851823black_krim2.jpg\",\"1751364866030black_krim.jpg\"]"
     },
     {
       "user_name": "bruce",
@@ -398,11 +396,9 @@
       "date_available": "2025-06-22T08:33:16Z",
       "organic": true,
       "name": "Arugula",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/17505812007801893957_130425174900_01112_grande.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/thumb500_17505812007801893957_130425174900_01112_grande.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/thumbnail_17505812007801893957_130425174900_01112_grande.jpeg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/1750581208581arugula.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/thumb500_1750581208581arugula.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/7/thumbnail_1750581208581arugula.jpg"}}
-      ],
-      "producer_user_name": "bruce"
+      "producer_user_name": "bruce",
+      "original_id": 7,
+      "avatars_raw": "[\"17505812007801893957_130425174900_01112_grande.jpeg\",\"1750581208581arugula.jpg\"]"
     },
     {
       "user_name": "bob",
@@ -415,11 +411,9 @@
       "date_available": "2025-06-22T08:35:56Z",
       "organic": true,
       "name": "Basil",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/1750581370499basil-with-wet-leaves.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/thumb500_1750581370499basil-with-wet-leaves.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/thumbnail_1750581370499basil-with-wet-leaves.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/1750581377807basil3.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/thumb500_1750581377807basil3.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/8/thumbnail_1750581377807basil3.jpg"}}
-      ],
-      "producer_user_name": "bob"
+      "producer_user_name": "bob",
+      "original_id": 8,
+      "avatars_raw": "[\"1750581370499basil-with-wet-leaves.jpg\",\"1750581377807basil3.jpg\"]"
     },
     {
       "user_name": "barry",
@@ -432,11 +426,9 @@
       "date_available": "2025-06-22T08:38:23Z",
       "organic": false,
       "name": "Black Cherry",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/1750581529454black_cherry_tomato_2.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/thumb500_1750581529454black_cherry_tomato_2.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/thumbnail_1750581529454black_cherry_tomato_2.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/1750581538258black_cherry_tomatoes.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/thumb500_1750581538258black_cherry_tomatoes.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/9/thumbnail_1750581538258black_cherry_tomatoes.jpeg"}}
-      ],
-      "producer_user_name": "barry"
+      "producer_user_name": "barry",
+      "original_id": 9,
+      "avatars_raw": "[\"1750581529454black_cherry_tomato_2.png\",\"1750581538258black_cherry_tomatoes.jpeg\"]"
     },
     {
       "user_name": "barry",
@@ -449,11 +441,9 @@
       "date_available": "2025-06-22T08:40:36Z",
       "organic": true,
       "name": "Curly Kale",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/1750581669721curly_kale_1.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/thumb500_1750581669721curly_kale_1.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/thumbnail_1750581669721curly_kale_1.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/1750581678247curly_kale.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/thumb500_1750581678247curly_kale.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/10/thumbnail_1750581678247curly_kale.jpg"}}
-      ],
-      "producer_user_name": "barry"
+      "producer_user_name": "barry",
+      "original_id": 10,
+      "avatars_raw": "[\"1750581669721curly_kale_1.jpg\",\"1750581678247curly_kale.jpg\"]"
     },
     {
       "user_name": "peter",
@@ -466,11 +456,9 @@
       "date_available": "2025-06-22T08:53:25Z",
       "organic": true,
       "name": "Early Girl",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/1750582443485early_girl_1.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/thumb500_1750582443485early_girl_1.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/thumbnail_1750582443485early_girl_1.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/1750582450068early_girl_2.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/thumb500_1750582450068early_girl_2.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/11/thumbnail_1750582450068early_girl_2.png"}}
-      ],
-      "producer_user_name": "peter"
+      "producer_user_name": "peter",
+      "original_id": 11,
+      "avatars_raw": "[\"1750582443485early_girl_1.png\",\"1750582450068early_girl_2.png\"]"
     },
     {
       "user_name": "peter",
@@ -483,11 +471,9 @@
       "date_available": "2025-06-22T08:55:27Z",
       "organic": true,
       "name": "Cabbage",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/1750582543038cabbage.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/thumb500_1750582543038cabbage.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/thumbnail_1750582543038cabbage.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/1750582550263cabbage2.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/thumb500_1750582550263cabbage2.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/12/thumbnail_1750582550263cabbage2.jpg"}}
-      ],
-      "producer_user_name": "peter"
+      "producer_user_name": "peter",
+      "original_id": 12,
+      "avatars_raw": "[\"1750582543038cabbage.jpg\",\"1750582550263cabbage2.jpg\"]"
     },
     {
       "user_name": "sara",
@@ -500,11 +486,9 @@
       "date_available": "2025-06-22T08:57:47Z",
       "organic": true,
       "name": "Fennel",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/1750582697783fennel.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/thumb500_1750582697783fennel.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/thumbnail_1750582697783fennel.jpeg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/1750582705419fennel2.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/thumb500_1750582705419fennel2.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/13/thumbnail_1750582705419fennel2.jpg"}}
-      ],
-      "producer_user_name": "sara"
+      "producer_user_name": "sara",
+      "original_id": 13,
+      "avatars_raw": "[\"1750582697783fennel.jpeg\",\"1750582705419fennel2.jpg\"]"
     },
     {
       "user_name": "sara",
@@ -517,11 +501,9 @@
       "date_available": "2025-06-22T08:59:09Z",
       "organic": true,
       "name": "Lemon Balm",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/1750582775973lemon_balm.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/thumb500_1750582775973lemon_balm.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/thumbnail_1750582775973lemon_balm.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/1750582803615Lemon_Balm.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/thumb500_1750582803615Lemon_Balm.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/14/thumbnail_1750582803615Lemon_Balm.jpg"}}
-      ],
-      "producer_user_name": null
+      "producer_user_name": null,
+      "original_id": 14,
+      "avatars_raw": "[\"1750582775973lemon_balm.jpg\",\"1750582803615Lemon_Balm.jpg\"]"
     },
     {
       "user_name": "paul",
@@ -534,11 +516,9 @@
       "date_available": "2025-06-22T09:00:54Z",
       "organic": true,
       "name": "Lettuce",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/1750582875945lettuce1.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/thumb500_1750582875945lettuce1.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/thumbnail_1750582875945lettuce1.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/1750582882996lettuce3.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/thumb500_1750582882996lettuce3.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/15/thumbnail_1750582882996lettuce3.jpeg"}}
-      ],
-      "producer_user_name": "paul"
+      "producer_user_name": "paul",
+      "original_id": 15,
+      "avatars_raw": "[\"1750582875945lettuce1.png\",\"1750582882996lettuce3.jpeg\"]"
     },
     {
       "user_name": "mary",
@@ -551,12 +531,9 @@
       "date_available": "2025-06-22T09:33:57Z",
       "organic": true,
       "name": "Mint",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/1750584870221mint1.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumb500_1750584870221mint1.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumbnail_1750584870221mint1.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/1750584879142mint2.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumb500_1750584879142mint2.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumbnail_1750584879142mint2.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/1750584889094mint3.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumb500_1750584889094mint3.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/16/thumbnail_1750584889094mint3.png"}}
-      ],
-      "producer_user_name": "mary"
+      "producer_user_name": "mary",
+      "original_id": 16,
+      "avatars_raw": "[\"1750584870221mint1.png\",\"1750584879142mint2.png\",\"1750584889094mint3.png\"]"
     },
     {
       "user_name": "mary",
@@ -569,11 +546,9 @@
       "date_available": "2025-06-22T09:35:41Z",
       "organic": true,
       "name": "Hot Peppers",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/1750584955954pepper1.png","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/thumb500_1750584955954pepper1.png"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/thumbnail_1750584955954pepper1.png"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/1750584972672pepper2.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/thumb500_1750584972672pepper2.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/17/thumbnail_1750584972672pepper2.jpeg"}}
-      ],
-      "producer_user_name": "mary"
+      "producer_user_name": "mary",
+      "original_id": 17,
+      "avatars_raw": "[\"1750584955954pepper1.png\",\"1750584972672pepper2.jpeg\"]"
     },
     {
       "user_name": "clark",
@@ -586,11 +561,9 @@
       "date_available": "2025-06-22T09:37:38Z",
       "organic": true,
       "name": "Purple Cabbage",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/1750585076007purple_cabbage.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/thumb500_1750585076007purple_cabbage.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/thumbnail_1750585076007purple_cabbage.jpg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/1750585082925purple-cabbage.jpg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/thumb500_1750585082925purple-cabbage.jpg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/18/thumbnail_1750585082925purple-cabbage.jpg"}}
-      ],
-      "producer_user_name": "clark"
+      "producer_user_name": "clark",
+      "original_id": 18,
+      "avatars_raw": "[\"1750585076007purple_cabbage.jpg\",\"1750585082925purple-cabbage.jpg\"]"
     },
     {
       "user_name": "clark",
@@ -603,12 +576,9 @@
       "date_available": "2025-06-22T09:39:10Z",
       "organic": true,
       "name": "Russet Potatoes",
-      "avatars": [
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/1750585186332russet_potato_1.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumb500_1750585186332russet_potato_1.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumbnail_1750585186332russet_potato_1.jpeg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/1750585245264russet_potato_2.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumb500_1750585245264russet_potato_2.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumbnail_1750585245264russet_potato_2.jpeg"}},
-        {"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/1750585251749russet_potato_3.jpeg","thumb500":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumb500_1750585251749russet_potato_3.jpeg"},"thumbnail":{"url":"https://growoperative-uploads-dev.s3.amazonaws.com/uploads/item/avatars/19/thumbnail_1750585251749russet_potato_3.jpeg"}}
-      ],
-      "producer_user_name": "clark"
+      "producer_user_name": "clark",
+      "original_id": 19,
+      "avatars_raw": "[\"1750585186332russet_potato_1.jpeg\",\"1750585245264russet_potato_2.jpeg\",\"1750585251749russet_potato_3.jpeg\"]"
     }
   ],
   "inventories": [
@@ -618,9 +588,6 @@
       "quantity": 3.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": "Some very fine tomatoes",
       "ref_price": 0.0
     },
@@ -630,9 +597,6 @@
       "quantity": 5.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -642,9 +606,6 @@
       "quantity": 5.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -654,9 +615,6 @@
       "quantity": 6.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": "null",
       "ref_price": 0.0
     },
@@ -666,9 +624,6 @@
       "quantity": 5.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -678,9 +633,6 @@
       "quantity": 5.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -690,9 +642,6 @@
       "quantity": 5.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -702,9 +651,6 @@
       "quantity": 9.0,
       "price": 5.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -714,9 +660,6 @@
       "quantity": 8.0,
       "price": 5.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -726,9 +669,6 @@
       "quantity": 9.0,
       "price": 5.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -738,9 +678,6 @@
       "quantity": 6.0,
       "price": 4.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -750,9 +687,6 @@
       "quantity": 5.0,
       "price": 6.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -762,9 +696,6 @@
       "quantity": 9.0,
       "price": 5.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -774,9 +705,6 @@
       "quantity": 15.0,
       "price": 3.0,
       "status": "available",
-      "avatars": [
-
-      ],
       "description": "null",
       "ref_price": 0.0
     },
@@ -786,9 +714,6 @@
       "quantity": 1.0,
       "price": 4.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -798,9 +723,6 @@
       "quantity": 2.0,
       "price": 4.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -810,9 +732,6 @@
       "quantity": 1.0,
       "price": 5.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -822,9 +741,6 @@
       "quantity": 1.0,
       "price": 5.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -834,9 +750,6 @@
       "quantity": 3.0,
       "price": 4.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -846,9 +759,6 @@
       "quantity": 1.0,
       "price": 5.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     },
@@ -858,9 +768,6 @@
       "quantity": 2.0,
       "price": 5.0,
       "status": "reserved",
-      "avatars": [
-
-      ],
       "description": null,
       "ref_price": 0.0
     }
