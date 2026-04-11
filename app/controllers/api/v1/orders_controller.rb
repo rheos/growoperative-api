@@ -64,7 +64,7 @@ module Api::V1
     end
 
     def order_action_params
-      params.require(:order_action).permit(:action_name, :item_id)
+      params.require(:order_action).permit(:action_name, :item_id, :settlement_type, :cash_amount)
     end
 
     def order_params

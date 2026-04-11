@@ -163,6 +163,14 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.time "estimated_time"
     t.string "location", default: "pick up", null: false
     t.text "note"
+    t.string "settlement_type"
+    t.string "settlement_status"
+    t.integer "settlement_proposed_by"
+    t.string "settlement_counter_type"
+    t.integer "settlement_counter_by"
+    t.decimal "cash_amount", precision: 10, scale: 2
+    t.integer "cash_paid_by"
+    t.integer "cash_confirmed_by"
   end
 
   create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
