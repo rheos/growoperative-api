@@ -78,11 +78,12 @@ class User < ApplicationRecord
   end
 
   def is_admin?
-    if self.user_groups.pluck(:group_label).include?("admin")
-      true
-    else
-      false
-    end
+    labels = self.user_groups.pluck(:group_label)
+    labels.include?("admin") || labels.include?("superuser")
+  end
+
+  def is_superuser?
+    self.user_groups.pluck(:group_label).include?("superuser")
   end
 
   def is_producer?
