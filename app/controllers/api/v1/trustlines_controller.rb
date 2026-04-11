@@ -120,10 +120,10 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   def summary
     summary_data = {
       total_trustlines: current_user.active_trustlines.count,
-      total_credit_owed: current_user.total_credit_owed,
-      total_credit_owed_to_me: current_user.total_credit_owed_to_me,
-      net_credit_position: current_user.net_credit_position,
-      available_credit: current_user.available_credit_total,
+      total_credit_owed: current_user.total_credit_owed.to_f,
+      total_credit_owed_to_me: current_user.total_credit_owed_to_me.to_f,
+      net_credit_position: current_user.net_credit_position.to_f,
+      available_credit: current_user.available_credit_total.to_f,
       recent_transactions: current_user.initiated_trustline_transactions
                                       .recent
                                       .limit(5)
@@ -271,8 +271,17 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # GET /api/v1/trustlines/:id/transactions
+  def transactions
+    @trustline = current_user.trustlines.find(params[:id])
+    transactions = @trustline.trustline_transactions.order(created_at: :desc)
+    render json: transactions.map { |tx| serialize_transaction(tx) }
+  rescue ActiveRecord::RecordNotFound
+    render json: { errors: ['Trustline not found'] }, status: :not_found
+  end
+
   private
-  
+
   # === HELPER METHODS ===
   
   # Finds and sets trustline for member actions
@@ -309,10 +318,10 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         id: other_user.id,
         name: other_user.user_name
       },
-      my_credit_limit: trustline.credit_limit_for(current_user),
-      their_credit_limit: trustline.credit_limit_for(other_user),
-      my_available_credit: trustline.available_credit_for(current_user),
-      current_balance: trustline.balance_for(current_user),
+      my_credit_limit: trustline.credit_limit_for(current_user).to_f,
+      their_credit_limit: trustline.credit_limit_for(other_user).to_f,
+      my_available_credit: trustline.available_credit_for(current_user).to_f,
+      current_balance: trustline.balance_for(current_user).to_f,
       is_active: trustline.is_active,
       established_date: trustline.established_date,
       last_activity: trustline.last_activity,
@@ -326,11 +335,11 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   def serialize_transaction(transaction)
     {
       id: transaction.id,
-      amount: transaction.amount,
+      amount: transaction.amount.to_f,
       description: transaction.description,
       transaction_type: transaction.transaction_type,
       created_at: transaction.created_at,
-      balance_after: transaction.balance_after,
+      balance_after: transaction.balance_after.to_f,
       is_reversed: transaction.is_reversed
     }
   end
