@@ -155,10 +155,17 @@ class Order < ApplicationRecord
 
   private
 
+  # The actual dollar amount owed — sum of item request prices.
+  # order_total stores quantity (legacy), not dollar amount.
+  def settlement_amount
+    self.item_requests.sum(:price)
+  end
+
   # Ensure a trustline exists between the two parties with enough credit,
   # then execute the payment. Both parties agreed on credit so the limit
   # should auto-increase if needed — the agreement IS the authorization.
   def execute_credit_payment!
+    amount = settlement_amount
     from_user = User.find(self.user_id)
     to_user = User.find(self.friend_id)
 
@@ -167,15 +174,15 @@ class Order < ApplicationRecord
       trustline = Trustline.create!(
         user_a: from_user,
         user_b: to_user,
-        credit_limit_a_to_b: self.order_total,
+        credit_limit_a_to_b: amount,
         credit_limit_b_to_a: 0,
         current_balance: 0,
         is_active: true
       )
     else
       available = trustline.available_credit_for(from_user)
-      if available < self.order_total
-        shortfall = self.order_total - available
+      if available < amount
+        shortfall = amount - available
         if from_user.id == trustline.user_a_id
           trustline.update!(credit_limit_a_to_b: trustline.credit_limit_a_to_b + shortfall)
         else
@@ -186,7 +193,7 @@ class Order < ApplicationRecord
 
     Trustline.execute_payment_path(
       [from_user, to_user],
-      self.order_total,
+      amount,
       description: "Settlement for #{self.order_label}"
     )
   end

@@ -19,7 +19,7 @@
 #   4. GET /summary - Verify updated balances
 
 class Api::V1::TrustlinesController < Api::V1::ApiController
-  before_action :authenticate_user!
+  # Auth is inherited from ApiController (before_action :authenticate!)
   before_action :set_trustline, only: [:show, :update, :destroy]
   before_action :set_other_user, only: [:create]
   
