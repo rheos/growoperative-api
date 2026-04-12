@@ -18,8 +18,8 @@ module Api::V1
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
-          ((request_contracts.inventory_id=#{params[:item_id]} AND item_requests.status < #{params[:include_completed] == "true" ? 3 : 2})
-          OR ((inventories.ref_id=#{params[:item_id]} OR request_contracts.inventory_id=#{params[:item_id]}) AND item_requests.status = 4))
+          (request_contracts.inventory_id=#{params[:item_id]} OR inventories.ref_id=#{params[:item_id]}) AND
+          (item_requests.status < #{params[:include_completed] == "true" ? 3 : 2} OR item_requests.status = 4)
         ")
         .uniq
       res = {}

@@ -53,9 +53,7 @@ module Api::V1
 				end
 				@invitation.status = 0
 				if @invitation.save!
-				render json: {
-					invitation_code: @invitation.invitation_code
-				}, status: 200
+				render json: @invitation, status: 200
 				else
 					render json: @invitation.errors, status: 422
 				end
