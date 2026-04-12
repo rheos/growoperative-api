@@ -6,7 +6,7 @@ module Api::V1
 		# url : v1/invitations
 		# method : GET
 		def index
-			@invitations = current_user.invitations.joins('LEFT JOIN users ON users.id = invitations.accepted_id').select("invitations.*, users.nickname").to_a
+			@invitations = current_user.invitations.joins('LEFT JOIN users ON users.id = invitations.accepted_id').select("invitations.*, COALESCE(users.nickname, users.user_name) AS accepted_user_name").to_a
 			
 			@invitations.each do |invitation|
 				if invitation.accepted_id
