@@ -194,7 +194,8 @@ class Order < ApplicationRecord
     Trustline.execute_payment_path(
       [from_user, to_user],
       amount,
-      description: "Settlement for #{self.order_label}"
+      description: "Settlement for #{self.order_label}",
+      order: self
     )
   end
 end

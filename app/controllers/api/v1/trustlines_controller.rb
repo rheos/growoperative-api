@@ -125,6 +125,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       net_credit_position: current_user.net_credit_position.to_f,
       available_credit: current_user.available_credit_total.to_f,
       recent_transactions: current_user.initiated_trustline_transactions
+                                      .includes(:initiated_by, :order)
                                       .recent
                                       .limit(5)
                                       .map { |tx| serialize_transaction(tx) }
@@ -274,7 +275,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # GET /api/v1/trustlines/:id/transactions
   def transactions
     @trustline = current_user.trustlines.find(params[:id])
-    transactions = @trustline.trustline_transactions.order(created_at: :desc)
+    transactions = @trustline.trustline_transactions
+                              .includes(:initiated_by, :order)
+                              .order(created_at: :desc)
     render json: transactions.map { |tx| serialize_transaction(tx) }
   rescue ActiveRecord::RecordNotFound
     render json: { errors: ['Trustline not found'] }, status: :not_found
@@ -340,7 +343,13 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       transaction_type: transaction.transaction_type,
       created_at: transaction.created_at,
       balance_after: transaction.balance_after.to_f,
-      is_reversed: transaction.is_reversed
+      is_reversed: transaction.is_reversed,
+      initiated_by_id: transaction.initiated_by_id,
+      initiated_by_name: transaction.initiated_by&.user_name,
+      order_id: transaction.order_id,
+      order_label: transaction.order&.order_label,
+      originating_request_id: transaction.originating_request_id,
+      path_info: transaction.path_info
     }
   end
 end 
