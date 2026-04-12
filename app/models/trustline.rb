@@ -237,7 +237,7 @@ class Trustline < ApplicationRecord
   # @param originating_request [ItemRequest] - Optional item request
   # @return [Boolean] - Success status
   # @raise [StandardError] - If path is invalid or any payment fails
-  def self.execute_payment_path(path, amount, description: nil, originating_request: nil)
+  def self.execute_payment_path(path, amount, description: nil, originating_request: nil, order: nil)
     raise ArgumentError, "Path must have at least 2 users" if path.length < 2
     
     transaction do
@@ -247,11 +247,12 @@ class Trustline < ApplicationRecord
         raise "No trustline found between #{from_user.user_name} and #{to_user.user_name}" unless trustline
         
         trustline.process_payment!(
-          amount, 
-          from_user, 
-          to_user, 
+          amount,
+          from_user,
+          to_user,
           description: description,
-          originating_request: originating_request
+          originating_request: originating_request,
+          order: order
         )
       end
     end
