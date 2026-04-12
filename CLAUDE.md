@@ -92,6 +92,20 @@ docker-compose exec backend rails generate migration AddFieldToModel field:type
 docker-compose exec backend rails db:migrate
 ```
 
+### Dev Data Snapshots
+
+MySQL dumps live in `db/snapshots/`. Used to save/restore a known-good dev database state with realistic test data (users, items, requests, orders).
+
+```bash
+# Save
+docker-compose exec db sh -c 'mysqldump -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' > db/snapshots/dev_preshipment.sql
+
+# Restore
+docker-compose exec db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < db/snapshots/dev_preshipment.sql
+```
+
+Current snapshot: `dev_preshipment.sql` — full demo network with requests and orders, pre-shipment state (no credit transactions yet).
+
 ## Deployment
 
 - **Server:** AWS Lightsail `growoperative-rails` (`35.163.185.37`)

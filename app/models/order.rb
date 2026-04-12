@@ -155,10 +155,12 @@ class Order < ApplicationRecord
 
   private
 
-  # The actual dollar amount owed — sum of item request prices.
-  # order_total stores quantity (legacy), not dollar amount.
+  # The actual dollar amount owed — sum of (price × quantity) for each item.
+  # order_total stores quantity count (legacy), not dollar amount.
   def settlement_amount
-    self.item_requests.sum(:price)
+    self.item_requests
+      .joins(:request_contract)
+      .sum('item_requests.price * request_contracts.quantity')
   end
 
   # Ensure a trustline exists between the two parties with enough credit,
