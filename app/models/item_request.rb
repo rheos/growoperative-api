@@ -111,10 +111,10 @@ class ItemRequest < ApplicationRecord
       if !order
         order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
         order.update(order_label: 'Order ' + order.id.to_s)
-        next_request.update(order_id: order.id)
       else
         order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
       end
+      next_request.update(order_id: order.id)
     end
 
     # Update current contract step and finish contract, if all steps are done
