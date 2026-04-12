@@ -108,6 +108,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "shipped_at"
     t.datetime "signed_at"
     t.integer "order_id"
+    t.text "cancellation_reason"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
