@@ -198,6 +198,8 @@ class DemoResetService
         name: i['name'],
         producer_id: @name_to_id[i['producer_user_name']],
       )
+      # Skip after_create :add_inventory — snapshot includes its own inventories
+      item.with_inventory = true
       # Force original ID so CarrierWave S3 paths match existing files
       item.id = i['original_id'] if i['original_id']
       item.save!
