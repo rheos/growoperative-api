@@ -245,6 +245,9 @@ module Api::V1
         return
       end
 
+      # Save cancellation reason if provided
+      @request.update(cancellation_reason: params[:reason]) if params[:reason].present?
+
       if @request.request_contract.completed? || @request.request_contract.cancelled?
         render json: { message: 'Request chain is not pending already' }, status: 406
         return
