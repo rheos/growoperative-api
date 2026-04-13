@@ -68,19 +68,15 @@ class ItemRequest < ApplicationRecord
         return { message: 'Please, choose order to assign' } if order.length > 1
         order = order[0]
         if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
+          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
           order.update(order_label: 'Order ' + order.id.to_s)
-        else
-          order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
         end
         self.update(order_id: order.id)
       else
         order = Order.find_by(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
         if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0, order_total: self.request_contract.quantity)
+          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
           order.update(order_label: 'Order ' + order.id.to_s)
-        else
-          order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
         end
         self.update(order_id: order.id)
         self.request_contract.update(status: :accepted) if pending_size == 0
@@ -92,7 +88,6 @@ class ItemRequest < ApplicationRecord
   def ship (multi = false)
     self.shipped_at = DateTime.now
     self.status = :completed
-    # self.order.update(order_total: self.order.order_total - self.request_contract.quantity) if !multi
     # self.order_id = nil if !multi
     self.save!
   end
@@ -111,8 +106,6 @@ class ItemRequest < ApplicationRecord
       if !order
         order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
         order.update(order_label: 'Order ' + order.id.to_s)
-      else
-        order.update(order_total: (order.order_total || 0) + self.request_contract.quantity)
       end
       next_request.update(order_id: order.id)
     end

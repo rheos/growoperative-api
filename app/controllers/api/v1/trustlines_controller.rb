@@ -180,6 +180,99 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
+  # === IMMEDIATE BALANCE OPERATIONS ===
+
+  # Records a self-declared debt ("I owe them X")
+  # POST /api/v1/trustlines/:id/record_debt
+  #
+  # The current user voluntarily takes on liability. No confirmation needed
+  # from the other party since this benefits them.
+  #
+  # Parameters:
+  # - amount: Debt amount (must be positive)
+  # - description: Optional description
+  #
+  # Returns: Updated trustline with new balance
+  def record_debt
+    @trustline = current_user.trustlines.find(params[:id])
+    amount = params[:amount].to_f
+    to_user = @trustline.other_user(current_user)
+
+    if amount <= 0
+      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
+    end
+
+    unless @trustline.can_handle_payment?(amount, current_user)
+      return render json: { errors: ['Amount exceeds available credit'] }, status: :unprocessable_entity
+    end
+
+    begin
+      new_balance = @trustline.process_payment!(
+        amount,
+        current_user,
+        to_user,
+        description: params[:description] || "Debt recorded by #{current_user.user_name}"
+      )
+
+      # Mark as adjustment so audit trail distinguishes from order settlements
+      @trustline.trustline_transactions.last.update!(transaction_type: 'adjustment')
+
+      render json: {
+        message: 'Debt recorded',
+        new_balance: new_balance,
+        trustline: serialize_trustline(@trustline.reload)
+      }
+    rescue => e
+      render json: { errors: [e.message] }, status: :unprocessable_entity
+    end
+  end
+
+  # Records a receipt acknowledgment ("I received X from them")
+  # POST /api/v1/trustlines/:id/record_receipt
+  #
+  # The current user acknowledges receiving value from the other party,
+  # reducing the other party's debt. No confirmation needed since this
+  # benefits the other party.
+  #
+  # Parameters:
+  # - amount: Receipt amount (must be positive)
+  # - description: Optional description
+  #
+  # Returns: Updated trustline with new balance
+  def record_receipt
+    @trustline = current_user.trustlines.find(params[:id])
+    amount = params[:amount].to_f
+    from_user = @trustline.other_user(current_user)
+
+    if amount <= 0
+      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
+    end
+
+    unless @trustline.can_handle_payment?(amount, from_user)
+      return render json: { errors: ['Amount exceeds available credit'] }, status: :unprocessable_entity
+    end
+
+    begin
+      new_balance = @trustline.process_payment!(
+        amount,
+        from_user,
+        current_user,
+        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}"
+      )
+
+      # Mark as adjustment so audit trail distinguishes from order settlements
+      @trustline.trustline_transactions.last.update!(transaction_type: 'adjustment')
+
+      render json: {
+        message: 'Receipt recorded',
+        new_balance: new_balance,
+        trustline: serialize_trustline(@trustline.reload)
+      }
+    rescue => e
+      render json: { errors: [e.message] }, status: :unprocessable_entity
+    end
+  end
+
   # === NETWORK PAYMENT ROUTING ===
   
   # Finds a payment path through the trustline network

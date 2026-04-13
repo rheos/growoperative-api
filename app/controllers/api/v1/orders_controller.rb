@@ -2,6 +2,20 @@ module Api::V1
   class OrdersController < ApiController
     # before_action :authenticate_user!
 
+    def index
+      orders = Order.includes(:item_requests)
+        .where(user_id: current_user.id.to_s)
+        .or(Order.includes(:item_requests).where(friend_id: current_user.id.to_s))
+        .order(created_at: :desc)
+
+      if params[:status].present?
+        statuses = params[:status].split(',').map(&:strip)
+        orders = orders.where(order_status: statuses)
+      end
+
+      render json: { data: orders.map { |o| serialize_order_summary(o) } }, status: 200
+    end
+
     def show
       order = Order.includes(item_requests: { request_contract: { inventory: { item: :item_unit } } }).find_by(id: params[:id])
       render :json=> {error: 'Unable to find order'}, :status=>422 if !order
@@ -98,8 +112,7 @@ module Api::V1
         order_status: order.order_status,
         settlement_type: order.settlement_type,
         settlement_status: order.settlement_status,
-        order_total: order.order_total,
-        settlement_amount: order.item_requests.sum(:price).to_f,
+        settlement_amount: serialized_settlement_amount(order),
         item_request_count: order.item_requests.count,
         shipped_on: order.shipped_on,
         signed_on: order.signed_on,
@@ -125,6 +138,42 @@ module Api::V1
           }
         end
       }
+    end
+
+    def serialize_order_summary(order)
+      buyer = User.find_by(id: order.user_id)
+      seller = User.find_by(id: order.friend_id)
+
+      {
+        id: order.id,
+        order_label: order.order_label,
+        user_id: order.user_id,
+        friend_id: order.friend_id,
+        buyer_name: buyer&.user_name || 'Unknown',
+        seller_name: seller&.user_name || 'Unknown',
+        order_status: order.order_status,
+        settlement_type: order.settlement_type,
+        settlement_status: order.settlement_status,
+        settlement_amount: serialized_settlement_amount(order),
+        item_request_count: order.item_requests.size,
+        shipped_on: order.shipped_on,
+        signed_on: order.signed_on,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+      }
+    end
+
+    def serialized_settlement_amount(order)
+      settled_transaction = TrustlineTransaction.where(order_id: order.id)
+        .where.not(transaction_type: 'reversal')
+        .order(created_at: :desc)
+        .first
+      return settled_transaction.amount.to_f if settled_transaction
+
+      order.item_requests
+        .joins(:request_contract)
+        .sum('item_requests.price * request_contracts.quantity')
+        .to_f
     end
   end
 end

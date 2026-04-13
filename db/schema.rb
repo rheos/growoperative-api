@@ -154,7 +154,6 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "user_id"
     t.string "friend_id"
     t.string "order_label"
-    t.decimal "order_total", precision: 10
     t.integer "order_status"
     t.datetime "estimated_date"
     t.datetime "shipped_on"
@@ -172,6 +171,24 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "cash_amount", precision: 10, scale: 2
     t.integer "cash_paid_by"
     t.integer "cash_confirmed_by"
+  end
+
+  create_table "pending_payments", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "from_user_id"
+    t.bigint "to_user_id"
+    t.bigint "trustline_id"
+    t.decimal "amount", precision: 10, scale: 2, null: false
+    t.text "description"
+    t.integer "status", default: 0, null: false
+    t.text "rejected_reason"
+    t.datetime "confirmed_at"
+    t.datetime "resolved_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["from_user_id"], name: "index_pending_payments_on_from_user_id"
+    t.index ["status"], name: "index_pending_payments_on_status"
+    t.index ["to_user_id"], name: "index_pending_payments_on_to_user_id"
+    t.index ["trustline_id"], name: "index_pending_payments_on_trustline_id"
   end
 
   create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
@@ -373,6 +390,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "items", "item_names"
   add_foreign_key "items", "item_units"
   add_foreign_key "items", "users"
+  add_foreign_key "pending_payments", "trustlines"
+  add_foreign_key "pending_payments", "users", column: "from_user_id"
+  add_foreign_key "pending_payments", "users", column: "to_user_id"
   add_foreign_key "relationships", "users"
   add_foreign_key "request_contracts", "items"
   add_foreign_key "request_contracts", "users"

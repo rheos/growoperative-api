@@ -1,6 +1,16 @@
 class Api::V1::DebugController < Api::V1::ApiController
   skip_before_action :authenticate!
 
+  private def settlement_amount_for(order)
+    settled_transaction = TrustlineTransaction.where(order_id: order.id)
+      .where.not(transaction_type: 'reversal')
+      .order(created_at: :desc)
+      .first
+    return settled_transaction.amount.to_f if settled_transaction
+
+    order.send(:settlement_amount).to_f
+  end
+
   # GET /v1/debug/order/:id
   def order
     o = Order.find(params[:id])
@@ -38,7 +48,7 @@ class Api::V1::DebugController < Api::V1::ApiController
         id: o.id,
         label: o.order_label,
         order_status: o.order_status,
-        order_total: o.order_total,
+        settlement_amount: settlement_amount_for(o),
         buyer: buyer.user_name,
         buyer_id: o.user_id,
         seller: seller.user_name,
@@ -117,11 +127,11 @@ class Api::V1::DebugController < Api::V1::ApiController
       user: { id: u.id, user_name: u.user_name, email: u.email },
       orders_as_buyer: orders_as_buyer.map { |o|
         { id: o.id, label: o.order_label, status: o.order_status, counterparty: User.find(o.friend_id).user_name,
-          settlement_status: o.settlement_status, total: o.order_total, created_at: o.created_at }
+          settlement_status: o.settlement_status, settlement_amount: settlement_amount_for(o), created_at: o.created_at }
       },
       orders_as_seller: orders_as_seller.map { |o|
         { id: o.id, label: o.order_label, status: o.order_status, counterparty: User.find(o.user_id).user_name,
-          settlement_status: o.settlement_status, total: o.order_total, created_at: o.created_at }
+          settlement_status: o.settlement_status, settlement_amount: settlement_amount_for(o), created_at: o.created_at }
       },
       recent_item_requests: ItemRequest.where('user_id = ? OR friend_id = ?', u.id, u.id)
         .order(created_at: :desc).limit(10).map { |ir|
