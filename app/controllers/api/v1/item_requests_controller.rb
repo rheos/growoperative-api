@@ -176,6 +176,17 @@ module Api::V1
         request.save!
       end
 
+      # Notify each recipient in the request chain (friend_id = person who must act)
+      chain_requests = request_contract.item_requests.includes(:friend)
+      recipients = chain_requests.map(&:friend).compact
+      Notifications.publish!(
+        event:      :request_created,
+        actor:      current_user,
+        recipients: recipients,
+        resource:   chain_requests.first,
+        metadata:   { request_contract_id: request_contract.id, quantity: request_contract.quantity.to_f }
+      )
+
       render json: { message: 'Item has been requested successfully' }, status: 200
     end
 

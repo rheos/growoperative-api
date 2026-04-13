@@ -27,6 +27,7 @@ class User < ApplicationRecord
   has_many   :user_relationship_request_prices, dependent: :destroy
   has_many   :reviews, dependent: :destroy
   has_many   :category_sizes, dependent: :destroy
+  has_many   :notifications, foreign_key: :recipient_id, dependent: :destroy
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'
   
   # === MUTUAL CREDIT SYSTEM ASSOCIATIONS ===
