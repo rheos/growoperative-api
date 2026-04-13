@@ -93,6 +93,11 @@ Rails.application.routes.draw do
       get  'demo/snapshots' => 'demo#snapshots'
       post 'demo/snapshot' => 'demo#save_snapshot'
 
+      # Debug query endpoints (no auth required)
+      get 'debug/order/:id' => 'debug#order'
+      get 'debug/requests' => 'debug#requests'
+      get 'debug/user/:username' => 'debug#user'
+
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'
