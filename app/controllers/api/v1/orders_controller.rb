@@ -2,6 +2,19 @@ module Api::V1
   class OrdersController < ApiController
     # before_action :authenticate_user!
 
+    def show
+      order = Order.includes(item_requests: { request_contract: { inventory: { item: :item_unit } } }).find_by(id: params[:id])
+      render :json=> {error: 'Unable to find order'}, :status=>422 if !order
+      return if !order
+
+      unless current_user.id.to_s == order.user_id.to_s || current_user.id.to_s == order.friend_id.to_s || current_user.admin?
+        render :json=> {error: 'Unauthorized'}, :status=>403
+        return
+      end
+
+      render json: { data: serialize_order_detail(order) }, status: 200
+    end
+
     def create
       # binding.pry
       if params[:order].present? && params[:order][:acceptable_item].present?
@@ -69,6 +82,49 @@ module Api::V1
 
     def order_params
       params.require(:order).permit(:order_label, :estimated_date, :estimated_time, :location, :note, :user_id, :friend_id)
+    end
+
+    def serialize_order_detail(order)
+      buyer = User.find_by(id: order.user_id)
+      seller = User.find_by(id: order.friend_id)
+
+      {
+        id: order.id,
+        order_label: order.order_label,
+        user_id: order.user_id,
+        friend_id: order.friend_id,
+        buyer_name: buyer&.user_name || 'Unknown',
+        seller_name: seller&.user_name || 'Unknown',
+        order_status: order.order_status,
+        settlement_type: order.settlement_type,
+        settlement_status: order.settlement_status,
+        order_total: order.order_total,
+        settlement_amount: order.item_requests.sum(:price).to_f,
+        item_request_count: order.item_requests.count,
+        shipped_on: order.shipped_on,
+        signed_on: order.signed_on,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        items: order.item_requests.map do |request|
+          contract = request.request_contract
+          inventory = contract&.inventory
+          item = inventory&.item
+          {
+            request_id: request.id,
+            inventory_id: inventory&.id,
+            name: item&.name || 'Item',
+            quantity: contract&.quantity.to_f,
+            unit_name: item&.item_unit&.item_symbol || '',
+            price: request.price.to_f,
+            status: request.status,
+            buyer_name: User.find_by(id: request.user_id)&.user_name || 'Unknown',
+            seller_name: User.find_by(id: request.friend_id)&.user_name || 'Unknown',
+            accepted_at: request.accepted_at,
+            shipped_at: request.shipped_at,
+            signed_at: request.signed_at,
+          }
+        end
+      }
     end
   end
 end
