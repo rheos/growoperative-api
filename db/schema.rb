@@ -150,6 +150,26 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["jti"], name: "index_jwt_blacklist_on_jti"
   end
 
+  create_table "notifications", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "recipient_id", null: false
+    t.bigint "actor_id"
+    t.string "notification_type", null: false
+    t.text "message", null: false
+    t.string "actor_name"
+    t.string "actor_avatar_url"
+    t.string "target_type"
+    t.bigint "target_id"
+    t.string "target_screen"
+    t.json "metadata"
+    t.boolean "read", default: false, null: false
+    t.datetime "read_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["actor_id"], name: "fk_rails_06a39bb8cc"
+    t.index ["recipient_id", "created_at"], name: "index_notifications_timeline"
+    t.index ["recipient_id", "read", "created_at"], name: "index_notifications_inbox"
+  end
+
   create_table "orders", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "user_id"
     t.string "friend_id"
@@ -390,6 +410,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "items", "item_names"
   add_foreign_key "items", "item_units"
   add_foreign_key "items", "users"
+  add_foreign_key "notifications", "users", column: "actor_id"
+  add_foreign_key "notifications", "users", column: "recipient_id"
   add_foreign_key "pending_payments", "trustlines"
   add_foreign_key "pending_payments", "users", column: "from_user_id"
   add_foreign_key "pending_payments", "users", column: "to_user_id"

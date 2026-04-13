@@ -73,6 +73,17 @@ Rails.application.routes.draw do
       resources :user_relationship_request_prices,    only: [:create]
       resources :orders
       
+      # Notifications
+      resources :notifications, only: [:index] do
+        collection do
+          get  'unread_count'
+          patch 'read_all'
+        end
+        member do
+          patch 'read'
+        end
+      end
+
       # Mutual Credit / Trustlines System
       resources :trustlines do
         member do

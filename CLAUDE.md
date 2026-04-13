@@ -7,23 +7,29 @@ API server for Growoperative. Serves both the current web frontend and the new R
 Run from `railsbackend/` directory:
 
 ```bash
-docker-compose up                             # Start all services
-docker-compose exec backend bash              # Shell access
-docker-compose exec backend rails db:migrate  # Run migrations
-docker-compose exec backend rails db:seed     # Seed database
-docker-compose exec backend bundle exec rspec # Run tests
-docker-compose logs backend                   # View logs
+docker-compose up                                                  # Start all services (db, backend, frontend)
+docker-compose exec backend bash                                   # Shell access
+docker-compose exec backend rails db:migrate                       # Run migrations
+docker-compose exec backend rails db:seed                          # Seed database
+docker-compose exec -e RAILS_ENV=test backend bundle exec rspec    # Run tests
+docker-compose logs backend                                        # View logs
 ```
 
+**CRITICAL: Always pass `-e RAILS_ENV=test` when running rspec.** The Docker container sets `RAILS_ENV=development` by default, and `rails_helper.rb` uses `||=` which won't override it. Without this flag, DatabaseCleaner will **wipe the development database**.
+
 **Never run local rails/bundle commands.**
+
+Port mapping: Rails container listens on 8080 internally, exposed as `localhost:3001`.
 
 ## Tech Stack
 
 - Rails 5.2 API mode
-- MySQL 8.0
+- MySQL 5.7
+- Puma (clustered, `WEB_CONCURRENCY` workers)
 - JWT authentication (HS256, 1-year expiry)
-- CarrierWave + S3 for file uploads
-- Devise for user management
+- CarrierWave + fog-aws for S3 uploads (rmagick for image processing)
+- Devise (username-based auth) + devise-jwt + devise_invitable
+- fast_jsonapi for serialization
 - RSpec + Factory Bot for testing
 
 ## API
@@ -31,26 +37,68 @@ docker-compose logs backend                   # View logs
 - **Base path:** `/api/v1/` (internally), served as `/v1/` (externally)
 - **Auth:** JWT in HTTP-only cookie (`jwt`) or `Authorization: Bearer <token>` header
 - **Auth key:** `user_name` (not email — email is optional)
-- **CORS origins:** `localhost:3000`, `10.0.1.6:3000`, `beta.growoperative.app`
+- **CORS origins:** `ENV['FRONTEND_URL']` (default `localhost:3000`), `localhost:8081`, `localhost:19006`, `10.0.1.6:3000`, `beta.growoperative.app`, `legacy.growoperative.app`
+- **Credentials:** enabled (cookies sent cross-origin)
 
 ## Key Models
 
 | Model | Purpose |
 |-------|---------|
 | User | Core entity, has roles via UserGroup, trustlines, items, relationships |
+| UserGroup | Role assignments (admin, producer, broker, wholesaler, retailer, consumer, demo, superuser) |
 | Item | Product listing with category, grade, unit, images |
-| ItemRequest | Request/reserve/ship workflow between users |
-| Order | Groups multiple item requests |
-| Relationship | Social connection between users with pricing |
-| Invitation | Invite codes for new user registration |
+| Inventory | Per-user copy of item; statuses: unavailable/available/reserved/in_order. `ref_id` links reserved copies back to original |
+| ItemRequest | One hop in a supply chain step; statuses: pending → reserved → shipped → signed |
+| RequestContract | Multi-hop supply chain path; has `steps` count and `current_step` pointer. Links ItemRequests together |
+| Order | Groups item requests between same buyer-seller pair; statuses: pending → shipped → signed |
+| Relationship | Directional social connection between users with pricing state |
+| Invitation | Invite codes with chain depth tracking |
 | Category | Product classification |
 | Grade | Quality level (A, B, C) |
-| Trustline | Bilateral credit relationship (user_a, user_b, limits, balance) |
-| TrustlineTransaction | Audit trail for all credit movements |
+| Trustline | Bilateral credit (user_a_id < user_b_id enforced). Has two independent limits + balance |
+| TrustlineTransaction | Audit trail for all credit movements (never deleted; reversals create counteracting records) |
+| PendingPayment | App-level payment confirmation — recipient must confirm before trustline executes |
 | UserCategoryPrice | Per-user category pricing overrides |
-| UserRelationshipPrice | Per-relationship pricing |
+| UserRelationshipPrice | Per-relationship pricing (includes `receiving_price` for reverse direction) |
 | CategorySize | Pack size limits per user per category |
-| JWTBlacklist | Revoked token storage |
+| GlobalSetting | System-wide config (e.g., ChainLimit for max payment hops) |
+| JWTBlacklist | Revoked token storage (jti-based) |
+
+## Business Logic
+
+### Pricing Hierarchy
+
+Evaluated in order: **ItemPrice** (base) → **UserCategoryPrice** (user-level override per category) → **UserRelationshipPrice** (relationship-specific override). Pricing logic lives in helpers (`get_relation_price`), not controllers.
+
+### Multi-Hop Item Requests
+
+When a buyer requests an item, the system traces a path through relationships (BFS, max depth configurable via GlobalSetting). For each hop, a separate ItemRequest is created under a shared RequestContract. Path is calculated at request time and stored — not recalculated during acceptance.
+
+On acceptance: a reserved Inventory is created (with `ref_id` pointing to original), quantity is decremented from the source, and an Order is auto-created/linked for that buyer-seller pair.
+
+### Trustline Balance Math
+
+- Balance is from user_a's perspective: positive = A owes B, negative = B owes A
+- A pays B: `balance += amount`; B pays A: `balance -= amount`
+- Available credit: `limit - max(balance_toward_creditor, 0)`
+
+### Order Settlement
+
+Settlement is negotiated, not automatic:
+1. Shipper proposes settlement type (cash or credit)
+2. Receiver agrees, offers cash, or counters with credit
+3. Cash: payer records amount → payee confirms receipt → settled
+4. Credit: both agree → `execute_credit_payment!` runs atomically (can auto-expand trustline limits if needed)
+
+### Demo System
+
+- Passwordless login for demo users via `POST /v1/demo/login`
+- `DemoResetService` clears transactional data and restores from snapshot JSON
+- S3 images are NOT deleted during demo resets (shared across resets via `skip_callback`)
+- `GlobalSetting.demo_setup_enabled` gates one-time setup endpoint
+- Core demo usernames are hardcoded in the DemoController
+
+Rake tasks: `demo:mark_users`, `demo:snapshot`, `demo:reset`, `user:update_password`
 
 ## Authentication
 
@@ -59,11 +107,14 @@ docker-compose logs backend                   # View logs
 - Algorithm: HS256 with `SECRET_KEY_BASE`
 - Payload: `{ iat, exp (1 year), sub: { user_id }, jti (UUID) }`
 - Token set in signed httpOnly cookie AND returned in response body
+- Dev: `SameSite=None, Secure=false` (needed for cross-origin localhost)
+- Prod: cookie scoped via `COOKIE_DOMAIN` env var
 
 ### JWT Validation (`lib/jwt/jwt_decoding_service.rb`)
 
 - Checks signature, expiration, algorithm
 - `current_user` reads from cookie first, falls back to Authorization header
+- Has double-nesting handling for JWT subject (historical payload migration)
 
 ### Session Controller (`app/controllers/api/v1/sessions_controller.rb`)
 
@@ -74,7 +125,29 @@ docker-compose logs backend                   # View logs
 ### Auth Middleware (`app/controllers/api/v1/api_controller.rb`)
 
 - `before_action :authenticate!` on all actions by default
-- Skipped on: sessions#create, registrations#create
+- Skipped on: sessions#create, registrations#create, home#index/verify, demo#login, debug#*, resources#*
+- No self-service password reset — `ChangePasswordsController` is admin-only
+
+## Key Controllers (Non-Obvious Patterns)
+
+| Controller | Notes |
+|---|---|
+| ItemsController | Complex `index` with multi-hop relationship traversal (`range_degree` 0-3); recursive `all_items()` for network pricing |
+| ItemRequestsController | BFS path-finding at request time (MAX_DEPTH=5); creates RequestContract + ItemRequest chain |
+| TrustlinesController | Perspective-aware serialization (flips balance/limits based on which user is viewing) |
+| PendingPaymentsController | Authorization enforces sender-or-receiver only |
+| OrdersController | Settlement negotiation via `apply_action` state machine |
+| DebugController | **Unauthenticated** — exposes order/request/user inspection queries |
+| ResourcesController | Serves files from `/private/` directory |
+| GlobalSettingsController | Admin-only; currently manages ChainLimit setting |
+
+## Domain Constraints
+
+- Demo users cannot have trustlines or relationships with non-demo users (model-level validation)
+- Users cannot request their own items
+- Consumer/retailer roles are filtered out of supply chain path calculations
+- Invitation system tracks chain depth to prevent infinite user trees
+- Inventory unit conversion: requests can specify different units than inventory, system converts via ItemUnit equivalence
 
 ## Common Tasks
 
@@ -109,6 +182,19 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
 ## Deployment
 
 - **Server:** AWS Lightsail `growoperative-rails` (`35.163.185.37`)
-- **Deploy:** GitHub Actions → SSH → git pull → Docker rebuild
+- **Deploy:** GitHub Actions on push to `master` → SSH → `git pull` → `docker compose build` → `docker compose up -d` → nginx restart
+- **No tests in CI pipeline** — deploy goes straight to production
+- **Production Docker:** `docker-compose.prod.yml` (backend only, no MySQL — connects to Lightsail DB at `172.26.13.168`)
+- **Nginx:** reverse proxy with Certbot SSL, serves `api.growoperative.app` + `beta.growoperative.app` + `growoperative.app`
 - **URL:** `https://api.growoperative.app`
-- **SSL:** Certbot
+
+## Key Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `SECRET_KEY_BASE` | JWT signing + Rails secrets (changing it invalidates all tokens) |
+| `COOKIE_DOMAIN` | JWT cookie scope (`localhost` dev, `.growoperative.app` prod) |
+| `FRONTEND_URL` | Primary CORS origin |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` | CarrierWave S3 storage |
+| `DATABASE_HOST`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` | MySQL connection |
+| `SEED_DATABASE` | If `"true"`, auto-seeds DB on container startup (dev only) |
