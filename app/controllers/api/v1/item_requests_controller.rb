@@ -387,10 +387,8 @@ module Api::V1
       # Find or create order for this user relationship (same logic as accept_request)
       order = Order.find_by(user_id: user.id, friend_id: current_user.id, order_status: 0)
       if !order
-        order = Order.create(user_id: user.id, friend_id: current_user.id, order_status: 0, order_total: request_contract.quantity)
+        order = Order.create(user_id: user.id, friend_id: current_user.id, order_status: 0)
         order.update(order_label: 'Order ' + order.id.to_s)
-      else
-        order.update(order_total: (order.order_total || 0) + request_contract.quantity)
       end
       request.update(order_id: order.id)
 

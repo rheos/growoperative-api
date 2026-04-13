@@ -441,7 +441,7 @@ CREATE TABLE `orders` (
   `user_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `friend_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `order_label` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `order_total` decimal(10,0) DEFAULT NULL,
+  `order_total` decimal(10,2) DEFAULT NULL,
   `order_status` int(11) DEFAULT NULL,
   `estimated_date` datetime DEFAULT NULL,
   `shipped_on` datetime DEFAULT NULL,

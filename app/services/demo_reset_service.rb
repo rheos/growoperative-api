@@ -245,7 +245,6 @@ class DemoResetService
         user_id: @name_to_id[o['user_name']],
         friend_id: @name_to_id[o['friend_user_name']],
         order_label: o['order_label'],
-        order_total: o['order_total'],
         order_status: o['order_status'],
       )
     end

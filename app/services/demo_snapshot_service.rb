@@ -252,7 +252,6 @@ class DemoSnapshotService
         user_name: id_to_name[o.user_id],
         friend_user_name: id_to_name[o.friend_id],
         order_label: o.order_label,
-        order_total: o.order_total.to_f,
         order_status: o.order_status,
       }
     end

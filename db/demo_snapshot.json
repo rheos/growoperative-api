@@ -1683,56 +1683,48 @@
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100110",
-      "order_total": 1.0,
       "order_status": "signed"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100111",
-      "order_total": 0.0,
       "order_status": "pending"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100112",
-      "order_total": 2.0,
       "order_status": "shipped"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100113",
-      "order_total": 1.0,
       "order_status": "signed"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100114",
-      "order_total": 1.0,
       "order_status": "signed"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100115",
-      "order_total": 3.0,
       "order_status": "signed"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100116",
-      "order_total": 4.0,
       "order_status": "pending"
     },
     {
       "user_name": null,
       "friend_user_name": null,
       "order_label": "Order 100117",
-      "order_total": 3.0,
       "order_status": "pending"
     }
   ],

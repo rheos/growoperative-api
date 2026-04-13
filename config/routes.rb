@@ -77,6 +77,8 @@ Rails.application.routes.draw do
       resources :trustlines do
         member do
           post 'payment'
+          post 'record_debt'
+          post 'record_receipt'
           get 'transactions'
         end
         collection do
@@ -92,6 +94,14 @@ Rails.application.routes.draw do
       post 'demo/setup' => 'demo#setup'
       get  'demo/snapshots' => 'demo#snapshots'
       post 'demo/snapshot' => 'demo#save_snapshot'
+
+      # Pending payments (app-level confirmation before trustline execution)
+      resources :pending_payments, only: [:index, :create, :destroy] do
+        member do
+          put 'confirm'
+          put 'reject'
+        end
+      end
 
       # Debug query endpoints (no auth required)
       get 'debug/order/:id' => 'debug#order'
