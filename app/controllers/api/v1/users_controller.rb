@@ -137,7 +137,7 @@ module Api::V1
 		def contact_list
 			relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
 
-			res = relationships.as_json(include: [{user: {include: [:user_groups]} }, {friend: {include: [:user_groups]} }, :user_relationship_prices])
+			res = relationships.as_json(include: [{user: {include: [:user_groups], methods: [:avatar_url]} }, {friend: {include: [:user_groups], methods: [:avatar_url]} }, :user_relationship_prices])
 			target_price = 0
 			if params[:target_inventory_id].present? && Inventory.find(params[:target_inventory_id]).item.user_id != current_user.id
 				res.each do |relation|
