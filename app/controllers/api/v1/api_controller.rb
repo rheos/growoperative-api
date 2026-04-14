@@ -64,14 +64,14 @@ class Api::V1::ApiController < ApplicationController
     token = JwtGenerationService.new(user_id: user.id).token
     time = 1.year.from_now
     
-    # For development, SameSite=None so cookies work cross-origin
-    # (e.g. localhost:8081 frontend → localhost:3001 backend)
+    # Dev: Lax is sufficient because localhost ports are same-site.
+    # None+Secure=false is rejected by modern browsers.
     if Rails.env.development?
       cookies.signed[:jwt] = {
         value: token,
         expires: time,
         httponly: true,
-        same_site: :none,
+        same_site: :lax,
         secure: false
       }
     else

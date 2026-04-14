@@ -22,6 +22,16 @@ class ImagesUploader < CarrierWave::Uploader::Base
   end
 
 
+  # Only allow image file types
+  def content_type_allowlist
+    /image\//
+  end
+
+  # Reject files larger than 10MB
+  def size_range
+    0..10.megabytes
+  end
+
   version :thumb500 do
     process :resize_to_fit => [300, 300]
   end
