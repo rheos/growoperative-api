@@ -1,41 +1,80 @@
+# Groups item_requests between the same buyer (user_id) and seller (friend_id).
+# Lifecycle: pending → shipped → signed, then settlement negotiation.
+#
+# INVARIANT: An order is atomic — it ships as a whole. Once any item_request
+# on the order is shipped/completed, no new items may be added. New items
+# for the same buyer-seller pair go on a fresh order.
 class Order < ApplicationRecord
   has_many :item_requests, primary_key: 'id', foreign_key: 'order_id', dependent: :destroy
   has_many :request_contracts, through: :item_requests
   has_many :inventories, through: :request_contracts
   enum order_status: [ :pending, :shipped, :signed ]
 
+  # Find or create a pending order suitable for new items.
+  # Skips any pending order that already has completed (shipped) requests,
+  # since those are effectively "done" even if the order-level status
+  # hasn't caught up. Used by ItemRequest#accept_request, #sign (chain
+  # cascading), and ItemRequestsController#reserve.
+  def self.find_or_create_pending(buyer_id, seller_id)
+    candidates = Order.where(user_id: buyer_id, friend_id: seller_id, order_status: 0)
+    order = candidates.find { |o| !o.item_requests.exists?(status: [:completed]) }
+    unless order
+      order = Order.create!(user_id: buyer_id, friend_id: seller_id, order_status: :pending)
+      order.update!(order_label: 'Order ' + order.id.to_s)
+    end
+    order
+  end
+
   def remove_request (id)
     # self.item_requests.find(id)
   end
 
+  # Central state machine for order actions. Called via PATCH /v1/orders/:id.
+  # Returns false on permission/guard failure.
   def apply_action (action, user_id)
     case action[:action_name]
+
+    # --- Shipping & receiving ---
+
     when 'sign'
+      # Only the buyer (user_id) can sign, and only after shipment
       return false if (user_id.to_s != self.user_id || self.order_status != "shipped")
       self.item_requests.each do |item_request|
         item_request.sign if !item_request.signed_at
       end
       self.update(signed_on: DateTime.now, order_status: :signed)
+
     when 'ship'
+      # Only the seller (friend_id) can ship; all contracts must be accepted
       return false if (user_id.to_s != self.friend_id || self.order_status == "shipped") || self.item_requests.find{|item_request| item_request.request_contract.status != "accepted"}
-      self.item_requests.each do |item_request|
-        item_request.ship if !item_request.shipped_at
+      # Transaction ensures item_requests and order status update atomically —
+      # if any item fails to ship, the order stays pending (no split state).
+      ActiveRecord::Base.transaction do
+        self.item_requests.each do |item_request|
+          item_request.ship if !item_request.shipped_at
+        end
+        attrs = { shipped_on: DateTime.now, order_status: :shipped }
+        if action[:settlement_type].present? && %w[cash credit].include?(action[:settlement_type])
+          attrs[:settlement_type] = action[:settlement_type]
+          attrs[:settlement_proposed_by] = user_id
+          attrs[:settlement_status] = 'proposed'
+        end
+        self.update!(attrs)
       end
-      attrs = { shipped_on: DateTime.now, order_status: :shipped }
-      # New app sends settlement preference with ship; old app sends nothing (both work)
-      if action[:settlement_type].present? && %w[cash credit].include?(action[:settlement_type])
-        attrs[:settlement_type] = action[:settlement_type]
-        attrs[:settlement_proposed_by] = user_id
-        attrs[:settlement_status] = 'proposed'
-      end
-      self.update(attrs)
+
+    # --- Item management ---
+
     when 'remove_item'
       item = self.item_requests.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]}")
       return false if !item
       item.update(order_id: nil)
       self.destroy if ItemRequest.where(order_id: self.id).count == 0
       true
+
     when 'add_item'
+      # Guard: only pending orders with no completed requests accept new items
+      return false unless self.order_status == 'pending'
+      return false if self.item_requests.exists?(status: [:completed])
       item_requests = ItemRequest.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]} AND item_requests.status = 1")
       return false if !item_requests.first
       item_request = item_requests.find{ |i| i.friend_id.to_s == user_id.to_s || i.friend_id.to_s == self.friend_id}

@@ -63,21 +63,11 @@ class ItemRequest < ApplicationRecord
         # bind contract to a new reserved inventory and update status
         RequestContract.find_by(id: self.request_contract_id).update(inventory_id: reserved.id)
 
-        # create or find order if there are any request_contract with same relation present
-        order = Order.where(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-        return { message: 'Please, choose order to assign' } if order.length > 1
-        order = order[0]
-        if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-          order.update(order_label: 'Order ' + order.id.to_s)
-        end
+        # create or find a pending order with no shipped/completed items
+        order = Order.find_or_create_pending(self.user_id, self.friend_id)
         self.update(order_id: order.id)
       else
-        order = Order.find_by(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-        if !order
-          order = Order.create(user_id: self.user_id, friend_id: self.friend_id, order_status: 0)
-          order.update(order_label: 'Order ' + order.id.to_s)
-        end
+        order = Order.find_or_create_pending(self.user_id, self.friend_id)
         self.update(order_id: order.id)
         self.request_contract.update(status: :accepted) if pending_size == 0
       end
@@ -102,11 +92,7 @@ class ItemRequest < ApplicationRecord
     next_request = ItemRequest.find_by(request_contract_id: self.request_contract_id, friend_id: self.user_id)
 
     if next_request
-      order = Order.find_by(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
-      if !order
-        order = Order.create(user_id: next_request.user_id, friend_id: next_request.friend_id, order_status: 0)
-        order.update(order_label: 'Order ' + order.id.to_s)
-      end
+      order = Order.find_or_create_pending(next_request.user_id, next_request.friend_id)
       next_request.update(order_id: order.id)
     end
 

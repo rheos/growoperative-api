@@ -396,11 +396,7 @@ module Api::V1
       request.save!
 
       # Find or create order for this user relationship (same logic as accept_request)
-      order = Order.find_by(user_id: user.id, friend_id: current_user.id, order_status: 0)
-      if !order
-        order = Order.create(user_id: user.id, friend_id: current_user.id, order_status: 0)
-        order.update(order_label: 'Order ' + order.id.to_s)
-      end
+      order = Order.find_or_create_pending(user.id, current_user.id)
       request.update(order_id: order.id)
 
       render json: { message: 'Item has been reserved' }, status: 200
