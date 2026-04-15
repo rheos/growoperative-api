@@ -15,6 +15,8 @@ Rails.application.routes.draw do
       # devise_for :users
       get 'get_chain_limit' => 'global_settings#get_chain_limit'
       post 'set_chain_limit' => 'global_settings#set_chain_limit'
+      get 'get_debug_api' => 'global_settings#get_debug_api'
+      post 'set_debug_api' => 'global_settings#set_debug_api'
       post 'signup' => 'registrations#create'
       resource :sessions, only: %i[show create destroy]
       resources :users, only: [:index, :show] do 
@@ -118,6 +120,9 @@ Rails.application.routes.draw do
       get 'debug/order/:id' => 'debug#order'
       get 'debug/requests' => 'debug#requests'
       get 'debug/user/:username' => 'debug#user'
+      get 'debug/items/:username' => 'debug#items'
+      post 'debug/create_request' => 'debug#create_request'
+      post 'debug/accept_request/:id' => 'debug#accept_request'
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'

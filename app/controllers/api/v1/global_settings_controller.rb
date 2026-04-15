@@ -1,7 +1,8 @@
 module Api::V1
 	class GlobalSettingsController < ApiController
 		# before_action :authenticate_user!
-		before_action :is_admin_user, :set_global_setting
+		before_action :is_admin_user
+		before_action :set_global_setting, only: [:get_chain_limit, :set_chain_limit]
 
 		def get_chain_limit
 			render json: {
@@ -9,6 +10,18 @@ module Api::V1
 					chain_limit: @global_setting.value
 				}, status: 200
 			}
+		end
+
+		def get_debug_api
+			setting = GlobalSetting.find_by(setting: 'debug_api_enabled')
+			render json: { data: { debug_api_enabled: setting&.value == 1 } }, status: 200
+		end
+
+		def set_debug_api
+			setting = GlobalSetting.find_or_create_by(setting: 'debug_api_enabled')
+			enabled = params[:enabled] == true || params[:enabled] == 'true' || params[:enabled] == 1
+			setting.update(value: enabled ? 1 : 0)
+			render json: { message: "Debug API #{enabled ? 'enabled' : 'disabled'}." }, status: 200
 		end
 
 		def set_chain_limit
