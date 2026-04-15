@@ -25,5 +25,5 @@ jobs:
             git pull && \
             chmod +x docker-entrypoint.sh entrypoint.sh entrypoint.prod.sh bin/* && \
             sudo docker compose -f docker-compose.prod.yml build backend && \
-            sudo docker compose -f docker-compose.prod.yml up -d backend && \
+            sudo docker compose -f docker-compose.prod.yml up -d backend backend-demo && \
             sudo docker compose -f docker-compose.prod.yml restart nginx"
