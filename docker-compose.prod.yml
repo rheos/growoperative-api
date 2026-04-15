@@ -23,6 +23,20 @@ services:
     expose:
       - "8080"
 
+  backend-demo:
+    build:
+      context: .
+      args:
+        RAILS_ENV: production
+    restart: always
+    env_file:
+      - .env.demo
+    environment:
+      RAILS_ENV: production
+      PORT: 8080
+    expose:
+      - "8080"
+
   nginx:
     image: nginx:alpine
     restart: always
@@ -34,8 +48,10 @@ services:
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
       - ./nginx/certbot/www:/var/www/certbot:ro
       - /home/ubuntu/growoperative-app/dist:/var/www/beta:ro
+      - /home/ubuntu/growoperative-app/dist:/var/www/demo:ro
     depends_on:
       - backend
+      - backend-demo
 
   certbot:
     image: certbot/certbot
