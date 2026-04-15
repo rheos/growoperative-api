@@ -178,7 +178,14 @@ module Api::V1
 
       notify_request_chain!(request_contract)
 
-      render json: { message: 'Item has been requested successfully' }, status: 200
+      render json: {
+        message: 'Item has been requested successfully',
+        data: {
+          contract_id: request_contract.id,
+          inventory_id: request_contract.inventory_id,
+          requests: request_contract.item_requests.reload.map { |r| serialize_request_result(r) }
+        }
+      }, status: 200
     end
 
     # POST: /v1/items/requests/:request_id/accept
@@ -206,9 +213,9 @@ module Api::V1
       # @request.accepted_at = DateTime.now
       result = @request.accept_request
       if result == true
-        render json: { message: 'Request has been accepted' }, status: 200
+        render json: { message: 'Request has been accepted', data: serialize_request_result(@request) }, status: 200
       elsif result[:message]
-        render json: result, status: 207
+        render json: result.merge(data: serialize_request_result(@request)), status: 207
       else
         render json: { message: 'Something is wrong' }, status: 500
       end
@@ -232,7 +239,7 @@ module Api::V1
       end
 
       if successful == true
-        render json: { message: 'Requests has been accepted' }, status: 200
+        render json: { message: 'Requests has been accepted', data: { accepted: true } }, status: 200
       else
         render json: { message: 'Something is wrong' }, status: 500
       end
@@ -276,8 +283,8 @@ module Api::V1
         
         # Only destroy contract if inventory wasn't already destroyed by update_status
         @request.request_contract.destroy if RequestContract.exists?(@request.request_contract.id)
-        
-        render json: { message: 'Request has been cancelled' }, status: 200
+
+        render json: { message: 'Request has been cancelled', data: { id: @request.id, status: 'cancelled', inventory_id: inventory.id } }, status: 200
         return
       end
 
@@ -291,7 +298,7 @@ module Api::V1
       # Use update_status to trigger quantity merge if inventory was reserved
       request_contract.inventory.update_status(status: 'available') if (request_contract.inventory.status == 'reserved')
 
-      render json: { message: 'Request has been cancelled' }, status: 200
+      render json: { message: 'Request has been cancelled', data: { id: @request.id, status: 'cancelled', inventory_id: request_contract.inventory_id } }, status: 200
     end
 
     # POST: /v1/items/requests/:request_id/ship
@@ -326,7 +333,7 @@ module Api::V1
       end
       current_chain_item_request.ship
 
-      render json: { message: 'Items has been shipped' }, status: 200
+      render json: { message: 'Items has been shipped', data: serialize_request_result(current_chain_item_request) }, status: 200
     end
     
     # POST: /v1/items/requests/:request_id/sign
@@ -342,7 +349,7 @@ module Api::V1
       end
 
       @request.sign
-      render json: { message: 'Request has been signed' }, status: 200
+      render json: { message: 'Request has been signed', data: serialize_request_result(@request) }, status: 200
     end
 
     # POST: /v1/items/requests/reserve
@@ -390,7 +397,7 @@ module Api::V1
       order = Order.find_or_create_pending(user.id, current_user.id)
       request.update(order_id: order.id)
 
-      render json: { message: 'Item has been reserved' }, status: 200
+      render json: { message: 'Item has been reserved', data: serialize_request_result(request) }, status: 200
     end
 
     # GET: /v1/items/requested
@@ -569,6 +576,22 @@ module Api::V1
           metadata:   metadata
         )
       end
+    end
+
+    def serialize_request_result(request)
+      request.reload
+      contract = request.request_contract
+      {
+        id: request.id,
+        status: request.status,
+        order_id: request.order_id,
+        contract_id: contract.id,
+        contract_status: contract.status,
+        inventory_id: contract.inventory_id,
+        shipped_at: request.shipped_at,
+        signed_at: request.signed_at,
+        accepted_at: request.accepted_at,
+      }
     end
 
     def request_params
