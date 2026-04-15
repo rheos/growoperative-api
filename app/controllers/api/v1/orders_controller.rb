@@ -59,12 +59,12 @@ module Api::V1
     end
 
     def update
-      order = Order.find_by(id: params[:id])
+      order = Order.includes(item_requests: { request_contract: { inventory: { item: :item_unit } } }).find_by(id: params[:id])
       render :json=> {error: 'Unable to find order'}, :status=>422 if !order
- 
+
       if params[:order].present?
         if order.update(order_params)
-          render json: { data: order }, status: 200
+          render json: { data: serialize_order_detail(order.reload) }, status: 200
         else
           render :json=> {error: 'Unable to process order!'}, :status=>422
         end
@@ -73,7 +73,7 @@ module Api::V1
 
       if order.apply_action(order_action_params, current_user.id)
         render json: {
-          data: order
+          data: serialize_order_detail(order.reload)
         }, status: 200
       else
         render :json=> {error: 'Unable to process order!'}, :status=>422
@@ -113,6 +113,11 @@ module Api::V1
         settlement_type: order.settlement_type,
         settlement_status: order.settlement_status,
         settlement_proposed_by: order.settlement_proposed_by,
+        settlement_counter_type: order.settlement_counter_type,
+        settlement_counter_by: order.settlement_counter_by,
+        cash_amount: order.cash_amount&.to_f,
+        cash_paid_by: order.cash_paid_by,
+        cash_confirmed_by: order.cash_confirmed_by,
         settlement_amount: serialized_settlement_amount(order),
         item_request_count: order.item_requests.count,
         shipped_on: order.shipped_on,
@@ -157,6 +162,11 @@ module Api::V1
         settlement_type: order.settlement_type,
         settlement_status: order.settlement_status,
         settlement_proposed_by: order.settlement_proposed_by,
+        settlement_counter_type: order.settlement_counter_type,
+        settlement_counter_by: order.settlement_counter_by,
+        cash_amount: order.cash_amount&.to_f,
+        cash_paid_by: order.cash_paid_by,
+        cash_confirmed_by: order.cash_confirmed_by,
         settlement_amount: serialized_settlement_amount(order),
         item_request_count: order.item_requests.size,
         shipped_on: order.shipped_on,
