@@ -1,5 +1,14 @@
 class Api::V1::DebugController < Api::V1::ApiController
   skip_before_action :authenticate!
+  before_action :check_debug_enabled!
+
+  private def check_debug_enabled!
+    return if Rails.env.development? || Rails.env.test?
+    setting = GlobalSetting.find_by(setting: 'debug_api_enabled')
+    unless setting&.value == 1
+      render json: { error: 'Debug API is disabled' }, status: 403
+    end
+  end
 
   private def settlement_amount_for(order)
     settled_transaction = TrustlineTransaction.where(order_id: order.id)
@@ -115,6 +124,188 @@ class Api::V1::DebugController < Api::V1::ApiController
     end
 
     render json: { count: results.size, requests: results }
+  end
+
+  # GET /v1/debug/items/:username
+  # Returns available items from this user's perspective (what they'd see on their dashboard)
+  def items
+    u = User.find_by!(user_name: params[:username])
+    range_degree = (params[:range_degree] || 2).to_i
+
+    relationships = Relationship.where(
+      "(user_id=#{u.id} AND friend_actions_state < 2 AND (actions_state = 0 OR actions_state = 2)) " \
+      "OR (friend_id=#{u.id} AND actions_state < 2 AND (friend_actions_state = 0 OR friend_actions_state = 2))"
+    )
+
+    users = relationships.pluck(:user_id, :friend_id).flatten.uniq
+    users = users.select { |id| !User.find(id).only_consumer_retailer? }
+    users.delete(u.id)
+
+    return render(json: { count: 0, items: [] }) if users.empty?
+
+    inventories = Inventory.where(
+      "inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != ?",
+      users, u.id
+    ).distinct.includes(item: [:item_unit])
+
+    result = inventories.map do |inv|
+      price = if inv.producer_owns?
+                inv.price.to_f
+              else
+                (inv.price || 0).to_f + helpers.get_relation_price(inv.user_id, u.id).to_f
+              end
+      {
+        inventory_id: inv.id,
+        item_name: inv.item.name,
+        owner: User.find(inv.user_id).user_name,
+        quantity: inv.quantity.to_f,
+        base_price: inv.price.to_f,
+        display_price: price,
+        category: inv.item.category&.category_name,
+        status: inv.status
+      }
+    end
+
+    render json: { count: result.size, items: result.sort_by { |i| i[:display_price] } }
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: "User '#{params[:username]}' not found" }, status: 404
+  end
+
+  # POST /v1/debug/create_request
+  # Creates a request chain as a user, using the real BFS pathfinding + per-hop pricing.
+  # Params: user_name, inventory_id, quantity
+  def create_request
+    user = User.find_by!(user_name: params[:user_name])
+    inventory = Inventory.find(params[:inventory_id])
+    quantity = params[:quantity].to_f
+
+    if inventory.user_id == user.id
+      return render json: { error: "#{user.user_name} owns this inventory" }, status: 400
+    end
+
+    if quantity <= 0 || quantity > inventory.quantity
+      return render json: { error: "Invalid quantity (available: #{inventory.quantity})" }, status: 400
+    end
+
+    # BFS pathfinding — same algorithm as ItemRequestsController#create
+    max_depth = 5
+    contacts = [{ user_id: user.id, path: [], prices: [], total: 0, route_price: 0 }]
+    shortest = { total: BigDecimal::INFINITY, path: [], prices: [] }
+    checked_contacts = {}
+
+    while contacts.size > 0
+      contact = contacts.shift
+      checked_contacts[contact[:user_id]] = contact[:total]
+
+      if contact[:user_id] == inventory.user_id
+        unless inventory.producer_owns?
+          contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
+        end
+        shortest = contact if contact[:total] < shortest[:total]
+      elsif contact[:path].size < max_depth
+        rels = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")
+        if rels.size > 0
+          rels.pluck(:user_id, :friend_id).flatten!.uniq
+            .select { |id| !User.find(id).only_consumer_retailer? }
+            .each do |relation_id|
+              next if relation_id == contact[:user_id]
+              total = contact[:total] + contact[:route_price]
+              if total < shortest[:total] &&
+                (checked_contacts[relation_id].nil? || total < checked_contacts[relation_id])
+                contacts.push({
+                  user_id: relation_id,
+                  path: contact[:path] + [contact[:user_id]],
+                  prices: contact[:prices] + [total],
+                  total: total,
+                  route_price: helpers.get_relation_price(relation_id, contact[:user_id]),
+                })
+              end
+            end
+        end
+      end
+    end
+
+    if shortest[:total] == BigDecimal::INFINITY || shortest[:path].empty?
+      return render json: { error: "No path found from #{user.user_name} to #{inventory.item.name}" }, status: 400
+    end
+
+    # Create contract + request chain
+    rc = RequestContract.create!(
+      user_id: user.id,
+      inventory_id: inventory.id,
+      item_id: inventory.item_id,
+      quantity: quantity,
+      steps: shortest[:prices].size,
+    )
+
+    shortest[:path] << inventory.user_id
+    final_price = inventory.price + shortest[:total]
+    created_requests = []
+
+    shortest[:prices].each_with_index do |price, index|
+      ir = ItemRequest.create!(
+        request_contract_id: rc.id,
+        user_id: shortest[:path][index],
+        friend_id: shortest[:path][index + 1],
+        price: final_price - price,
+        status: :pending,
+        sent: shortest[:path][index] == user.id ? 1 : 0,
+        step: shortest[:prices].size - index,
+      )
+      created_requests << {
+        item_request_id: ir.id,
+        user: User.find(ir.user_id).user_name,
+        friend: User.find(ir.friend_id).user_name,
+        price: ir.price.to_f,
+        step: ir.step,
+        status: ir.status,
+      }
+    end
+
+    render json: {
+      message: "Request chain created",
+      contract_id: rc.id,
+      item: inventory.item.name,
+      quantity: quantity,
+      chain: created_requests,
+    }
+  rescue ActiveRecord::RecordNotFound => e
+    render json: { error: e.message }, status: 404
+  end
+
+  # POST /v1/debug/accept_request/:id
+  # Accepts a request as a user.
+  # Params: user_name
+  def accept_request
+    user = User.find_by!(user_name: params[:user_name])
+    ir = ItemRequest.find(params[:id])
+
+    unless ir.friend_id == user.id || (ir.status == "reserved" && ir.user_id == user.id)
+      return render json: { error: "#{user.user_name} is not the recipient of request #{ir.id}" }, status: 403
+    end
+
+    unless ir.pending? || ir.status == "reserved"
+      return render json: { error: "Request #{ir.id} is #{ir.status}, not pending" }, status: 406
+    end
+
+    unless ir.request_contract.pending?
+      return render json: { error: "Contract #{ir.request_contract_id} is #{ir.request_contract.status}, not pending" }, status: 406
+    end
+
+    result = ir.accept_request
+    if result == true
+      render json: {
+        message: "Request #{ir.id} accepted",
+        item_request_id: ir.id,
+        user: User.find(ir.user_id).user_name,
+        friend: User.find(ir.friend_id).user_name,
+        status: ir.reload.status,
+      }
+    else
+      render json: { error: "Accept failed", details: result }, status: 500
+    end
+  rescue ActiveRecord::RecordNotFound => e
+    render json: { error: e.message }, status: 404
   end
 
   # GET /v1/debug/user/:username
