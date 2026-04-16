@@ -76,7 +76,7 @@ class Inventory < ApplicationRecord
         'owner-id' => self.user_id,
         'producer' => self.item.producer_id,
         'status' => self.status,
-        'action-request' => self.action_request,
+        'action-request' => self.action_request.nil? ? self.item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count > 0 : self.action_request != 0,
         'unit-options' => generate_options,
         'description' => self.description
       }
