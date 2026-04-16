@@ -48,7 +48,6 @@ services:
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
       - ./nginx/certbot/www:/var/www/certbot:ro
       - /home/ubuntu/growoperative-app/dist:/var/www/beta:ro
-      - /home/ubuntu/growoperative-app/dist:/var/www/demo:ro
     depends_on:
       - backend
       - backend-demo
