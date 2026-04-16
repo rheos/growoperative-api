@@ -147,7 +147,11 @@ class Trustline < ApplicationRecord
         current_balance: new_balance,
         last_activity: Time.current
       )
-      
+
+      # Shadow mirror to FOAF protocol (development only, fire-and-forget)
+      Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
+                                       description: description, order: order)
+
       new_balance
     end
   end

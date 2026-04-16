@@ -29,18 +29,10 @@ module Foaf
       @network_address
     end
 
-    # Ensure a user has a FOAF identity registered.
+    # Ensure a user has a FOAF keypair.
+    # No registration with FOAF needed — addresses exist by usage, like blockchain.
     def ensure_identity!(user)
       Foaf::Signer.ensure_keypair!(user)
-
-      # Register with FOAF if not already done
-      unless user.foaf_registered?
-        result = @client.register_identity(public_key: user.foaf_public_key)
-        if result
-          user.update_column(:foaf_registered, true)
-          Rails.logger.info("[FOAF Shadow] Registered identity for #{user.user_name}: #{user.foaf_address}")
-        end
-      end
     end
 
     # Mirror a trustline update to FOAF.
@@ -58,12 +50,18 @@ module Foaf
       debtor = creditor.id == user_a.id ? user_b : user_a
       is_a = creditor.id == user_a.id
 
+      # CRITICAL: semantic mapping between app and FOAF (see foaf-protocol skill)
+      # App credit_limit_a_to_b (A can owe B) = FOAF creditline_received (from A's perspective)
+      # App credit_limit_b_to_a (B can owe A) = FOAF creditline_given (from A's perspective)
+      # So from the creditor's perspective:
+      #   if creditor is A: given = app B→A (what A extends to B), received = app A→B (what B extends to A)
+      #   if creditor is B: given = app A→B (what B extends to A), received = app B→A (what A extends to B)
       @client.update_trustline(
         network_address: @network_address,
         creditor_address: Foaf::Signer.address_for(creditor),
         debtor_address: Foaf::Signer.address_for(debtor),
-        creditline_given: is_a ? trustline.credit_limit_a_to_b : trustline.credit_limit_b_to_a,
-        creditline_received: is_a ? trustline.credit_limit_b_to_a : trustline.credit_limit_a_to_b
+        creditline_given: is_a ? trustline.credit_limit_b_to_a : trustline.credit_limit_a_to_b,
+        creditline_received: is_a ? trustline.credit_limit_a_to_b : trustline.credit_limit_b_to_a
       )
 
       Rails.logger.info("[FOAF Shadow] Mirrored trustline update: #{creditor.user_name} -> #{debtor.user_name}")

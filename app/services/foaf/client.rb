@@ -13,10 +13,10 @@ module Foaf
       @base_url = base_url
     end
 
-    # === IDENTITIES ===
+    # === KEYPAIR ===
 
-    def register_identity(public_key:)
-      post("/api/v1/identities", { public_key: public_key })
+    def generate_keypair
+      post("/api/v1/keypair")
     end
 
     # === NETWORKS ===
