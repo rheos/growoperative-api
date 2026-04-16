@@ -233,11 +233,15 @@ class Order < ApplicationRecord
       end
     end
 
+    # Mirror trustline creation/update to FOAF
+    Foaf::ShadowHooks.after_trustline_save(trustline, from_user)
+
     Trustline.execute_payment_path(
       [from_user, to_user],
       amount,
       description: "Settlement for #{self.order_label}",
       order: self
     )
+    # Payment is mirrored by process_payment! inside execute_payment_path
   end
 end
