@@ -389,7 +389,12 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "invite_limit", default: 3
     t.string "invited_code"
     t.integer "parent_id"
+    t.string "foaf_address", limit: 42
+    t.text "foaf_public_key"
+    t.text "foaf_private_key"
+    t.boolean "foaf_registered", default: false
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["foaf_address"], name: "index_users_on_foaf_address", unique: true
     t.index ["invitations_count"], name: "index_users_on_invitations_count"
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["invited_by_id"], name: "index_users_on_invited_by_type_and_invited_by_id"
