@@ -26,11 +26,11 @@ module Api::V1
         end
 
         if users.length > 0
-          @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
-            (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id 
-            AND (request_contracts.status = 0 OR request_contracts.status = 3) 
+          @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.user_id IN (?) AND inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
+            (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id
+            AND (request_contracts.status = 0 OR request_contracts.status = 3)
             AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
-          ))", users).uniq
+          ))", users, users).uniq
 
           # if params[:dashboard_type] == 'consumer'
           #   @items = @items.select{ |item| item.generate_options.length > 0}
@@ -90,7 +90,7 @@ module Api::V1
         .select("inventories.id AS inventory_id, COUNT(item_requests.id) AS action_request, inventories.ref_id AS reserved_id")
         .each do |request|
           pending_requests[request.inventory_id] = request.action_request
-          pending_requests[request.reserved_id] = Inventory.find(request.reserved_id).item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count if request.reserved_id
+          pending_requests[request.reserved_id] = request.action_request if request.reserved_id
         end
       
       # assign count

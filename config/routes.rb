@@ -125,6 +125,7 @@ Rails.application.routes.draw do
       post 'debug/accept_request/:id' => 'debug#accept_request'
       get 'debug/foaf/reconcile' => 'debug#foaf_reconcile'
       get 'debug/foaf/status' => 'debug#foaf_status'
+      get 'debug/foaf/events/:trustline_id' => 'debug#foaf_events'
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
