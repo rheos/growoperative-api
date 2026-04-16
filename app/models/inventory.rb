@@ -63,7 +63,6 @@ class Inventory < ApplicationRecord
         'user-id' => self.target_user_id.nil? ? self.user_id : self.target_user_id,
         'target-user-id' => self.target_user_id.nil? ? self.user_id : self.target_user_id, 
         'target-user-name' => self.target_user_name(current_user),
-        'action-request' => self.action_request,
         'category-id' => self.item.category_id, 
         'name' => self.item.name, 
         'grade-id' => self.item.grade_id,
@@ -77,7 +76,7 @@ class Inventory < ApplicationRecord
         'owner-id' => self.user_id,
         'producer' => self.item.producer_id,
         'status' => self.status,
-        'action-request' => self.item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count > 0,
+        'action-request' => self.action_request,
         'unit-options' => generate_options,
         'description' => self.description
       }

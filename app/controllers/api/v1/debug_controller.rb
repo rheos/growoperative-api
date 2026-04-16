@@ -2,6 +2,89 @@ class Api::V1::DebugController < Api::V1::ApiController
   skip_before_action :authenticate!
   before_action :check_debug_enabled!
 
+  private def parse_foaf_extra_data(data)
+    return {} if data.blank?
+    return data if data.is_a?(Hash)
+    JSON.parse(data)
+  rescue JSON::ParserError
+    {}
+  end
+
+  private def build_transfer_row(event, trustline, user_a, user_b)
+    extra = parse_foaf_extra_data(event["extraData"])
+    is_credloop = extra["credloop_cancellation"].present? || (event["extraData"].to_s.include?("credloop_cancellation"))
+    order_id = extra["order_id"]
+    order_label = extra["order_label"]
+    description = extra["description"] || (is_credloop ? "Credit loop cancellation" : nil)
+
+    classification = if is_credloop
+      "credloop"
+    elsif order_id
+      "order_settlement"
+    else
+      "direct_payment"
+    end
+
+    transaction_type = order_id ? "settlement" : "payment"
+
+    path = event["path"]
+    initiator = event["direction"] == "sent" ? user_a : user_b
+
+    {
+      transaction: {
+        id: event["blockNumber"].to_i,
+        trustline_id: trustline.id,
+        amount: event["value"].to_f,
+        description: description,
+        transaction_type: transaction_type,
+        initiated_by_id: initiator.id,
+        originating_request_id: nil,
+        order_id: order_id,
+        balance_after: 0.0,
+        is_reversed: false,
+        created_at: Time.at(event["timestamp"].to_i).iso8601,
+        initiated_by_name: initiator.user_name,
+        order_label: order_label,
+        path_info: path.is_a?(Array) && path.size > 2 ? { hops: path } : nil,
+        _direction: event["direction"]
+      },
+      balance_before: 0.0,
+      source_classification: classification,
+      balance_mismatch: false,
+      missing_linkage: false
+    }
+  end
+
+  private def build_trustline_update_row(event, trustline, user_a, user_b)
+    given = event["creditlineGiven"].to_f
+    received = event["creditlineReceived"].to_f
+    initiator = event["direction"] == "sent" ? user_a : user_b
+
+    {
+      transaction: {
+        id: event["blockNumber"].to_i,
+        trustline_id: trustline.id,
+        amount: 0.0,
+        description: "Limits updated (given: $#{given}, received: $#{received})",
+        transaction_type: "adjustment",
+        initiated_by_id: initiator.id,
+        originating_request_id: nil,
+        order_id: nil,
+        balance_after: 0.0,
+        is_reversed: false,
+        created_at: Time.at(event["timestamp"].to_i).iso8601,
+        initiated_by_name: initiator.user_name,
+        order_label: nil,
+        path_info: nil,
+        _direction: event["direction"]
+      },
+      balance_before: 0.0,
+      source_classification: "adjustment",
+      balance_mismatch: false,
+      missing_linkage: false
+    }
+  end
+
   private def check_debug_enabled!
     return if Rails.env.development? || Rails.env.test?
     setting = GlobalSetting.find_by(setting: 'debug_api_enabled')
@@ -449,6 +532,74 @@ class Api::V1::DebugController < Api::V1::ApiController
     }
 
     render json: { summary: summary, trustlines: results }
+  end
+
+  # GET /v1/debug/foaf/events/:trustline_id
+  # Returns FOAF protocol events for this trustline, mapped to the same
+  # AuditLedgerRow shape the app uses, so the audit report can render them
+  # with the same component.
+  def foaf_events
+    unless Foaf::Config.shadow_mode?
+      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    end
+
+    trustline = Trustline.find(params[:trustline_id])
+    user_a = User.find(trustline.user_a_id)
+    user_b = User.find(trustline.user_b_id)
+
+    unless user_a.foaf_address.present? && user_b.foaf_address.present?
+      return render json: { rows: [], warning: "One or both users have no FOAF address" }
+    end
+
+    client = Foaf::Client.new
+    networks = client.networks
+    unless networks&.any?
+      return render json: { error: "No FOAF network found" }, status: 400
+    end
+    network_address = networks.first["address"]
+
+    events = client.user_events(
+      network_address: network_address,
+      user_address: user_a.foaf_address
+    ) || []
+
+    # Only events where the counterparty is user_b
+    relevant = events.select { |e| e["counterParty"] == user_b.foaf_address }
+
+    rows = []
+
+    relevant.each do |e|
+      case e["type"]
+      when "Transfer"
+        rows << build_transfer_row(e, trustline, user_a, user_b)
+      when "TrustlineUpdate"
+        rows << build_trustline_update_row(e, trustline, user_a, user_b)
+      end
+    end
+
+    # FOAF returned descending; reverse to ascending to build running balance
+    rows.sort_by! { |r| [r[:transaction][:created_at], r[:transaction][:id]] }
+
+    # Running balance from user_a's perspective using direction:
+    # user_a sent  -> user_a owes more -> balance += value  (app convention: + = user_a owes user_b)
+    # user_a received -> user_a owes less -> balance -= value
+    running = 0.0
+    rows.each_with_index do |row, i|
+      tx = row[:transaction]
+      row[:balance_before] = running
+      if tx[:transaction_type] == 'adjustment'
+        tx[:balance_after] = running
+      else
+        delta = tx[:_direction] == 'sent' ? tx[:amount] : -tx[:amount]
+        running += delta
+        tx[:balance_after] = running
+      end
+      tx.delete(:_direction)
+    end
+
+    render json: { rows: rows.reverse } # back to descending for display
+  rescue ActiveRecord::RecordNotFound
+    render json: { error: "Trustline #{params[:trustline_id]} not found" }, status: 404
   end
 
   # GET /v1/debug/foaf/status
