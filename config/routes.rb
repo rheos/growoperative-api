@@ -123,6 +123,8 @@ Rails.application.routes.draw do
       get 'debug/items/:username' => 'debug#items'
       post 'debug/create_request' => 'debug#create_request'
       post 'debug/accept_request/:id' => 'debug#accept_request'
+      get 'debug/foaf/reconcile' => 'debug#foaf_reconcile'
+      get 'debug/foaf/status' => 'debug#foaf_status'
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'

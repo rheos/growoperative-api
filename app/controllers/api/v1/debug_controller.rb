@@ -334,4 +334,148 @@ class Api::V1::DebugController < Api::V1::ApiController
   rescue ActiveRecord::RecordNotFound
     render json: { error: "User '#{params[:username]}' not found" }, status: 404
   end
+
+  # GET /v1/debug/foaf/reconcile
+  # Compare all trustline state between the app and FOAF protocol.
+  def foaf_reconcile
+    unless Foaf::Config.shadow_mode?
+      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    end
+
+    client = Foaf::Client.new
+    networks = client.networks
+    unless networks&.any?
+      return render json: { error: "No FOAF network found" }, status: 400
+    end
+    network_address = networks.first["address"]
+
+    results = []
+
+    Trustline.where(is_active: true).each do |tl|
+      user_a = User.find(tl.user_a_id)
+      user_b = User.find(tl.user_b_id)
+
+      row = {
+        trustline_id: tl.id,
+        user_a: user_a.user_name,
+        user_b: user_b.user_name,
+        app: {
+          credit_limit_a_to_b: tl.credit_limit_a_to_b.to_f,
+          credit_limit_b_to_a: tl.credit_limit_b_to_a.to_f,
+          balance: tl.current_balance.to_f
+        },
+        foaf: nil,
+        match: nil,
+        discrepancies: []
+      }
+
+      # Look up FOAF state
+      if user_a.foaf_address.present?
+        foaf_trustlines = client.user_trustlines(
+          network_address: network_address,
+          user_address: user_a.foaf_address
+        )
+
+        if foaf_trustlines
+          foaf_tl = foaf_trustlines.find { |ft| ft["counterParty"] == user_b.foaf_address }
+
+          if foaf_tl
+            # Map FOAF fields back to app semantics for comparison
+            # FOAF "given" (from user_a perspective) = app credit_limit_b_to_a
+            # FOAF "received" (from user_a perspective) = app credit_limit_a_to_b
+            # FOAF balance (positive = B owes A) = -1 * app balance (positive = A owes B)
+            foaf_limit_a_to_b = foaf_tl["received"]
+            foaf_limit_b_to_a = foaf_tl["given"]
+            foaf_balance = -foaf_tl["balance"]  # negate to match app convention
+
+            row[:foaf] = {
+              credit_limit_a_to_b: foaf_limit_a_to_b,
+              credit_limit_b_to_a: foaf_limit_b_to_a,
+              balance: foaf_balance,
+              raw: {
+                given: foaf_tl["given"],
+                received: foaf_tl["received"],
+                balance: foaf_tl["balance"]
+              }
+            }
+
+            # Compare
+            if tl.credit_limit_a_to_b.to_f != foaf_limit_a_to_b
+              row[:discrepancies] << {
+                field: "credit_limit_a_to_b",
+                app: tl.credit_limit_a_to_b.to_f,
+                foaf: foaf_limit_a_to_b
+              }
+            end
+
+            if tl.credit_limit_b_to_a.to_f != foaf_limit_b_to_a
+              row[:discrepancies] << {
+                field: "credit_limit_b_to_a",
+                app: tl.credit_limit_b_to_a.to_f,
+                foaf: foaf_limit_b_to_a
+              }
+            end
+
+            if tl.current_balance.to_f != foaf_balance
+              row[:discrepancies] << {
+                field: "balance",
+                app: tl.current_balance.to_f,
+                foaf: foaf_balance
+              }
+            end
+
+            row[:match] = row[:discrepancies].empty?
+          else
+            row[:discrepancies] << { field: "trustline", error: "Not found in FOAF" }
+            row[:match] = false
+          end
+        else
+          row[:discrepancies] << { field: "api", error: "FOAF API call failed" }
+          row[:match] = false
+        end
+      else
+        row[:discrepancies] << { field: "identity", error: "#{user_a.user_name} has no FOAF address" }
+        row[:match] = false
+      end
+
+      results << row
+    end
+
+    summary = {
+      total: results.size,
+      matches: results.count { |r| r[:match] == true },
+      discrepancies: results.count { |r| r[:match] == false },
+      unlinked: results.count { |r| r[:match].nil? }
+    }
+
+    render json: { summary: summary, trustlines: results }
+  end
+
+  # GET /v1/debug/foaf/status
+  # Quick check: is FOAF reachable and what's its state?
+  def foaf_status
+    unless Foaf::Config.shadow_mode?
+      return render json: { shadow_mode: false }
+    end
+
+    client = Foaf::Client.new
+    version = begin
+      uri = URI("#{Foaf::Config.api_url}/api/v1/version")
+      Net::HTTP.get(uri)
+    rescue => e
+      nil
+    end
+
+    networks = client.networks
+
+    render json: {
+      shadow_mode: true,
+      foaf_url: Foaf::Config.api_url,
+      foaf_reachable: version.present?,
+      foaf_version: version,
+      networks: networks&.size || 0,
+      users_with_foaf_address: User.where.not(foaf_address: nil).count,
+      users_total: User.count
+    }
+  end
 end
