@@ -30,6 +30,19 @@ def generate_global_setting
 end
 generate_global_setting
 
+# Bootstrap admin user
+def generate_admin_user
+  admin = User.find_or_initialize_by(user_name: "robin")
+  admin.password = "password"
+  admin.invite_limit = 1000000
+  admin.depth = 0
+  admin.save!
+  %w[superuser admin broker].each do |role|
+    admin.user_groups.find_or_create_by!(group_label: role)
+  end
+end
+generate_admin_user
+
 # Generate category seed data
 def generate_category
   Category.create!([{category_name: "herbs and greens", default_unit: 1, default_consumer_unit:2, default_node_price: 1.0},
