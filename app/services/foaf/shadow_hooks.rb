@@ -4,8 +4,8 @@
 # Called after the authoritative operation succeeds.
 # Fire-and-forget — never raises, never blocks the app.
 #
-# Usage: call these from controllers/models after the real operation completes.
-# The shadow singleton handles all the FOAF communication.
+# Runs synchronously (not threaded) to avoid race conditions on
+# keypair generation. The HTTP calls to FOAF are local and fast.
 
 module Foaf
   module ShadowHooks
@@ -19,27 +19,22 @@ module Foaf
     def after_trustline_save(trustline, current_user)
       return unless Foaf::Config.shadow_mode?
 
-      Thread.new do
-        shadow.mirror_trustline_update(trustline, current_user)
-      rescue StandardError => e
-        Rails.logger.warn("[FOAF Shadow] Background mirror failed: #{e.message}")
-      end
+      shadow.mirror_trustline_update(trustline, current_user)
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Trustline mirror failed: #{e.message}")
     end
 
     # Call after process_payment! succeeds.
     def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil)
       return unless Foaf::Config.shadow_mode?
 
-      Thread.new do
-        shadow.mirror_payment(trustline, amount, from_user, to_user,
-                              description: description, order: order)
-      rescue StandardError => e
-        Rails.logger.warn("[FOAF Shadow] Background payment mirror failed: #{e.message}")
-      end
+      shadow.mirror_payment(trustline, amount, from_user, to_user,
+                            description: description, order: order)
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end
 
     # Run reconciliation for all active trustlines.
-    # Call from a rake task or console.
     def reconcile_all
       return unless Foaf::Config.shadow_mode?
 
