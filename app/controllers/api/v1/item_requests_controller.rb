@@ -6,9 +6,14 @@ module Api::V1
     
     # URL: /v1/items/:inventory_id/requests
     def index
+      # Resolve the original inventory ID — if this is a reserved copy, follow ref_id
+      # back to the original so we find all sibling copies too.
+      inv = Inventory.find_by(id: params[:item_id])
+      original_id = (inv&.ref_id.present? && inv.ref_id.to_i > 0) ? inv.ref_id : params[:item_id]
+
       requests = ItemRequest.with_inventory_data
         .select("
-          item_requests.*, 
+          item_requests.*,
           request_contracts.status AS chain_status,
           request_contracts.quantity AS quantity,
           request_contracts.unit AS unit,
@@ -18,7 +23,7 @@ module Api::V1
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
-          (request_contracts.inventory_id=#{params[:item_id]} OR inventories.ref_id=#{params[:item_id]}) AND
+          (request_contracts.inventory_id=#{original_id} OR inventories.ref_id=#{original_id} OR request_contracts.inventory_id=#{params[:item_id]}) AND
           (item_requests.status < #{params[:include_completed] == "true" ? 3 : 2} OR item_requests.status = 4)
         ")
         .uniq
