@@ -68,7 +68,9 @@ class Order < ApplicationRecord
       item = self.item_requests.joins(:request_contract).where("request_contracts.inventory_id = #{action[:item_id]}")
       return false if !item
       item.update(order_id: nil)
-      self.destroy if ItemRequest.where(order_id: self.id).count == 0
+      # Use delete instead of destroy to avoid dependent: :destroy cascading
+      # to the item requests we just detached (Rails caches the association)
+      Order.delete(self.id) if ItemRequest.where(order_id: self.id).count == 0
       true
 
     when 'add_item'
