@@ -72,9 +72,14 @@ module Api::V1
       end
 
       if order.apply_action(order_action_params, current_user.id)
-        render json: {
-          data: serialize_order_detail(order.reload)
-        }, status: 200
+        if Order.exists?(order.id)
+          render json: {
+            data: serialize_order_detail(order.reload)
+          }, status: 200
+        else
+          # Order was destroyed (e.g. last item removed) — tell the frontend
+          render json: { data: nil, destroyed: true }, status: 200
+        end
       else
         render :json=> {error: 'Unable to process order!'}, :status=>422
       end
