@@ -393,6 +393,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.text "foaf_public_key"
     t.text "foaf_private_key"
     t.boolean "foaf_registered", default: false
+    t.text "foaf_seed_phrase"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["foaf_address"], name: "index_users_on_foaf_address", unique: true
     t.index ["invitations_count"], name: "index_users_on_invitations_count"
