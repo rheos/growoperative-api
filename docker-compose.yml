@@ -46,6 +46,9 @@ services:
       DISABLE_SPRING: 1
       SECRET_KEY_BASE: REMOVED_FOR_PUBLICATION
       COOKIE_DOMAIN: localhost
+      # FOAF Protocol shadow mode (development only)
+      FOAF_SHADOW_MODE: "true"
+      FOAF_API_URL: "http://host.docker.internal:3002"
     depends_on:
       - db
 
