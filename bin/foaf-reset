@@ -1,8 +1,6 @@
 #!/bin/bash
 #
-# Reset both the app DB and FOAF DB to a clean starting state.
-# Restores from the pre-shipment snapshot, runs migrations,
-# generates FOAF addresses, clears FOAF, seeds FOAF with matching state.
+# Reset both the app DB and FOAF DB to a clean synced starting state.
 #
 # Usage (from railsbackend/):
 #   ./bin/foaf-reset [snapshot_file]
@@ -37,96 +35,47 @@ echo "  OK"
 echo "[3/5] Clearing FOAF DB..."
 docker-compose -f ../foaf-protocol-ruby/docker-compose.yml exec -T foaf bundle exec rails runner '
 [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, Operation,
- PendingTransfer, Identity, CurrencyNetwork].each(&:destroy_all)
+ PendingTransfer, CurrencyNetwork].each(&:destroy_all)
 puts "  Cleared."
 ' 2>&1
 echo "  OK"
 
-# --- Step 4: Generate FOAF addresses + seed FOAF ---
-echo "[4/5] Generating addresses and seeding FOAF..."
+# --- Step 4: Generate FOAF addresses for app users ---
+echo "[4/5] Generating FOAF addresses..."
 docker-compose exec backend rails runner '
-require "digest"
-require "net/http"
-require "json"
-
-foaf_url = ENV.fetch("FOAF_API_URL", "http://host.docker.internal:3002")
-
-def foaf_post(base, path, body)
-  uri = URI("#{base}#{path}")
-  http = Net::HTTP.new(uri.host, uri.port)
-  req = Net::HTTP::Post.new(uri.path, "Content-Type" => "application/json")
-  req.body = body.to_json
-  resp = http.request(req)
-  JSON.parse(resp.body) rescue nil
-end
-
-def foaf_put(base, path, body = {})
-  uri = URI("#{base}#{path}")
-  http = Net::HTTP.new(uri.host, uri.port)
-  req = Net::HTTP::Put.new(uri.path, "Content-Type" => "application/json")
-  req.body = body.to_json
-  resp = http.request(req)
-  JSON.parse(resp.body) rescue nil
-end
-
-# Collect users with trustlines
 user_ids = (Trustline.pluck(:user_a_id) + Trustline.pluck(:user_b_id)).uniq
-users = {}
-
-user_ids.each do |uid|
-  u = User.find(uid)
-  addr = "0x" + Digest::SHA256.hexdigest("growoperative:#{u.user_name}")[0..39]
-  pubkey = "04" + Digest::SHA256.hexdigest("pub:growoperative:#{u.user_name}") +
-           Digest::SHA256.hexdigest("pub2:growoperative:#{u.user_name}")
-
-  # Save to app DB
-  u.update_columns(foaf_address: addr, foaf_public_key: pubkey, foaf_registered: true)
-
-  # Register with FOAF
-  foaf_post(foaf_url, "/api/v1/identities", { public_key: pubkey })
-
-  users[u.user_name] = { id: u.id, address: addr }
-  puts "  #{u.user_name}: #{addr}"
-end
-
-# Deploy network on FOAF (via direct runner since we need the network address)
-# We cannot deploy via API yet, so we use a known seed approach
-puts ""
-puts "  Users registered. Now seeding trustlines via FOAF rails runner..."
-File.write("/tmp/foaf_users.json", users.to_json)
-
-# Dump trustline data
-tl_data = Trustline.where(is_active: true).map do |tl|
-  a = User.find(tl.user_a_id)
-  b = User.find(tl.user_b_id)
-  {
-    user_a: a.user_name,
-    user_b: b.user_name,
-    addr_a: users[a.user_name][:address],
-    addr_b: users[b.user_name][:address],
-    credit_limit_a_to_b: tl.credit_limit_a_to_b.to_f,
-    credit_limit_b_to_a: tl.credit_limit_b_to_a.to_f,
-    balance: tl.current_balance.to_f
-  }
-end
-File.write("/tmp/foaf_trustlines.json", tl_data.to_json)
-puts "  Exported #{tl_data.size} trustlines."
+user_ids.each { |uid| Foaf::Signer.ensure_keypair!(User.find(uid)) rescue nil }
+count = User.where.not(foaf_address: nil).count
+User.where.not(foaf_address: nil).each { |u| puts "  #{u.user_name}: #{u.foaf_address}" }
+puts "  #{count} users with trustlines addressed." if count > 0
+puts "  No trustlines yet — addresses will be generated as users transact." if count == 0
 ' 2>&1 | grep -v "warning:"
 echo "  OK"
 
-# --- Step 5: Seed FOAF trustlines ---
-echo "[5/5] Seeding FOAF trustlines..."
+# --- Step 5: Seed FOAF with current trustline state ---
+echo "[5/5] Seeding FOAF..."
 
-# Copy data from app container to host, then into FOAF container
-docker-compose exec -T backend cat /tmp/foaf_trustlines.json > /tmp/foaf_tl.json 2>/dev/null
-docker cp /tmp/foaf_tl.json "$(docker-compose -f ../foaf-protocol-ruby/docker-compose.yml ps -q foaf)":/tmp/foaf_tl.json 2>/dev/null
+# Export trustline data from app, pipe directly into FOAF
+docker-compose exec -T backend rails runner '
+require "json"
+data = Trustline.where(is_active: true).map do |tl|
+  a = User.find(tl.user_a_id)
+  b = User.find(tl.user_b_id)
+  { user_a: a.user_name, user_b: b.user_name,
+    addr_a: a.foaf_address, addr_b: b.foaf_address,
+    credit_limit_a_to_b: tl.credit_limit_a_to_b.to_f,
+    credit_limit_b_to_a: tl.credit_limit_b_to_a.to_f,
+    balance: tl.current_balance.to_f }
+end
+puts data.to_json
+' 2>&1 | grep -v "warning:" | grep '^\[' > /tmp/foaf_seed.json
+
+docker cp /tmp/foaf_seed.json "$(docker-compose -f ../foaf-protocol-ruby/docker-compose.yml ps -q foaf)":/tmp/foaf_seed.json 2>/dev/null
 
 docker-compose -f ../foaf-protocol-ruby/docker-compose.yml exec -T foaf bundle exec rails runner '
 require "json"
+data = JSON.parse(File.read("/tmp/foaf_seed.json"))
 
-data = JSON.parse(File.read("/tmp/foaf_tl.json"))
-
-# Deploy network
 network = NetworkService.deploy(
   name: "Growoperative Gardens (CAD)", symbol: "GGRO", decimals: 2,
   owner_address: "0x0000000000000000000000000000000000000001"
@@ -134,13 +83,12 @@ network = NetworkService.deploy(
 puts "  Network: #{network.address}"
 
 data.each do |tl|
-  addr_a = tl["addr_a"]
-  addr_b = tl["addr_b"]
+  addr_a, addr_b = tl["addr_a"], tl["addr_b"]
   app_a_to_b = tl["credit_limit_a_to_b"]
   app_b_to_a = tl["credit_limit_b_to_a"]
   app_balance = tl["balance"]
 
-  # Canonical order and semantic mapping
+  # Canonical order + semantic mapping (app limits are inverted from FOAF)
   if addr_a < addr_b
     foaf_given = app_b_to_a
     foaf_received = app_a_to_b
@@ -169,14 +117,15 @@ data.each do |tl|
   record = Foaf::TrustlineRecord.where(user_a_address: canon_a, user_b_address: canon_b).first!
   record.update_column(:balance, foaf_balance) if foaf_balance != 0
 
-  puts "  #{tl["user_a"]}<->#{tl["user_b"]}: balance=#{foaf_balance}"
+  puts "  #{tl["user_a"]} <-> #{tl["user_b"]}: balance=#{foaf_balance}"
 end
+puts "  Done: #{data.size} trustlines seeded."
 ' 2>&1
-echo "  OK"
 
 # --- Verify ---
 echo ""
 echo "=== Verify ==="
+sleep 2
 curl -s http://localhost:3001/v1/debug/foaf/reconcile 2>/dev/null | \
   python3 -c "
 import json, sys
@@ -185,13 +134,10 @@ s = data['summary']
 print(f\"Trustlines: {s['total']}  Matches: {s['matches']}  Discrepancies: {s['discrepancies']}  Unlinked: {s['unlinked']}\")
 for tl in data['trustlines']:
     status = 'OK' if tl['match'] else 'DIFF'
-    print(f\"  {status}  {tl['user_a']} <-> {tl['user_b']}\")
-    if not tl['match']:
-        for d in tl['discrepancies']:
-            print(f\"       {d}\")
-" 2>/dev/null || echo "  (reconciliation endpoint not available)"
+    print(f'  {status}  {tl[\"user_a\"]} <-> {tl[\"user_b\"]}')
+" 2>/dev/null || echo "  (reconciliation not available — backend may need restart)"
 
 echo ""
 echo "=== Reset Complete ==="
-echo "Both databases are in sync. Make transactions and check:"
+echo "Both databases synced. Shadow hooks are active."
 echo "  curl http://localhost:3001/v1/debug/foaf/reconcile"

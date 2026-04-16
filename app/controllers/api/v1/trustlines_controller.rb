@@ -66,6 +66,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     )
     
     if @trustline.persisted?
+      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
       render json: serialize_trustline(@trustline), status: :created
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_entity
@@ -84,6 +85,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # Returns: Updated trustline object or validation errors
   def update
     if @trustline.update(trustline_params)
+      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
       render json: serialize_trustline(@trustline)
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_entity
