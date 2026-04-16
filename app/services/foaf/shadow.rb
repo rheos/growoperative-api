@@ -36,6 +36,8 @@ module Foaf
     end
 
     # Mirror a trustline update to FOAF.
+    # FOAF uses two-stage accept — we send both sides so it completes immediately.
+    # The app creates trustlines unilaterally, so we simulate both parties agreeing.
     def mirror_trustline_update(trustline, current_user)
       return unless Foaf::Config.shadow_mode?
       return unless ensure_network!
@@ -45,26 +47,32 @@ module Foaf
       ensure_identity!(user_a)
       ensure_identity!(user_b)
 
-      # The current user is the creditor (the one making the update)
-      creditor = current_user
-      debtor = creditor.id == user_a.id ? user_b : user_a
-      is_a = creditor.id == user_a.id
+      addr_a = Foaf::Signer.address_for(user_a)
+      addr_b = Foaf::Signer.address_for(user_b)
 
-      # CRITICAL: semantic mapping between app and FOAF (see foaf-protocol skill)
+      # CRITICAL: semantic mapping (see foaf-protocol skill)
       # App credit_limit_a_to_b (A can owe B) = FOAF creditline_received (from A's perspective)
       # App credit_limit_b_to_a (B can owe A) = FOAF creditline_given (from A's perspective)
-      # So from the creditor's perspective:
-      #   if creditor is A: given = app B→A (what A extends to B), received = app A→B (what B extends to A)
-      #   if creditor is B: given = app A→B (what B extends to A), received = app B→A (what A extends to B)
+
+      # First call: user_a proposes
       @client.update_trustline(
         network_address: @network_address,
-        creditor_address: Foaf::Signer.address_for(creditor),
-        debtor_address: Foaf::Signer.address_for(debtor),
-        creditline_given: is_a ? trustline.credit_limit_b_to_a : trustline.credit_limit_a_to_b,
-        creditline_received: is_a ? trustline.credit_limit_a_to_b : trustline.credit_limit_b_to_a
+        creditor_address: addr_a,
+        debtor_address: addr_b,
+        creditline_given: trustline.credit_limit_b_to_a,
+        creditline_received: trustline.credit_limit_a_to_b
       )
 
-      Rails.logger.info("[FOAF Shadow] Mirrored trustline update: #{creditor.user_name} -> #{debtor.user_name}")
+      # Second call: user_b accepts (with matching terms)
+      @client.update_trustline(
+        network_address: @network_address,
+        creditor_address: addr_b,
+        debtor_address: addr_a,
+        creditline_given: trustline.credit_limit_a_to_b,
+        creditline_received: trustline.credit_limit_b_to_a
+      )
+
+      Rails.logger.info("[FOAF Shadow] Mirrored trustline update: #{user_a.user_name} <-> #{user_b.user_name}")
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Trustline mirror failed: #{e.message}")
     end
