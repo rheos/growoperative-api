@@ -66,6 +66,19 @@ module Foaf
       get("/api/v1/networks/#{network_address}/users/#{user_address}/events", params)
     end
 
+    # Events scoped to a specific trustline edge (both directions). Includes
+    # per-hop BalanceUpdate events that would otherwise be invisible in a
+    # user-scoped feed — notably, credloop cancellations that pass through
+    # this edge but whose Transfer event targets a different user.
+    def trustline_events(network_address:, user_address:, counter_party_address:, type: nil)
+      params = {}
+      params[:type] = type if type
+      get(
+        "/api/v1/networks/#{network_address}/users/#{user_address}/trustlines/#{counter_party_address}/events",
+        params,
+      )
+    end
+
     private
 
     def get(path, params = {})

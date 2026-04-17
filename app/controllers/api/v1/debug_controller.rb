@@ -10,6 +10,61 @@ class Api::V1::DebugController < Api::V1::ApiController
     {}
   end
 
+  # BalanceUpdate event that's part of a credit-loop cancellation. The parent
+  # op's `path` is the full cycle. For each participant in this trustline, the
+  # loop also touched their *other* cycle-edge trustline by the same amount —
+  # that's the "where did this come from" explanation we show.
+  private def build_credloop_row(event, parent, trustline, user_a, user_b)
+    path = parent["path"] || []
+    loop_value = parent["value"].to_f
+    from_addr = event["from"]  # edge direction this BalanceUpdate represents
+
+    # Figure out user_a's "other neighbor" in the cycle (the one that isn't
+    # user_b). path wraps, so the last element equals the first.
+    # e.g. [bob, bruce, arthur, mary, peter, bob]
+    inner = path.size > 1 && path.first == path.last ? path[0..-2] : path
+    idx = inner.index(user_a.foaf_address)
+    other_addr = nil
+    if idx
+      prev_addr = inner[(idx - 1) % inner.size]
+      next_addr = inner[(idx + 1) % inner.size]
+      other_addr = (prev_addr == user_b.foaf_address) ? next_addr : prev_addr
+    end
+    other_user = other_addr && User.find_by(foaf_address: other_addr)
+    other_name = other_user&.user_name || "another user"
+
+    # Direction on THIS edge: from user_a's POV, did user_a "send" or "receive"?
+    # A BalanceUpdate stores the edge's directional intent in from/to. If user_a
+    # is the from_address, user_a was the sender on this hop.
+    direction = from_addr == user_a.foaf_address ? "sent" : "received"
+
+    description = "Credit loop cancellation — your balance with #{other_name} was adjusted by the same amount"
+
+    {
+      transaction: {
+        id: event["blockNumber"].to_i,
+        trustline_id: trustline.id,
+        amount: loop_value,
+        description: description,
+        transaction_type: "credloop",
+        initiated_by_id: nil,
+        originating_request_id: nil,
+        order_id: nil,
+        balance_after: 0.0,
+        is_reversed: false,
+        created_at: Time.at(event["timestamp"].to_i).iso8601,
+        initiated_by_name: nil,
+        order_label: nil,
+        path_info: { hops: path, other_user: other_name },
+        _direction: direction,
+      },
+      balance_before: 0.0,
+      source_classification: "credloop",
+      balance_mismatch: false,
+      missing_linkage: false,
+    }
+  end
+
   private def build_transfer_row(event, trustline, user_a, user_b)
     extra = parse_foaf_extra_data(event["extraData"])
     is_credloop = extra["credloop_cancellation"].present? || (event["extraData"].to_s.include?("credloop_cancellation"))
@@ -101,6 +156,14 @@ class Api::V1::DebugController < Api::V1::ApiController
     return settled_transaction.amount.to_f if settled_transaction
 
     order.send(:settlement_amount).to_f
+  end
+
+  # GET /v1/debug/invariants
+  # Runs every registered data-integrity check against the current DB state
+  # and reports pass/fail. Used by the end-to-end trade test; also useful
+  # from curl/browser console when debugging.
+  def invariants
+    render json: InvariantsService.run
   end
 
   # GET /v1/debug/order/:id
@@ -575,6 +638,24 @@ class Api::V1::DebugController < Api::V1::ApiController
       when "TrustlineUpdate"
         rows << build_trustline_update_row(e, trustline, user_a, user_b)
       end
+    end
+
+    # Credloop cancellations that passed through this trustline edge. The
+    # Transfer event for a credloop has from == to == the initiator, so it
+    # won't appear under either participant's counterparty filter. But the
+    # BalanceUpdate on this specific edge IS scoped correctly via the per-
+    # trustline events endpoint. For each BalanceUpdate whose parent op is
+    # a self-transfer (from == to), render a credloop row.
+    tl_events = client.trustline_events(
+      network_address: network_address,
+      user_address: user_a.foaf_address,
+      counter_party_address: user_b.foaf_address,
+    ) || []
+    tl_events.each do |e|
+      next unless e["type"] == "BalanceUpdate"
+      parent = e["parentOp"]
+      next unless parent && parent["from"] == parent["to"]
+      rows << build_credloop_row(e, parent, trustline, user_a, user_b)
     end
 
     # FOAF returned descending; reverse to ascending to build running balance
