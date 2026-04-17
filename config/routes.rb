@@ -117,6 +117,7 @@ Rails.application.routes.draw do
       end
 
       # Debug query endpoints (no auth required)
+      get 'debug/invariants' => 'debug#invariants'
       get 'debug/order/:id' => 'debug#order'
       get 'debug/requests' => 'debug#requests'
       get 'debug/user/:username' => 'debug#user'

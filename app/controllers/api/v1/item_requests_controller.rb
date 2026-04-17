@@ -445,8 +445,13 @@ module Api::V1
             end
             value.delete_if { |request| request_ids.include?(request[:id]) }
             items_without_order += values_without_order
-            res = order.as_json
-            (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+            # If extraction emptied the order group, skip the wrapper entirely —
+            # otherwise the client renders a "0 items" placeholder card for an
+            # order whose items now live in items_without_order.
+            if value.any?
+              res = order.as_json
+              (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)
+            end
           else
             res = order.as_json
             (current_user.id.to_s.in?([res['friend_id'], res['user_id']]) || res['shipped_on']) ? result.push({order: res, items: value}) : result.push(value)

@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# End-to-end trade test. Restores a clean snapshot, then drives real API
+# calls across multiple demo users to exercise the request → accept → ship
+# → sign → settle flow. After every browser-equivalent action, the script
+# checks a set of data-integrity invariants against the DB and bails on
+# the first violation.
+#
+# Usage (from railsbackend/):
+#   ./bin/foaf-trade-test [snapshot_file]
+#
+# Exit codes:
+#   0 — all scenarios passed
+#   1 — invariant violation (details in output)
+#   2 — API error that blocked the test
+
+set -e
+
+SNAPSHOT="${1:-dev_clean_2026-04-17.sql}"
+
+echo "=== FOAF Trade Test ==="
+echo ""
+echo "[A] Reset ($SNAPSHOT)"
+./bin/foaf-reset "$SNAPSHOT" > /tmp/trade_test_reset.log 2>&1 || {
+  echo "  Reset failed. See /tmp/trade_test_reset.log"
+  exit 2
+}
+echo "  OK"
+echo ""
+
+echo "[B] Run scenarios (Python driver, via HTTP)"
+echo ""
+python3 scripts/trade_test.py
+
