@@ -13,7 +13,7 @@
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-04-17.sql}"
+SNAPSHOT="${1:-dev_clean_2026-04-18.sql}"
 SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
 
 if [ ! -f "${SNAPSHOT_PATH}" ]; then

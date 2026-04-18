@@ -16,7 +16,7 @@
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-04-17.sql}"
+SNAPSHOT="${1:-dev_clean_2026-04-18.sql}"
 
 echo "=== FOAF Trade Test ==="
 echo ""
