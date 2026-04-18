@@ -82,10 +82,12 @@ echo
 # We pipe the dump through foaf-testnet's mysql client (the rails-box host
 # doesn't have one installed, but the foaf-testnet image does).
 echo "[1/3] Loading ${SNAPSHOT} into ${DATABASE_NAME}..."
+# --ssl-mode=DISABLED: MySQL 8's self-signed cert fails CLI TLS verification,
+# but the connection is over private VPC so TLS is not needed for security.
 docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql -h ${DATABASE_HOST} -u ${DATABASE_USERNAME} -p'${DATABASE_PASSWORD}' ${DATABASE_NAME}" \
+  sh -c "mysql --ssl-mode=DISABLED -h ${DATABASE_HOST} -u ${DATABASE_USERNAME} -p'${DATABASE_PASSWORD}' ${DATABASE_NAME}" \
   < "${SNAPSHOT_PATH}" \
-  2>&1 | grep -v "Using a password" || true
+  2>&1 | grep -v "Using a password"
 echo "  OK"
 
 # --- Step 2: clear foaf-testnet data ---------------------------------------
@@ -94,7 +96,7 @@ docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
 models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
           Operation, PendingTransfer, CurrencyNetwork]
 models.each { |m| m.delete_all if defined?(m) }
-puts "  Cleared: #{models.map(&:name).join(\", \")}"
+puts "  Cleared: #{models.map(&:name).join(", ")}"
 ' 2>&1 | grep -v "warning:"
 echo "  OK"
 
