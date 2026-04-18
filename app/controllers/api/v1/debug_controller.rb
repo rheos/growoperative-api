@@ -38,7 +38,7 @@ class Api::V1::DebugController < Api::V1::ApiController
     # is the from_address, user_a was the sender on this hop.
     direction = from_addr == user_a.foaf_address ? "sent" : "received"
 
-    description = "Credit loop cancellation — your balance with #{other_name} was adjusted by the same amount"
+    description = "Offset by your balance with #{other_name}"
 
     {
       transaction: {
