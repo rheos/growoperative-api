@@ -37,6 +37,12 @@ SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
 BACKEND_CONTAINER="railsbackend-backend-demo-1"
 FOAF_CONTAINER="foaf-testnet"
 
+# --- Hard allowlist: refuse to touch anything but the demo + testnet -------
+# These are the ONLY targets this script is allowed to wipe. If any of these
+# expectations is violated, abort before any destructive operation.
+EXPECTED_APP_DB="growoperative_demo"
+EXPECTED_FOAF_NETWORK="testnet"
+
 # --- Safety: snapshot must be a clean baseline ------------------------------
 if [[ "${SNAPSHOT}" != dev_clean_* ]]; then
   echo "ERROR: Only dev_clean_* snapshots are allowed."
@@ -63,6 +69,13 @@ set -a; source "${ENV_FILE}"; set +a
 : "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in .env.demo}"
 : "${DATABASE_NAME:?DATABASE_NAME not in .env.demo}"
 
+# --- Allowlist guard: DATABASE_NAME must be the demo DB -------------------
+if [[ "${DATABASE_NAME}" != "${EXPECTED_APP_DB}" ]]; then
+  echo "REFUSED: DATABASE_NAME in .env.demo is '${DATABASE_NAME}', not '${EXPECTED_APP_DB}'."
+  echo "         This script only wipes the demo database. Aborting."
+  exit 1
+fi
+
 # --- Sanity: required containers running -----------------------------------
 for c in "${BACKEND_CONTAINER}" "${FOAF_CONTAINER}"; do
   if ! docker ps --format '{{.Names}}' | grep -qx "${c}"; then
@@ -70,6 +83,14 @@ for c in "${BACKEND_CONTAINER}" "${FOAF_CONTAINER}"; do
     exit 2
   fi
 done
+
+# --- Allowlist guard: foaf container must be running as testnet -----------
+FOAF_NETWORK_ACTUAL="$(docker exec "${FOAF_CONTAINER}" sh -c 'echo $FOAF_NETWORK' 2>/dev/null || echo '')"
+if [[ "${FOAF_NETWORK_ACTUAL}" != "${EXPECTED_FOAF_NETWORK}" ]]; then
+  echo "REFUSED: ${FOAF_CONTAINER} has FOAF_NETWORK='${FOAF_NETWORK_ACTUAL}', expected '${EXPECTED_FOAF_NETWORK}'."
+  echo "         This script only wipes the testnet FOAF database. Aborting."
+  exit 1
+fi
 
 echo "=== FOAF Demo Reset ==="
 echo "  Snapshot: ${SNAPSHOT}"
