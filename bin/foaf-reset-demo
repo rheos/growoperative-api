@@ -114,7 +114,7 @@ docker exec -i "${FOAF_CONTAINER}" \
 echo "  OK"
 
 # --- Step 2: clear foaf-testnet data ---------------------------------------
-echo "[2/3] Clearing foaf_testnet tables..."
+echo "[2/4] Clearing foaf_testnet tables..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
 models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
           Operation, PendingTransfer, CurrencyNetwork]
@@ -123,8 +123,31 @@ puts "  Cleared: #{models.map(&:name).join(", ")}"
 ' 2>&1 | { grep -v "warning:" || true; }
 echo "  OK"
 
-# --- Step 3: restart backend-demo so shadow state is fresh ----------------
-echo "[3/3] Restarting ${BACKEND_CONTAINER}..."
+# --- Step 3: deploy the FOAF currency network -----------------------------
+# Shadow mirroring needs a network to attach trustlines to. Without one,
+# every shadow call fails with "No network found on FOAF" and FOAF stays
+# empty even though the app is generating activity.
+echo "[3/4] Deploying FOAF currency network..."
+docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
+network = NetworkService.deploy(
+  name: "Growoperative Gardens (CAD)",
+  symbol: "GGRO",
+  decimals: 2,
+  owner_address: "0x0000000000000000000000000000000000000001"
+)
+puts "  Network: #{network.address}"
+' 2>&1 | { grep -v "warning:" || true; }
+echo "  OK"
+
+# --- Step 4: enable debug API + restart backend-demo ----------------------
+# The trade test uses /v1/debug/invariants which is gated by the
+# debug_api_enabled GlobalSetting. The dev_clean_* snapshot has no row
+# for it, so production-mode demo backend defaults to 403.
+echo "[4/4] Enabling debug API + restarting ${BACKEND_CONTAINER}..."
+docker exec "${BACKEND_CONTAINER}" bundle exec rails runner '
+GlobalSetting.find_or_create_by(setting: "debug_api_enabled").update!(value: 1)
+puts "  debug_api_enabled = 1"
+' 2>&1 | { grep -v -E "warning:|Spring" || true; }
 docker restart "${BACKEND_CONTAINER}" > /dev/null
 echo "  OK (allow ~15s for Rails to boot)"
 
