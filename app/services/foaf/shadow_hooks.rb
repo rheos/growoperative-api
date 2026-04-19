@@ -34,6 +34,20 @@ module Foaf
       Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end
 
+    # Call after settle_payment! succeeds. Settlement is the inverse of FOAF's
+    # transfer primitive — see project_settlement_vs_extension memory. The
+    # mirror auto-expands the (swapped) sender's credit room before the
+    # transfer so settling existing debt isn't blocked by limits that don't
+    # apply to repayment.
+    def after_settlement(trustline, amount, payer, payee, description: nil, order: nil)
+      return unless Foaf::Config.shadow_mode?
+
+      shadow.mirror_settlement(trustline, amount, payer, payee,
+                                description: description, order: order)
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Settlement mirror failed: #{e.message}")
+    end
+
     # Run reconciliation for all active trustlines.
     def reconcile_all
       return unless Foaf::Config.shadow_mode?

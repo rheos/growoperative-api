@@ -190,12 +190,11 @@ class Trustline < ApplicationRecord
         last_activity: Time.current
       )
 
-      # FOAF's transfer semantic is the inverted "extend credit" direction
-      # (sender becomes more indebted to receiver). Settle is the inverse —
-      # swap the parties so the shadow's transfer produces the same balance
-      # result on FOAF as we just produced locally.
-      Foaf::ShadowHooks.after_payment(self, amount, to_user, from_user,
-                                       description: description, order: order)
+      # Settlement gets its own shadow hook — the mirror auto-expands the
+      # swapped sender's credit room before the transfer (FOAF doesn't have
+      # a native settle primitive yet).
+      Foaf::ShadowHooks.after_settlement(self, amount, from_user, to_user,
+                                          description: description, order: order)
 
       new_balance
     end
