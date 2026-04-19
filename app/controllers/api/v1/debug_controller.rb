@@ -14,24 +14,34 @@ class Api::V1::DebugController < Api::V1::ApiController
   # op's `path` is the full cycle. For each participant in this trustline, the
   # loop also touched their *other* cycle-edge trustline by the same amount —
   # that's the "where did this come from" explanation we show.
-  private def build_credloop_row(event, parent, trustline, user_a, user_b)
+  private def build_credloop_row(event, parent, trustline, user_a, user_b, viewer = nil)
     path = parent["path"] || []
     loop_value = parent["value"].to_f
     from_addr = event["from"]  # edge direction this BalanceUpdate represents
 
-    # Figure out user_a's "other neighbor" in the cycle (the one that isn't
-    # user_b). path wraps, so the last element equals the first.
+    # Resolve "your other cycle neighbor" from the viewer's POV — not user_a's.
+    # user_a is whoever has the lower user_id in the trustline; the viewer may
+    # be either participant. Without viewer-awareness we'd always surface
+    # user_a's other neighbor and get the wrong name when the viewer is user_b.
+    viewer ||= user_a
+    viewer_addr = viewer.foaf_address
+    counterparty_addr = (viewer.id == user_a.id) ? user_b.foaf_address : user_a.foaf_address
+
+    # path wraps, so the last element equals the first.
     # e.g. [bob, bruce, arthur, mary, peter, bob]
     inner = path.size > 1 && path.first == path.last ? path[0..-2] : path
-    idx = inner.index(user_a.foaf_address)
+    idx = inner.index(viewer_addr)
     other_addr = nil
     if idx
       prev_addr = inner[(idx - 1) % inner.size]
       next_addr = inner[(idx + 1) % inner.size]
-      other_addr = (prev_addr == user_b.foaf_address) ? next_addr : prev_addr
+      other_addr = (prev_addr == counterparty_addr) ? next_addr : prev_addr
     end
     other_user = other_addr && User.find_by(foaf_address: other_addr)
     other_name = other_user&.user_name || "another user"
+    # Look up the trustline between the VIEWER and this other party so the
+    # audit modal can link to it — lets users follow the credloop around the cycle.
+    other_trustline_id = other_user && Trustline.between_users(viewer, other_user).first&.id
 
     # Direction on THIS edge: from user_a's POV, did user_a "send" or "receive"?
     # A BalanceUpdate stores the edge's directional intent in from/to. If user_a
@@ -55,7 +65,11 @@ class Api::V1::DebugController < Api::V1::ApiController
         created_at: Time.at(event["timestamp"].to_i).iso8601,
         initiated_by_name: nil,
         order_label: nil,
-        path_info: { hops: path, other_user: other_name },
+        path_info: {
+          hops: path,
+          other_user: other_name,
+          other_trustline_id: other_trustline_id,
+        },
         _direction: direction,
       },
       balance_before: 0.0,
@@ -111,8 +125,19 @@ class Api::V1::DebugController < Api::V1::ApiController
   end
 
   private def build_trustline_update_row(event, trustline, user_a, user_b)
-    given = event["creditlineGiven"].to_f
-    received = event["creditlineReceived"].to_f
+    # FOAF stores creditlineGiven/Received from the ORIGINATING user's POV.
+    # user_events returns events from both sides of the bilateral update, so
+    # "received" events arrive with values flipped from user_a's perspective.
+    # Normalize so "given" / "received" are always from user_a's side.
+    raw_given = event["creditlineGiven"].to_f
+    raw_received = event["creditlineReceived"].to_f
+    if event["direction"] == "received"
+      given = raw_received
+      received = raw_given
+    else
+      given = raw_given
+      received = raw_received
+    end
     initiator = event["direction"] == "sent" ? user_a : user_b
 
     {
@@ -631,11 +656,25 @@ class Api::V1::DebugController < Api::V1::ApiController
 
     rows = []
 
+    # Shadow mode emits TWO update_trustline API calls per logical limit change
+    # (one from each side of the bilateral agreement), which FOAF records as
+    # two TrustlineUpdate events at the same timestamp but from opposite POVs.
+    # After normalizing to user_a's perspective in build_trustline_update_row,
+    # the pair is redundant — dedupe by (timestamp, normalized given/received).
+    seen_update_keys = Set.new
+
     relevant.each do |e|
       case e["type"]
       when "Transfer"
         rows << build_transfer_row(e, trustline, user_a, user_b)
       when "TrustlineUpdate"
+        raw_given = e["creditlineGiven"].to_f
+        raw_received = e["creditlineReceived"].to_f
+        norm_given = e["direction"] == "received" ? raw_received : raw_given
+        norm_received = e["direction"] == "received" ? raw_given : raw_received
+        key = [e["timestamp"], norm_given, norm_received]
+        next if seen_update_keys.include?(key)
+        seen_update_keys << key
         rows << build_trustline_update_row(e, trustline, user_a, user_b)
       end
     end
@@ -655,7 +694,7 @@ class Api::V1::DebugController < Api::V1::ApiController
       next unless e["type"] == "BalanceUpdate"
       parent = e["parentOp"]
       next unless parent && parent["from"] == parent["to"]
-      rows << build_credloop_row(e, parent, trustline, user_a, user_b)
+      rows << build_credloop_row(e, parent, trustline, user_a, user_b, current_user)
     end
 
     # FOAF returned descending; reverse to ascending to build running balance
