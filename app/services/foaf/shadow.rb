@@ -84,6 +84,62 @@ module Foaf
       Rails.logger.warn("[FOAF Shadow] Trustline mirror failed: #{e.message}")
     end
 
+    # Mirror a settlement to FOAF.
+    #
+    # Settlement reduces payer's debt to payee. FOAF's only balance-affecting
+    # primitive is `transfer`, which always extends credit (sender becomes
+    # more indebted to receiver). To express settlement via transfer, we send
+    # payee→payer (making payee more indebted to payer = payer less indebted
+    # to payee — same net result).
+    #
+    # The catch: the swapped sender (payee) usually doesn't have enough
+    # creditline_received from payer in FOAF, because that limit was never
+    # used in normal flows. We pre-expand it here. Hack until FOAF has a
+    # native settle primitive — see project_settlement_vs_extension memory.
+    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil)
+      return unless Foaf::Config.shadow_mode?
+      return unless ensure_network!
+
+      ensure_identity!(payer)
+      ensure_identity!(payee)
+
+      # Bump both sides' limits so the swapped transfer has room.
+      ensure_capacity_for_settlement!(payer, payee)
+
+      extra_data = {
+        app: "growoperative",
+        description: description,
+        operation: "settlement",
+        order_id: order&.id,
+        order_label: order&.try(:order_label),
+        mirrored_at: Time.current.iso8601
+      }.compact.to_json
+
+      result = @client.create_pending_transfer(
+        network_address: @network_address,
+        from_address: Foaf::Signer.address_for(payee),
+        to_address: Foaf::Signer.address_for(payer),
+        value: amount.to_f,
+        extra_data: extra_data
+      )
+
+      unless result && result["id"]
+        Rails.logger.warn("[FOAF Shadow] Create pending settle transfer failed: #{payer.user_name} settle to #{payee.user_name} ($#{amount})")
+        return
+      end
+
+      confirm = @client.confirm_transfer(pending_transfer_id: result["id"])
+
+      unless confirm
+        Rails.logger.warn("[FOAF Shadow] Confirm settle transfer failed: PT##{result["id"]} #{payer.user_name} settle to #{payee.user_name}")
+        return
+      end
+
+      Rails.logger.info("[FOAF Shadow] Mirrored settlement: #{payer.user_name} settle to #{payee.user_name} ($#{amount})")
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Settlement mirror failed: #{e.message}")
+    end
+
     # Mirror a payment to FOAF.
     def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil)
       return unless Foaf::Config.shadow_mode?
@@ -168,6 +224,38 @@ module Foaf
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Reconcile failed: #{e.message}")
       { error: e.message }
+    end
+
+    private
+
+    SETTLEMENT_CAPACITY_CEILING = 1_000_000_000
+
+    # Bump both sides' creditlines on FOAF high enough that settlement
+    # transfers won't trip the capacity check. We can't query FOAF for the
+    # current state cheaply, so we just set both to a generous ceiling.
+    # Two-stage handshake (matches mirror_trustline_update) — both parties
+    # must call to apply an increase.
+    def ensure_capacity_for_settlement!(payer, payee)
+      payer_addr = Foaf::Signer.address_for(payer)
+      payee_addr = Foaf::Signer.address_for(payee)
+
+      @client.update_trustline(
+        network_address: @network_address,
+        creditor_address: payer_addr,
+        debtor_address: payee_addr,
+        creditline_given: SETTLEMENT_CAPACITY_CEILING,
+        creditline_received: SETTLEMENT_CAPACITY_CEILING
+      )
+
+      @client.update_trustline(
+        network_address: @network_address,
+        creditor_address: payee_addr,
+        debtor_address: payer_addr,
+        creditline_given: SETTLEMENT_CAPACITY_CEILING,
+        creditline_received: SETTLEMENT_CAPACITY_CEILING
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Capacity expand failed: #{e.message}")
     end
   end
 end
