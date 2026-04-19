@@ -110,7 +110,7 @@ echo "[1/3] Loading ${SNAPSHOT} into ${DATABASE_NAME}..."
 docker exec -i "${FOAF_CONTAINER}" \
   sh -c "mysql --skip-ssl -h ${DATABASE_HOST} -u ${DATABASE_USERNAME} -p'${DATABASE_PASSWORD}' ${DATABASE_NAME}" \
   < "${SNAPSHOT_PATH}" \
-  2>&1 | grep -v "Using a password"
+  2>&1 | { grep -v "Using a password" || true; }
 echo "  OK"
 
 # --- Step 2: clear foaf-testnet data ---------------------------------------
@@ -120,7 +120,7 @@ models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
           Operation, PendingTransfer, CurrencyNetwork]
 models.each { |m| m.delete_all if defined?(m) }
 puts "  Cleared: #{models.map(&:name).join(", ")}"
-' 2>&1 | grep -v "warning:"
+' 2>&1 | { grep -v "warning:" || true; }
 echo "  OK"
 
 # --- Step 3: restart backend-demo so shadow state is fresh ----------------
