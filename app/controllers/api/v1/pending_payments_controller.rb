@@ -34,6 +34,12 @@ module Api::V1
       )
 
       if pp.save
+        Notifications.publish!(
+          event:      :pending_payment_created,
+          actor:      current_user,
+          recipients: [to_user],
+          resource:   pp
+        )
         render json: serialize(pp), status: :created
       else
         render json: { errors: pp.errors.full_messages }, status: :unprocessable_entity

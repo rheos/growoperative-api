@@ -19,6 +19,15 @@ module Notifications
         target_type:   'item',
         target_screen: 'item_detail',
         target_id:     ->(resource:, **) { resource.request_contract.inventory_id }
+      },
+
+      pending_payment_created: {
+        message:       ->(actor:, resource:, **) {
+          "#{actor.user_name} sent you $#{format('%.2f', resource.amount)}"
+        },
+        target_type:   'trustline',
+        target_screen: 'trustlines',
+        target_id:     ->(resource:, **) { resource.trustline_id }
       }
 
       # Future events follow the same shape:
