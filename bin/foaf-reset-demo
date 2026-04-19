@@ -56,6 +56,19 @@ if [[ ! -f "${SNAPSHOT_PATH}" ]]; then
   exit 1
 fi
 
+# Snapshot must be transactionally empty. The dev_clean_* prefix is a name
+# convention; this check is the actual contract. If a snapshot somehow ended
+# up with orders/trustlines/etc baked in, refuse rather than silently load it.
+TRANSACTIONAL_TABLES=(trustlines trustline_transactions orders item_requests request_contracts pending_payments)
+for tbl in "${TRANSACTIONAL_TABLES[@]}"; do
+  if grep -q "INSERT INTO \`${tbl}\`" "${SNAPSHOT_PATH}"; then
+    echo "REFUSED: ${SNAPSHOT_PATH} contains INSERT INTO \`${tbl}\`."
+    echo "         Trade-test snapshots must have zero transactional rows."
+    echo "         Strip the INSERTs from the dump and retry."
+    exit 1
+  fi
+done
+
 # --- Load app DB creds from .env.demo --------------------------------------
 ENV_FILE="$(dirname "$(realpath "$0")")/../.env.demo"
 if [[ ! -f "${ENV_FILE}" ]]; then
