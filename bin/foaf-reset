@@ -26,6 +26,12 @@ echo "Snapshot: ${SNAPSHOT}"
 echo ""
 
 # --- Step 1: Restore app DB ---
+# NOTE: when this dev MySQL container is upgraded from 5.7 to 8, this command
+# will fail with "TLS/SSL error: self-signed certificate" because MySQL 8
+# requires TLS by default. Add an SSL-disable flag at that point — the right
+# flag depends on the client: --ssl-mode=DISABLED for Oracle's mysql client,
+# --skip-ssl for MariaDB's. (Prod's bin/foaf-reset-demo already uses --skip-ssl
+# because the foaf-testnet container ships MariaDB.)
 echo "[1/5] Restoring app DB..."
 docker-compose exec -T db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < "${SNAPSHOT_PATH}"
 echo "  OK"
