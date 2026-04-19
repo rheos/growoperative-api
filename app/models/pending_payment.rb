@@ -7,16 +7,14 @@ class PendingPayment < ApplicationRecord
 
   validates :amount, presence: true, numericality: { greater_than: 0 }
   validate :users_on_trustline, on: :create
-  validate :credit_available, on: :create
 
   scope :for_user, ->(user) { where('from_user_id = ? OR to_user_id = ?', user.id, user.id) }
 
   def confirm!
     raise 'Payment is not pending' unless pending?
-    raise 'Insufficient credit' unless trustline.can_handle_payment?(amount, from_user)
 
     transaction do
-      new_balance = trustline.process_payment!(
+      new_balance = trustline.settle_payment!(
         amount,
         from_user,
         to_user,
@@ -58,13 +56,6 @@ class PendingPayment < ApplicationRecord
     return unless trustline && from_user && to_user
     unless trustline.involves_users?(from_user, to_user)
       errors.add(:base, 'Users must both be on the trustline')
-    end
-  end
-
-  def credit_available
-    return unless trustline && from_user && amount
-    unless trustline.can_handle_payment?(amount, from_user)
-      errors.add(:amount, 'exceeds available credit')
     end
   end
 end

@@ -120,7 +120,7 @@ class Trustline < ApplicationRecord
   def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil)
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
     raise ArgumentError, "Insufficient credit" unless can_handle_payment?(amount, from_user)
-    
+
     transaction do
       # Calculate new balance based on payment direction
       if from_user.id == user_a_id
@@ -130,7 +130,7 @@ class Trustline < ApplicationRecord
         # B is paying A, decrease current_balance (A owes less)
         new_balance = current_balance - amount
       end
-      
+
       # Create transaction record for audit trail
       trustline_transactions.create!(
         amount: amount,
@@ -141,7 +141,7 @@ class Trustline < ApplicationRecord
         initiated_by: from_user,
         balance_after: new_balance
       )
-      
+
       # Update balance and activity timestamp atomically
       update!(
         current_balance: new_balance,
@@ -149,6 +149,47 @@ class Trustline < ApplicationRecord
       )
 
       # Shadow mirror to FOAF protocol (development only, fire-and-forget)
+      Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
+                                       description: description, order: order)
+
+      new_balance
+    end
+  end
+
+  # Settles debt FROM `from_user` TO `to_user`. Inverse of process_payment!:
+  # from_user's debt to to_user *decreases* by amount (and can swing past zero
+  # into to_user owing from_user, bounded by the reverse credit limit).
+  #
+  # This is what the Pay button does — bruce hits Pay, bob confirms, bruce's
+  # debt to bob goes down. Conventional pay semantics, requires recipient
+  # confirmation (handled by PendingPayment#confirm!).
+  def settle_payment!(amount, from_user, to_user, description: nil, order: nil)
+    raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
+    raise ArgumentError, "Amount must be positive" unless amount.to_f > 0
+
+    transaction do
+      if from_user.id == user_a_id
+        # A is settling toward B: A's debt to B decreases (or B becomes A's debtor)
+        new_balance = current_balance - amount
+      else
+        # B is settling toward A: B's debt to A decreases (or A becomes B's debtor)
+        new_balance = current_balance + amount
+      end
+
+      trustline_transactions.create!(
+        amount: amount,
+        description: description || "Settlement from #{from_user.user_name} to #{to_user.user_name}",
+        order: order,
+        transaction_type: 'payment',
+        initiated_by: from_user,
+        balance_after: new_balance
+      )
+
+      update!(
+        current_balance: new_balance,
+        last_activity: Time.current
+      )
+
       Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
                                        description: description, order: order)
 
