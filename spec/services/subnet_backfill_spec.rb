@@ -19,13 +19,37 @@ RSpec.describe SubnetBackfill do
     expect(Subnet.first.name).to match(/sb_bob/i)
   end
 
-  it 'seeds an initial config' do
+  it 'seeds a minimal config when no override is given (falls through to SiteConfig defaults)' do
     create_user('sb_bob')
     SubnetBackfill.run!
 
-    cfg = Subnet.first.current_config.config
-    expect(cfg['multi_role']).to eq(true)
-    expect(cfg['demo_mode']).to eq(true)
+    subnet = Subnet.first
+    stored = subnet.current_config.config
+    effective = SiteConfig.for(subnet)
+
+    expect(stored.keys).to contain_exactly('chain_limit')
+    expect(effective[:multi_role]).to eq(SiteConfig::DEFAULTS[:multi_role])
+    expect(effective[:demo_mode]).to eq(SiteConfig::DEFAULTS[:demo_mode])
+  end
+
+  it 'accepts an explicit config override (e.g. launch config)' do
+    create_user('sb_bob')
+    SubnetBackfill.run!(
+      subnet_name: 'Crawford Bay',
+      config: { multi_role: false, visible_roles: ['broker'], demo_mode: false }
+    )
+
+    subnet = Subnet.first
+    expect(subnet.name).to eq('Crawford Bay')
+    stored = subnet.current_config.config
+    expect(stored['multi_role']).to eq(false)
+    expect(stored['visible_roles']).to eq(['broker'])
+  end
+
+  it 'uses the provided subnet_name instead of auto-generating one' do
+    create_user('sb_bob')
+    SubnetBackfill.run!(subnet_name: 'Somewhere Specific')
+    expect(Subnet.first.name).to eq('Somewhere Specific')
   end
 
   it 'enrolls the seed user and everyone in their invite chain' do
