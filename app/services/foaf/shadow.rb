@@ -91,9 +91,9 @@ module Foaf
     # more indebted to receiver). To express settlement via transfer, we send
     # payee→payer (making payee more indebted to payer = payer less indebted
     # to payee — same net result). See project_settlement_vs_extension memory.
-    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil)
+    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement")
       mirror_payment(trustline, amount, payee, payer,
-                      description: description, order: order, operation: "settlement")
+                      description: description, order: order, operation: operation)
     end
 
     # Mirror a payment to FOAF. Honors FOAF's existing credit limits — if the
