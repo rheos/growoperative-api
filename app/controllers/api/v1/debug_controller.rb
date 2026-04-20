@@ -82,19 +82,28 @@ class Api::V1::DebugController < Api::V1::ApiController
   private def build_transfer_row(event, trustline, user_a, user_b)
     extra = parse_foaf_extra_data(event["extraData"])
     is_credloop = extra["credloop_cancellation"].present? || (event["extraData"].to_s.include?("credloop_cancellation"))
+    is_adjustment = extra["operation"] == "adjustment"
     order_id = extra["order_id"]
     order_label = extra["order_label"]
     description = extra["description"] || (is_credloop ? "Credit loop cancellation" : nil)
 
     classification = if is_credloop
       "credloop"
+    elsif is_adjustment
+      "adjustment"
     elsif order_id
       "order_settlement"
     else
       "direct_payment"
     end
 
-    transaction_type = order_id ? "settlement" : "payment"
+    transaction_type = if is_adjustment
+      "adjustment"
+    elsif order_id
+      "settlement"
+    else
+      "payment"
+    end
 
     path = event["path"]
     initiator = event["direction"] == "sent" ? user_a : user_b

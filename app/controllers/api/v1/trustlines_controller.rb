@@ -204,16 +204,16 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
     end
 
-    unless @trustline.can_handle_payment?(amount, current_user)
-      return render json: { errors: ['Amount exceeds available credit'] }, status: :unprocessable_entity
-    end
-
+    # No credit-limit check: voluntary self-adverse declaration. The user is
+    # accepting the obligation themselves, so the limit doesn't apply.
     begin
       new_balance = @trustline.process_payment!(
         amount,
         current_user,
         to_user,
-        description: params[:description] || "Debt recorded by #{current_user.user_name}"
+        description: params[:description] || "Debt recorded by #{current_user.user_name}",
+        force_capacity: true,
+        operation: "adjustment"
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements
@@ -250,16 +250,17 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
     end
 
-    unless @trustline.can_handle_payment?(amount, from_user)
-      return render json: { errors: ['Amount exceeds available credit'] }, status: :unprocessable_entity
-    end
-
+    # No credit-limit check: receipt acknowledgment is self-adverse — current
+    # user is voluntarily reducing their claim (or accepting a payment from
+    # the other side). The limit doesn't apply.
     begin
       new_balance = @trustline.process_payment!(
         amount,
         from_user,
         current_user,
-        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}"
+        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}",
+        force_capacity: true,
+        operation: "adjustment"
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements

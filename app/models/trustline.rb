@@ -117,9 +117,9 @@ class Trustline < ApplicationRecord
   # @param order [Order] - Optional order associated with this payment
   # @return [BigDecimal] - New balance after payment
   # @raise [ArgumentError] - If users are invalid or insufficient credit
-  def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil)
+  def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil, force_capacity: false, operation: "payment")
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
-    raise ArgumentError, "Insufficient credit" unless can_handle_payment?(amount, from_user)
+    raise ArgumentError, "Insufficient credit" unless force_capacity || can_handle_payment?(amount, from_user)
 
     transaction do
       # Calculate new balance based on payment direction
@@ -150,7 +150,7 @@ class Trustline < ApplicationRecord
 
       # Shadow mirror to FOAF protocol (development only, fire-and-forget)
       Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
-                                       description: description, order: order)
+                                       description: description, order: order, operation: operation)
 
       new_balance
     end
