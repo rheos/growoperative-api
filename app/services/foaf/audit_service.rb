@@ -110,28 +110,14 @@ module Foaf
 
       rows = []
 
-      # Dedupe TrustlineUpdate pairs. A single bilateral update emits two
-      # FOAF events (proposal + accept, one from each side, with given/received
-      # swapped). Their timestamps can differ by a second or two, so bucket to
-      # a 10s window — legitimate re-updates with identical limits inside 10s
-      # are vanishingly unlikely.
-      seen_update_keys = Set.new
-
+      # TrustlineUpdate events (limit changes) are intentionally excluded from
+      # transaction history — the user asked for balance-moving events only.
+      # Balance-moving "adjustment" rows (record_debt / record_receipt) come
+      # from Transfer events with operation="adjustment" in extraData and
+      # are kept. For a future "limit history" view, query TrustlineUpdate
+      # events separately via build_trustline_update_row.
       relevant.each do |e|
-        case e["type"]
-        when "Transfer"
-          rows << build_transfer_row(e, trustline, user_a, user_b)
-        when "TrustlineUpdate"
-          raw_given = e["creditlineGiven"].to_f
-          raw_received = e["creditlineReceived"].to_f
-          norm_given = e["direction"] == "received" ? raw_received : raw_given
-          norm_received = e["direction"] == "received" ? raw_given : raw_received
-          bucket = e["timestamp"].to_i / 10
-          key = [bucket, norm_given, norm_received]
-          next if seen_update_keys.include?(key)
-          seen_update_keys << key
-          rows << build_trustline_update_row(e, trustline, user_a, user_b)
-        end
+        rows << build_transfer_row(e, trustline, user_a, user_b) if e["type"] == "Transfer"
       end
 
       tl_events = client.trustline_events(
