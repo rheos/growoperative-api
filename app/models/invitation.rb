@@ -3,6 +3,7 @@ class Invitation < ApplicationRecord
   enum status: [ :pending, :accepted ]
   enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
   belongs_to :user
+  belongs_to :subnet, optional: true
 
   # Callbacks
   before_create :generate_invitation_code

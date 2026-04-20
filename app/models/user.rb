@@ -28,6 +28,8 @@ class User < ApplicationRecord
   has_many   :reviews, dependent: :destroy
   has_many   :category_sizes, dependent: :destroy
   has_many   :notifications, foreign_key: :recipient_id, dependent: :destroy
+  has_many   :subnet_memberships, dependent: :destroy
+  has_many   :subnets, through: :subnet_memberships
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'
   
   # === MUTUAL CREDIT SYSTEM ASSOCIATIONS ===
@@ -53,7 +55,7 @@ class User < ApplicationRecord
 
   # call_backs
   before_create :set_parent
-  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group
+  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group, :join_subnet_from_invitation
 
   def set_category_sizes
     CategorySize.where(user_id: nil).each do |c| 
@@ -196,6 +198,25 @@ class User < ApplicationRecord
     if parent&.demo?
       user_groups.find_or_create_by!(group_label: 'demo')
     end
+  end
+
+  # Subnet membership helper — at most one primary per user.
+  def primary_subnet
+    subnet_memberships.primary.first&.subnet
+  end
+
+  # Creates a primary SubnetMembership for the new user from the invitation's
+  # subnet. Nullable subnet_id on the invitation is intentional during the
+  # backfill window (see plan 17) — we silently no-op and leave the user
+  # without a membership until Phase 3 backfill runs.
+  def join_subnet_from_invitation
+    find_invitation
+    return unless @invitation&.subnet_id
+    subnet_memberships.create!(
+      subnet_id: @invitation.subnet_id,
+      joined_via_invitation_id: @invitation.id,
+      is_primary: true
+    )
   end
   
   # === MUTUAL CREDIT SYSTEM METHODS ===

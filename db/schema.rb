@@ -72,6 +72,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "note_label"
     t.integer "accepted_id"
     t.float "user_price"
+    t.bigint "subnet_id"
+    t.index ["subnet_id"], name: "index_invitations_on_subnet_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
 
@@ -264,6 +266,34 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["item_id"], name: "index_reviews_on_item_id"
     t.index ["item_name_id"], name: "index_reviews_on_item_name_id"
     t.index ["user_id"], name: "index_reviews_on_user_id"
+  end
+
+  create_table "subnet_configs", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "subnet_id", null: false
+    t.integer "version", null: false
+    t.json "config", null: false
+    t.bigint "changed_by_user_id"
+    t.datetime "created_at", null: false
+    t.index ["subnet_id", "version"], name: "index_subnet_configs_on_subnet_id_and_version", unique: true
+  end
+
+  create_table "subnet_memberships", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "subnet_id", null: false
+    t.bigint "joined_via_invitation_id"
+    t.boolean "is_primary", default: false, null: false
+    t.datetime "created_at", null: false
+    t.index ["joined_via_invitation_id"], name: "index_subnet_memberships_on_joined_via_invitation_id"
+    t.index ["subnet_id"], name: "index_subnet_memberships_on_subnet_id"
+    t.index ["user_id", "subnet_id"], name: "index_subnet_memberships_on_user_id_and_subnet_id", unique: true
+  end
+
+  create_table "subnets", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "seed_user_id", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["seed_user_id"], name: "index_subnets_on_seed_user_id"
   end
 
   create_table "trustline_transactions", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|

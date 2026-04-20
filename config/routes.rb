@@ -134,6 +134,8 @@ Rails.application.routes.draw do
       get 'foaf/trustlines/:id'        => 'foaf#show_trustline'
       get 'foaf/trustlines/:id/events' => 'foaf#trustline_events'
 
+      get 'site_config' => 'site_configs#show'
+
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'

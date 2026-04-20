@@ -5,15 +5,16 @@
 # Usage (from railsbackend/):
 #   ./bin/foaf-reset [snapshot_file]
 #
-# Default snapshot: dev_clean_2026-04-17.sql — users + items only, no
-# pre-existing requests/orders/contracts/trustlines. Clean slate for the
-# trade-test stress run (trustlines get created on-demand during settlement).
+# Default snapshot: dev_clean_2026-04-20.sql — users + items only, no
+# pre-existing requests/orders/contracts/trustlines. Also includes subnet
+# fixtures: Bob's Network (demo config) and Crawford Bay (launch config,
+# Robin-only). Clean slate for the trade-test stress run.
 # Older baseline with pre-shipment chains still available at:
 #   ./bin/foaf-reset dev_preshipment_rebalanced_2026-04-13.sql
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-04-18.sql}"
+SNAPSHOT="${1:-dev_clean_2026-04-20.sql}"
 SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
 
 if [ ! -f "${SNAPSHOT_PATH}" ]; then
