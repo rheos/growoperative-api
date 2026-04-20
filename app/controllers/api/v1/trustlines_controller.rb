@@ -255,17 +255,14 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
     end
 
-    # No credit-limit check: receipt acknowledgment is self-adverse — current
-    # user is voluntarily reducing their claim (or accepting a payment from
-    # the other side). The limit doesn't apply.
+    # Settlement direction: from_user's debt to current_user decreases.
+    # No credit-limit check needed — settlement only reduces debt.
     begin
-      new_balance = @trustline.process_payment!(
+      new_balance = @trustline.settle_payment!(
         amount,
         from_user,
         current_user,
-        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}",
-        force_capacity: true,
-        operation: "adjustment"
+        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}"
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements
