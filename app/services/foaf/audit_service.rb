@@ -161,6 +161,17 @@ module Foaf
         tx.delete(:_direction)
       end
 
+      # Flip canonical (user_a perspective) balances to viewer-perspective —
+      # same convention as Trustline#balance_for. Storage stays canonical;
+      # only the API response flips. tx[:amount] is always a magnitude (sign
+      # comes from direction), so it's never flipped.
+      if viewer && viewer.id == trustline.user_b_id
+        rows.each do |row|
+          row[:balance_before] = -row[:balance_before].to_f
+          row[:transaction][:balance_after] = -row[:transaction][:balance_after].to_f
+        end
+      end
+
       { rows: rows.reverse }
     end
 
