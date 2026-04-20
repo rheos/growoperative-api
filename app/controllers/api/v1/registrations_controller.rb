@@ -19,7 +19,25 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   private
 
   def sign_up_params
-    params.permit(:user_name, :password, :password_conformation, :invited_code)
+    # Accept both the legacy flat-param shape (old platform/) and the new
+    # nested-under-:user shape (growoperative-app). Tolerate both invite_code
+    # spellings since the legacy contract had `invited_code`.
+    source = params[:user].present? ? params[:user] : params
+    permitted = source.permit(
+      :user_name, :password, :password_confirmation, :password_conformation,
+      :first_name, :last_name, :email, :invite_code, :invited_code,
+    ).to_h
+    # Normalize the misspelled :password_conformation key the User model expects.
+    if permitted[:password_confirmation].present? && permitted[:password_conformation].blank?
+      permitted[:password_conformation] = permitted[:password_confirmation]
+    end
+    permitted.delete(:password_confirmation)
+    # Same for invite_code → invited_code (the column the User model uses).
+    if permitted[:invite_code].present? && permitted[:invited_code].blank?
+      permitted[:invited_code] = permitted[:invite_code]
+    end
+    permitted.delete(:invite_code)
+    permitted
   end
 
   def invitation_limit
