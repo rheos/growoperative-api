@@ -27,11 +27,13 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       :user_name, :password, :password_confirmation, :password_conformation,
       :first_name, :last_name, :name, :email, :invite_code, :invited_code,
     ).to_h
-    # password_confirmation → :password_conformation (User model expects the typo)
-    if permitted[:password_confirmation].present? && permitted[:password_conformation].blank?
-      permitted[:password_conformation] = permitted[:password_confirmation]
+    # The legacy controller permitted :password_conformation (sic) but the
+    # User model uses Devise's correctly-spelled :password_confirmation.
+    # Normalize the typo back to the correct key.
+    if permitted[:password_conformation].present? && permitted[:password_confirmation].blank?
+      permitted[:password_confirmation] = permitted[:password_conformation]
     end
-    permitted.delete(:password_confirmation)
+    permitted.delete(:password_conformation)
     # invite_code → :invited_code (User column name)
     if permitted[:invite_code].present? && permitted[:invited_code].blank?
       permitted[:invited_code] = permitted[:invite_code]
