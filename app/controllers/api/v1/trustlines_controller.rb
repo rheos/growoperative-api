@@ -262,7 +262,8 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         amount,
         from_user,
         current_user,
-        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}"
+        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}",
+        operation: "adjustment"
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements
