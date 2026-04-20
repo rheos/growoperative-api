@@ -110,8 +110,11 @@ module Foaf
 
       rows = []
 
-      # Dedupe TrustlineUpdate pairs (shadow mode emits two events per logical
-      # bilateral update, one from each side, with given/received swapped).
+      # Dedupe TrustlineUpdate pairs. A single bilateral update emits two
+      # FOAF events (proposal + accept, one from each side, with given/received
+      # swapped). Their timestamps can differ by a second or two, so bucket to
+      # a 10s window — legitimate re-updates with identical limits inside 10s
+      # are vanishingly unlikely.
       seen_update_keys = Set.new
 
       relevant.each do |e|
@@ -123,7 +126,8 @@ module Foaf
           raw_received = e["creditlineReceived"].to_f
           norm_given = e["direction"] == "received" ? raw_received : raw_given
           norm_received = e["direction"] == "received" ? raw_given : raw_received
-          key = [e["timestamp"], norm_given, norm_received]
+          bucket = e["timestamp"].to_i / 10
+          key = [bucket, norm_given, norm_received]
           next if seen_update_keys.include?(key)
           seen_update_keys << key
           rows << build_trustline_update_row(e, trustline, user_a, user_b)
