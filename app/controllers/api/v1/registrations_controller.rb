@@ -20,23 +20,29 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
 
   def sign_up_params
     # Accept both the legacy flat-param shape (old platform/) and the new
-    # nested-under-:user shape (growoperative-app). Tolerate both invite_code
-    # spellings since the legacy contract had `invited_code`.
+    # nested-under-:user shape (growoperative-app). Tolerate spelling variants
+    # since the legacy contract used misspelled / hyphenated keys.
     source = params[:user].present? ? params[:user] : params
     permitted = source.permit(
       :user_name, :password, :password_confirmation, :password_conformation,
-      :first_name, :last_name, :email, :invite_code, :invited_code,
+      :first_name, :last_name, :name, :email, :invite_code, :invited_code,
     ).to_h
-    # Normalize the misspelled :password_conformation key the User model expects.
+    # password_confirmation → :password_conformation (User model expects the typo)
     if permitted[:password_confirmation].present? && permitted[:password_conformation].blank?
       permitted[:password_conformation] = permitted[:password_confirmation]
     end
     permitted.delete(:password_confirmation)
-    # Same for invite_code → invited_code (the column the User model uses).
+    # invite_code → :invited_code (User column name)
     if permitted[:invite_code].present? && permitted[:invited_code].blank?
       permitted[:invited_code] = permitted[:invite_code]
     end
     permitted.delete(:invite_code)
+    # User model has a single :name column — combine first/last if present.
+    if permitted[:name].blank? && (permitted[:first_name].present? || permitted[:last_name].present?)
+      permitted[:name] = [permitted[:first_name], permitted[:last_name]].compact.reject(&:empty?).join(" ")
+    end
+    permitted.delete(:first_name)
+    permitted.delete(:last_name)
     permitted
   end
 
