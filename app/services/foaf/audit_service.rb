@@ -148,7 +148,10 @@ module Foaf
       rows.each do |row|
         tx = row[:transaction]
         row[:balance_before] = running
-        if tx[:transaction_type] == "adjustment"
+        # Zero-amount rows (trustline limit updates) are balance-neutral.
+        # Anything with a real amount — including record_debt / record_receipt
+        # adjustments — moves the balance by `value` in the transfer's direction.
+        if tx[:amount].to_f == 0
           tx[:balance_after] = running
         else
           delta = tx[:_direction] == "sent" ? tx[:amount] : -tx[:amount]
