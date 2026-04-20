@@ -128,6 +128,12 @@ Rails.application.routes.draw do
       get 'debug/foaf/status' => 'debug#foaf_status'
       get 'debug/foaf/events/:trustline_id' => 'debug#foaf_events'
 
+      # Authenticated FOAF reads scoped to current_user (replaces the
+      # equivalent /v1/debug/foaf/* endpoints for end-user traffic).
+      get 'foaf/trustlines'            => 'foaf#index'
+      get 'foaf/trustlines/:id'        => 'foaf#show_trustline'
+      get 'foaf/trustlines/:id/events' => 'foaf#trustline_events'
+
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'
       get 'current_user_types' => 'users#current_user_types'
