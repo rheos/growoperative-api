@@ -58,13 +58,18 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   #
   # Returns: Created trustline object or validation errors
   def create
+    # Frontend sends a single :credit_limit (the creator's outgoing limit);
+    # the older API expected :my_credit_limit / :their_credit_limit. Accept both.
+    my_limit = params[:my_credit_limit] || params[:credit_limit] || 0
+    their_limit = params[:their_credit_limit] || 0
+
     @trustline = current_user.establish_trustline_with(
       @other_user,
-      my_credit_limit: params[:my_credit_limit] || 0,
-      their_credit_limit: params[:their_credit_limit] || 0,
+      my_credit_limit: my_limit,
+      their_credit_limit: their_limit,
       notes: params[:notes]
     )
-    
+
     if @trustline.persisted?
       Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
       render json: serialize_trustline(@trustline), status: :created
@@ -391,9 +396,11 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     render json: { errors: ['Trustline not found'] }, status: :not_found
   end
   
-  # Finds and sets other user for trustline creation
+  # Finds and sets other user for trustline creation.
+  # Accepts :other_user_id (legacy) or :user_id (new app).
   def set_other_user
-    @other_user = User.find(params[:other_user_id])
+    other_id = params[:other_user_id] || params[:user_id]
+    @other_user = User.find(other_id)
   rescue ActiveRecord::RecordNotFound
     render json: { errors: ['User not found'] }, status: :not_found
   end
