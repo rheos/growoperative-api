@@ -25,11 +25,11 @@ module Foaf
     end
 
     # Call after process_payment! succeeds.
-    def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil)
+    def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment")
       return unless Foaf::Config.shadow_mode?
 
       shadow.mirror_payment(trustline, amount, from_user, to_user,
-                            description: description, order: order)
+                            description: description, order: order, operation: operation)
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end

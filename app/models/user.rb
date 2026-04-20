@@ -276,15 +276,21 @@ class User < ApplicationRecord
   # @param their_credit_limit [Numeric] - Credit limit they extend to me
   # @param notes [String] - Optional notes about the relationship
   # @return [Trustline, false] - The trustline or false if failed
-  def establish_trustline_with(other_user, my_credit_limit: 0, their_credit_limit: 0, notes: nil)
+  DEFAULT_CREDIT_LIMIT = 100
+  def establish_trustline_with(other_user, my_credit_limit: nil, their_credit_limit: nil, notes: nil)
     return false if self == other_user
     return trustline_with(other_user) if trustline_with(other_user)
-    
+
+    # Default both sides to a sensible starting limit so a fresh trustline is
+    # immediately usable. Counterparty can adjust their side later.
+    my_limit = my_credit_limit.to_f.positive? ? my_credit_limit : DEFAULT_CREDIT_LIMIT
+    their_limit = their_credit_limit.to_f.positive? ? their_credit_limit : DEFAULT_CREDIT_LIMIT
+
     Trustline.find_or_create_between(
-      self, 
-      other_user, 
-      credit_limit_1_to_2: my_credit_limit,
-      credit_limit_2_to_1: their_credit_limit
+      self,
+      other_user,
+      credit_limit_1_to_2: my_limit,
+      credit_limit_2_to_1: their_limit
     ).tap do |trustline|
       trustline.update(notes: notes) if notes
     end
