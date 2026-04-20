@@ -52,6 +52,23 @@ module Api::V1
 					@invitation.user_price = params[:user_price]
 				end
 				@invitation.status = 0
+				# Default the invitation's subnet to the inviter's primary. Nullable
+				# during the backfill window — once Phase 3 runs, every existing user
+				# has a primary membership and this will always be set.
+				subnet = current_user.primary_subnet
+				@invitation.subnet_id = subnet&.id
+				# Subnet role policy: when the inviter's subnet has multi_role=false,
+				# clamp the invitation's user_type to the first allowed role. Backend
+				# is authoritative — downstream user_groups can never accrue roles
+				# outside visible_roles for locked-role subnets, regardless of what
+				# the client sends.
+				if subnet
+					flags = SiteConfig.for(subnet)
+					unless flags[:multi_role]
+						allowed = flags[:visible_roles].first
+						@invitation.user_type = allowed if allowed.present?
+					end
+				end
 				if @invitation.save!
 				render json: @invitation, status: 200
 				else
