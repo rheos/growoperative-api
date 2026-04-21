@@ -175,9 +175,13 @@ class User < ApplicationRecord
     end
   end
 
-  # This method will get remaining invitation count of user
+  # Remaining invitation slots available to this user. Only *pending* (i.e.
+  # unused) invitations count against the limit — once someone accepts a code,
+  # that slot frees up. Historically this counted all invitations including
+  # accepted ones, which meant a user who'd successfully onboarded N people
+  # could never generate another code.
   def ramaining_invitation_limit
-    self.invite_limit - self.invitations.count
+    self.invite_limit - self.invitations.pending.count
   end
 
   # This method build relationship between user
