@@ -14,6 +14,33 @@ module Api::V1
       }, status: 200
     end
 
+    # GET /v1/subnets/:id/graph
+    # Returns { nodes, edges } for rendering the subnet's network map.
+    # Intra-subnet relationships + trustlines only — edges crossing subnet
+    # boundaries are deliberately excluded so the visualization stays scoped.
+    def graph
+      subnet = Subnet.find(params[:id])
+      member_ids = subnet.subnet_memberships.pluck(:user_id)
+      members = User.where(id: member_ids).includes(:user_groups, items: :item_unit)
+
+      nodes = members.map { |u| serialize_graph_node(u) }
+
+      relationships = Relationship.where(user_id: member_ids, friend_id: member_ids)
+      rel_edges = relationships.map { |r| { source_id: r.user_id, target_id: r.friend_id, type: 'relationship' } }
+
+      trustlines = Trustline.where(user_a_id: member_ids, user_b_id: member_ids)
+      trust_edges = trustlines.map do |t|
+        { source_id: t.user_a_id, target_id: t.user_b_id, type: 'trustline', balance: t.current_balance.to_f }
+      end
+
+      render json: {
+        subnet_id: subnet.id,
+        subnet_name: subnet.name,
+        nodes: nodes,
+        edges: rel_edges + trust_edges
+      }, status: 200
+    end
+
     # PATCH /v1/subnets/:id/config
     # Accepts a partial flag hash, merges it over the current config, and
     # writes a NEW SubnetConfig row (subnet_configs is append-only — we never
@@ -63,6 +90,19 @@ module Api::V1
     def to_bool(v)
       return v if v == true || v == false
       %w[true 1 yes].include?(v.to_s.downcase)
+    end
+
+    def serialize_graph_node(user)
+      roles = user.user_groups.map(&:group_label).reject { |g| g == 'demo' }
+      {
+        id: user.id,
+        user_name: user.user_name,
+        name: user.name || user.user_name.capitalize,
+        roles: roles,
+        parent_id: user.parent_id,
+        depth: user.depth || 0,
+        items: user.items.map { |i| "#{i.quantity.to_i}#{i.item_unit&.item_symbol} #{i.name}" }
+      }
     end
 
     def subnet_payload(subnet)
