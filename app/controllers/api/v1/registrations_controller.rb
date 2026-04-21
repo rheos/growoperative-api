@@ -1,7 +1,7 @@
 class Api::V1::RegistrationsController < Api::V1::ApiController
   skip_before_action :authenticate!
 
-  before_action :invitation_limit, :check_chain_limit, only: [:create]
+  before_action :invitation_limit, :check_chain_limit, :check_subnet_email_policy, only: [:create]
 
   respond_to :json
 
@@ -78,6 +78,24 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
 
     if global_setting && invited_user.depth >= global_setting.value
       render json: { message: "Chain limit over" }, status: 422
+    end
+  end
+
+  # Enforces the `enforce_valid_email` subnet flag. When the invitation's
+  # subnet requires a valid email, reject signups without one (or with a
+  # malformed one). Subnets that don't set the flag accept email-less signups.
+  def check_subnet_email_policy
+    code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
+    invitation = Invitation.find_by(invitation_code: code)
+    subnet = invitation&.subnet
+    return unless subnet
+
+    flags = SiteConfig.for(subnet)
+    return unless flags[:enforce_valid_email]
+
+    email = params[:email] || params.dig(:user, :email)
+    if email.blank? || !email.match?(URI::MailTo::EMAIL_REGEXP)
+      render json: { message: "A valid email is required to join this subnet" }, status: 422
     end
   end
 end

@@ -127,9 +127,12 @@ module Api::V1
 					return
 			end
 			if params[:invite_limit].present? && params[:invite_limit] != ""
-				if @user.invitations_count > params[:invite_limit].to_i
+				# Guard against lowering the limit below the number of currently-
+				# pending (not-yet-accepted) invitations — accepted ones don't
+				# block further generation so they don't block limit changes.
+				if @user.invitations.pending.count > params[:invite_limit].to_i
 					render json: {
-						message: "invitation limit can't be smaller than current inviations count"
+						message: "invitation limit can't be smaller than current pending invitations"
 					}, status: 401
 					return
 				end

@@ -77,6 +77,9 @@ module Api::V1
       if params.key?(:multi_role)
         allowed[:multi_role] = to_bool(params[:multi_role])
       end
+      if params.key?(:enforce_valid_email)
+        allowed[:enforce_valid_email] = to_bool(params[:enforce_valid_email])
+      end
       if params.key?(:visible_roles)
         roles = Array(params[:visible_roles]).map(&:to_s).reject(&:empty?)
         allowed[:visible_roles] = roles
