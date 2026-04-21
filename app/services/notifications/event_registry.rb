@@ -28,6 +28,24 @@ module Notifications
         target_type:   'trustline',
         target_screen: 'trustlines',
         target_id:     ->(resource:, **) { resource.trustline_id }
+      },
+
+      payment_request_created: {
+        message:       ->(actor:, resource:, **) {
+          "#{actor.user_name} is requesting $#{format('%.2f', resource.amount)} in cash"
+        },
+        target_type:   'trustline',
+        target_screen: 'trustlines',
+        target_id:     ->(resource:, **) { resource.trustline_id }
+      },
+
+      payment_request_paid: {
+        message:       ->(actor:, resource:, **) {
+          "#{actor.user_name} paid your $#{format('%.2f', resource.amount)} request — confirm receipt"
+        },
+        target_type:   'trustline',
+        target_screen: 'trustlines',
+        target_id:     ->(resource:, **) { resource.trustline_id }
       }
 
       # Future events follow the same shape:
