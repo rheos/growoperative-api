@@ -85,4 +85,49 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       expect(response).to have_http_status(422)
     end
   end
+
+  describe 'GET /v1/subnets/:id/graph' do
+    it 'requires superuser' do
+      subnet = create(:subnet, seed_user: regular)
+      get "/v1/subnets/#{subnet.id}/graph", headers: reg_headers
+      expect(response).to have_http_status(403)
+    end
+
+    it 'returns subnet members as nodes' do
+      seed = User.create!(user_name: 'sg_seed', password: password)
+      member = User.create!(user_name: 'sg_member', password: password)
+      subnet = create(:subnet, name: 'Graph Net', seed_user: seed)
+      seed.subnet_memberships.create!(subnet: subnet, is_primary: true)
+      member.subnet_memberships.create!(subnet: subnet, is_primary: true)
+
+      get "/v1/subnets/#{subnet.id}/graph", headers: super_headers
+      expect(response).to have_http_status(200)
+
+      body = JSON.parse(response.body)
+      expect(body['subnet_id']).to eq(subnet.id)
+      expect(body['subnet_name']).to eq('Graph Net')
+      usernames = body['nodes'].map { |n| n['user_name'] }
+      expect(usernames).to contain_exactly('sg_seed', 'sg_member')
+    end
+
+    it 'includes only intra-subnet relationship edges' do
+      seed = User.create!(user_name: 'sg_seed2', password: password)
+      inside = User.create!(user_name: 'sg_inside', password: password)
+      outside = User.create!(user_name: 'sg_outside', password: password)
+      subnet = create(:subnet, seed_user: seed)
+      seed.subnet_memberships.create!(subnet: subnet, is_primary: true)
+      inside.subnet_memberships.create!(subnet: subnet, is_primary: true)
+
+      # Intra-subnet relationship: seed → inside (should appear)
+      Relationship.create!(user_id: seed.id, friend_id: inside.id, status: 1, action_user_id: seed.id)
+      # Cross-subnet relationship: seed → outside (should NOT appear)
+      Relationship.create!(user_id: seed.id, friend_id: outside.id, status: 1, action_user_id: seed.id)
+
+      get "/v1/subnets/#{subnet.id}/graph", headers: super_headers
+      body = JSON.parse(response.body)
+
+      edge_pairs = body['edges'].select { |e| e['type'] == 'relationship' }.map { |e| [e['source_id'], e['target_id']] }
+      expect(edge_pairs).to contain_exactly([seed.id, inside.id])
+    end
+  end
 end

@@ -138,6 +138,7 @@ Rails.application.routes.draw do
       resources :subnets, only: [:index] do
         member do
           patch 'config' => 'subnets#update_config'
+          get   'graph'  => 'subnets#graph'
         end
       end
 
