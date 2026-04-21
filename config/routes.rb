@@ -113,6 +113,7 @@ Rails.application.routes.draw do
         member do
           put 'confirm'
           put 'reject'
+          put 'mark_paid'
         end
       end
 
