@@ -78,6 +78,10 @@ class PendingPayment < ApplicationRecord
     from_user
   end
 
+  def initiator_id
+    from_user_id
+  end
+
   # The party who must take the next action.
   def awaiting_user
     case [kind, status]
