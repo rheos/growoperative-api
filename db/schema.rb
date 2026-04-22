@@ -207,7 +207,10 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "resolved_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.datetime "paid_at"
     t.index ["from_user_id"], name: "index_pending_payments_on_from_user_id"
+    t.index ["kind"], name: "index_pending_payments_on_kind"
     t.index ["status"], name: "index_pending_payments_on_status"
     t.index ["to_user_id"], name: "index_pending_payments_on_to_user_id"
     t.index ["trustline_id"], name: "index_pending_payments_on_trustline_id"
