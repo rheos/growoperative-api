@@ -10,6 +10,11 @@ jobs:
     name: Deploy app
     runs-on: ubuntu-latest
     steps:
+      # Both backend containers auto-run `rails db:migrate` on startup via
+      # entrypoint.prod.sh (RAILS_ENV=production branch). Building backend-demo
+      # alongside backend — and recreating it on `up -d` — ensures migrations
+      # added since the last deploy apply to both databases without a manual
+      # SSH step.
       - name: Deploy to Lightsail
         env:
           SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
@@ -24,6 +29,6 @@ jobs:
             cd ~/railsbackend && \
             git pull && \
             chmod +x docker-entrypoint.sh entrypoint.sh entrypoint.prod.sh bin/* && \
-            sudo docker compose -f docker-compose.prod.yml build backend && \
+            sudo docker compose -f docker-compose.prod.yml build backend backend-demo && \
             sudo docker compose -f docker-compose.prod.yml up -d backend backend-demo && \
             sudo docker compose -f docker-compose.prod.yml restart nginx"
