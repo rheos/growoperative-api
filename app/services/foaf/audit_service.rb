@@ -252,6 +252,19 @@ module Foaf
       path = event["path"]
       initiator = event["direction"] == "sent" ? user_a : user_b
 
+      # Adjustment descriptions (record_debt / record_receipt) bake the
+      # username in at controller time, which rots when demo data is
+      # reseeded or an old row predates a user rename. Regenerate from the
+      # resolved initiator so the displayed "by X" always matches the
+      # actual actor. User-typed descriptions pass through untouched.
+      if is_adjustment && description.present?
+        if description.start_with?("Debt recorded by ")
+          description = "Debt recorded by #{initiator.user_name}"
+        elsif description.start_with?("Receipt acknowledged by ")
+          description = "Receipt acknowledged by #{initiator.user_name}"
+        end
+      end
+
       {
         transaction: {
           id: event["blockNumber"].to_i,
