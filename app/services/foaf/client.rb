@@ -79,6 +79,16 @@ module Foaf
       )
     end
 
+    # === CREDIT LOOPS (forensic) ===
+
+    def credloops(network_address:, limit: 20, offset: 0)
+      get("/api/v1/networks/#{network_address}/credloops", limit: limit, offset: offset)
+    end
+
+    def credloop(operation_id:)
+      get("/api/v1/credloops/#{operation_id}")
+    end
+
     private
 
     def get(path, params = {})

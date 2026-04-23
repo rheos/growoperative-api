@@ -135,6 +135,10 @@ Rails.application.routes.draw do
       get 'foaf/trustlines/:id'        => 'foaf#show_trustline'
       get 'foaf/trustlines/:id/events' => 'foaf#trustline_events'
 
+      # Admin-only credit loop forensics (superuser-gated in controller).
+      get 'admin/credit_loops'      => 'credit_loops#index'
+      get 'admin/credit_loops/:id'  => 'credit_loops#show'
+
       get 'site_config' => 'site_configs#show'
       resources :subnets, only: [:index] do
         member do
