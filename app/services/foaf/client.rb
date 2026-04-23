@@ -79,14 +79,21 @@ module Foaf
       )
     end
 
-    # === CREDIT LOOPS (forensic) ===
+    # === OPERATIONS (generic reads for indexers) ===
+    # Protocol exposes raw operations + events; all analytics (credloops,
+    # reports, graphs) live in this backend as consumer-side indexing.
 
-    def credloops(network_address:, limit: 20, offset: 0)
-      get("/api/v1/networks/#{network_address}/credloops", limit: limit, offset: offset)
+    def operations(network_address:, limit: 20, type: nil, since_id: nil, before_id: nil, actor_address: nil)
+      params = { limit: limit }
+      params[:type] = type if type
+      params[:since_id] = since_id if since_id
+      params[:before_id] = before_id if before_id
+      params[:actor_address] = actor_address if actor_address
+      get("/api/v1/networks/#{network_address}/operations", params)
     end
 
-    def credloop(operation_id:)
-      get("/api/v1/credloops/#{operation_id}")
+    def operation(operation_id:)
+      get("/api/v1/operations/#{operation_id}")
     end
 
     private
