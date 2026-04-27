@@ -312,7 +312,11 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.boolean "is_reversed", default: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "foaf_operation_id"
+    t.datetime "foaf_posted_at"
+    t.string "foaf_direction", limit: 16
     t.index ["created_at"], name: "index_trustline_transactions_on_created_at"
+    t.index ["foaf_posted_at"], name: "index_trustline_transactions_on_foaf_posted_at"
     t.index ["initiated_by_id"], name: "index_trustline_transactions_on_initiated_by_id"
     t.index ["is_reversed"], name: "index_trustline_transactions_on_is_reversed"
     t.index ["order_id"], name: "index_trustline_transactions_on_order_id"

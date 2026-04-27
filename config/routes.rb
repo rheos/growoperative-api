@@ -92,7 +92,6 @@ Rails.application.routes.draw do
           post 'payment'
           post 'record_debt'
           post 'record_receipt'
-          get 'transactions'
         end
         collection do
           get 'summary'

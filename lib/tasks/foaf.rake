@@ -95,4 +95,11 @@ namespace :foaf do
     puts "Discrepancies: #{discrepancies}"
     puts "Missing/Skip:  #{missing}"
   end
+
+  desc "Replay TrustlineTransaction rows that never mirrored to FOAF"
+  task :replay_unposted, [:limit] => :environment do |_, args|
+    limit = (args[:limit] || 100).to_i
+    results = Foaf::ReplayWorker.run(limit: limit)
+    puts results.inspect
+  end
 end

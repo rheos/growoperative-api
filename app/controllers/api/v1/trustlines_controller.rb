@@ -28,23 +28,26 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # Lists all active trustlines for the current user
   # GET /api/v1/trustlines
   #
-  # Returns: Array of trustline objects with:
-  # - other_user: {id, name}
-  # - credit_limits: my_credit_limit, their_credit_limit
-  # - balances: current_balance, my_available_credit
-  # - metadata: is_active, established_date, last_activity, notes
+  # Balance and credit limits come from FOAF (authoritative). Rails supplies
+  # non-balance metadata (id, established_date, notes, is_active). See
+  # docs/claude/plans/todo/21-retire-rails-trustline-balances.md for the cutover.
   def index
-    @trustlines = current_user.trustlines.active.includes(:user_a, :user_b)
-    
-    render json: @trustlines.map { |trustline| serialize_trustline(trustline) }
+    rows = Foaf::BalanceReader.fetch(current_user)
+    return render_foaf_unavailable if rows.nil?
+    render json: rows.map { |row| serialize_balance_row(row) }
   end
-  
+
   # Shows details of a specific trustline
   # GET /api/v1/trustlines/:id
-  #
-  # Returns: Full trustline object with balance and credit information
   def show
-    render json: serialize_trustline(@trustline)
+    rows = Foaf::BalanceReader.fetch(current_user)
+    return render_foaf_unavailable if rows.nil?
+    row = rows.find { |r| r[:trustline].id == @trustline.id }
+    if row
+      render json: serialize_balance_row(row)
+    else
+      render json: { errors: ['Trustline not found in FOAF'] }, status: :service_unavailable
+    end
   end
   
   # Creates a new trustline between current user and another user
@@ -371,17 +374,6 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     end
   end
   
-  # GET /api/v1/trustlines/:id/transactions
-  def transactions
-    @trustline = current_user.trustlines.find(params[:id])
-    transactions = @trustline.trustline_transactions
-                              .includes(:initiated_by, :order)
-                              .order(created_at: :desc)
-    render json: transactions.map { |tx| serialize_transaction(tx) }
-  rescue ActiveRecord::RecordNotFound
-    render json: { errors: ['Trustline not found'] }, status: :not_found
-  end
-
   private
 
   # === HELPER METHODS ===
@@ -409,7 +401,37 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   end
   
   # === SERIALIZATION METHODS ===
-  
+
+  def render_foaf_unavailable
+    render json: { errors: ['Balance data unavailable — FOAF is unreachable'] }, status: :service_unavailable
+  end
+
+  # Serializes a Foaf::BalanceReader row — balance/limits come from FOAF, the
+  # rest from the joined Rails Trustline. Output shape matches serialize_trustline
+  # so frontend doesn't need to change.
+  def serialize_balance_row(row)
+    trustline = row[:trustline]
+    counterparty = row[:counterparty]
+    balance = row[:viewer_balance]
+    my_limit = row[:my_credit_limit]
+
+    {
+      id: trustline.id,
+      other_user: {
+        id: counterparty.id,
+        name: counterparty.user_name
+      },
+      my_credit_limit: my_limit,
+      their_credit_limit: row[:their_credit_limit],
+      my_available_credit: my_limit - [balance, 0].max,
+      current_balance: balance,
+      is_active: trustline.is_active,
+      established_date: trustline.established_date,
+      last_activity: trustline.last_activity,
+      notes: trustline.notes
+    }
+  end
+
   # Serializes trustline object from current user's perspective
   # @param trustline [Trustline] - The trustline to serialize
   # @return [Hash] - JSON-ready hash with trustline data
