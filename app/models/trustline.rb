@@ -131,15 +131,19 @@ class Trustline < ApplicationRecord
         new_balance = current_balance - amount
       end
 
-      # Create transaction record for audit trail
-      trustline_transactions.create!(
+      # Create transaction record for audit trail. foaf_direction='sent'
+      # means the FOAF transfer goes in the same direction as the Rails
+      # initiator (from_user → to_user). The replay worker keys off this
+      # to pick mirror_payment vs mirror_settlement on retry.
+      tx_row = trustline_transactions.create!(
         amount: amount,
         description: description || "Payment from #{from_user.user_name} to #{to_user.user_name}",
         originating_request: originating_request,
         order: order,
         transaction_type: 'payment',
         initiated_by: from_user,
-        balance_after: new_balance
+        balance_after: new_balance,
+        foaf_direction: 'sent'
       )
 
       # Update balance and activity timestamp atomically
@@ -148,9 +152,12 @@ class Trustline < ApplicationRecord
         last_activity: Time.current
       )
 
-      # Shadow mirror to FOAF protocol (development only, fire-and-forget)
+      # Shadow mirror to FOAF. Writes foaf_operation_id + foaf_posted_at onto
+      # tx_row on success. If FOAF is down the row sits with foaf_posted_at
+      # nil — Foaf::ReplayWorker replays it when FOAF recovers.
       Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
-                                       description: description, order: order, operation: operation)
+                                       description: description, order: order,
+                                       operation: operation, tx_row: tx_row)
 
       new_balance
     end
@@ -176,13 +183,17 @@ class Trustline < ApplicationRecord
         new_balance = current_balance + amount
       end
 
-      trustline_transactions.create!(
+      # foaf_direction='received' marks this as a settlement-shape row. On
+      # replay the worker picks mirror_settlement (which sends a reverse-
+      # direction FOAF transfer to reduce the initiator's debt).
+      tx_row = trustline_transactions.create!(
         amount: amount,
         description: description || "Settlement from #{from_user.user_name} to #{to_user.user_name}",
         order: order,
         transaction_type: 'payment',
         initiated_by: from_user,
-        balance_after: new_balance
+        balance_after: new_balance,
+        foaf_direction: 'received'
       )
 
       update!(
@@ -194,7 +205,8 @@ class Trustline < ApplicationRecord
       # swapped sender's credit room before the transfer (FOAF doesn't have
       # a native settle primitive yet).
       Foaf::ShadowHooks.after_settlement(self, amount, from_user, to_user,
-                                          description: description, order: order, operation: operation)
+                                          description: description, order: order,
+                                          operation: operation, tx_row: tx_row)
 
       new_balance
     end

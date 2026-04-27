@@ -91,16 +91,20 @@ module Foaf
     # more indebted to receiver). To express settlement via transfer, we send
     # payee→payer (making payee more indebted to payer = payer less indebted
     # to payee — same net result). See project_settlement_vs_extension memory.
-    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement")
+    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", tx_row: nil)
       mirror_payment(trustline, amount, payee, payer,
-                      description: description, order: order, operation: operation)
+                      description: description, order: order, operation: operation, tx_row: tx_row)
     end
 
     # Mirror a payment to FOAF. Honors FOAF's existing credit limits — if the
     # transfer exceeds capacity, FOAF rejects and the shadow logs a warning
     # without affecting the local Rails commit. The proper warn-and-expand UX
     # is tracked in project_settlement_vs_extension memory.
-    def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment")
+    #
+    # When tx_row is supplied, a successful confirm writes foaf_operation_id
+    # and foaf_posted_at back onto the row. On any failure the row stays
+    # with foaf_posted_at nil — Foaf::ReplayWorker retries later.
+    def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", tx_row: nil)
       return unless Foaf::Config.shadow_mode?
       return unless ensure_network!
 
@@ -137,10 +141,28 @@ module Foaf
         return
       end
 
+      mark_posted!(tx_row, confirm) if tx_row
+
       Rails.logger.info("[FOAF Shadow] Mirrored payment: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end
+
+    private
+
+    # Confirm response shape: { status, transfer, operation, totalFees }.
+    # `operation` is FOAF's Operation#id. Stash it alongside posted_at so
+    # the retry worker knows to skip this row.
+    def mark_posted!(tx_row, confirm_response)
+      tx_row.update!(
+        foaf_operation_id: confirm_response["operation"],
+        foaf_posted_at: Time.current
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Failed to mark tx #{tx_row.id} posted: #{e.message}")
+    end
+
+    public
 
     # Compare FOAF state with local state for a trustline.
     def reconcile_trustline(trustline)
