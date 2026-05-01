@@ -208,9 +208,9 @@ class InvariantsService
     return Markup.from_record(rp) if rp && rp.price
     ucp = UserCategoryPrice.find_by(user_id: seller_id)
     return Markup.from_record(ucp) if ucp
-    return Markup.flat(Category.first.default_node_price) if Category.first&.default_node_price
     cfg = SiteConfig.for(User.find(seller_id).primary_subnet)
-    Markup.new(type: cfg[:default_markup_type], value: cfg[:default_markup])
+    return Markup.new(type: cfg[:default_markup_type], value: cfg[:default_markup]) if cfg
+    Markup.flat(Category.first&.default_node_price || 0)
   end
 
   # Non-cancelled item_requests must have a resolvable contract + inventory.

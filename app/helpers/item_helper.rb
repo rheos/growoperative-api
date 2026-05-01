@@ -17,10 +17,10 @@ module ItemHelper
     category_price = UserCategoryPrice.find_by(user_id: user_id)
     return Markup.from_record(category_price) if category_price
 
-    return Markup.flat(Category.first.default_node_price) if Category.first&.default_node_price
-
     config = subnet_config_for(user_id)
-    Markup.new(type: config[:default_markup_type], value: config[:default_markup])
+    return Markup.new(type: config[:default_markup_type], value: config[:default_markup]) if config
+
+    Markup.flat(Category.first&.default_node_price || 0)
   end
 
   def subnet_config_for(user_id)
