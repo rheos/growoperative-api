@@ -196,6 +196,7 @@ class DemoSnapshotService
         status: inv.status,
         avatars_raw: inv.read_attribute_before_type_cast(:avatars),
         description: inv.description,
+        apply_first_hop_markup: inv.apply_first_hop_markup,
         ref_price: inv.ref_price.to_f,
       }
     end
@@ -263,6 +264,7 @@ class DemoSnapshotService
         user_name: id_to_name[ucp.user_id],
         category_name: Category.find_by(id: ucp.category_id)&.category_name,
         price: ucp.price.to_f,
+        price_type: ucp.try(:price_type) || 'flat',
       }
     end
   end
@@ -274,6 +276,7 @@ class DemoSnapshotService
         friend_user_name: id_to_name[urp.friend_id],
         category_name: Category.find_by(id: urp.category_id)&.category_name,
         price: urp.price.to_f,
+        price_type: urp.try(:price_type) || 'flat',
         receiving_price: urp.try(:receiving_price)&.to_f,
         receiving_price_type: urp.try(:receiving_price_type),
       }

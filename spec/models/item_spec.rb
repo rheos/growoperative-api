@@ -1,5 +1,9 @@
 require 'rails_helper'
 
 RSpec.describe Item, type: :model do
-  pending "add some examples to (or delete) #{__FILE__}"
+  it 'allows grade to be omitted' do
+    item = build(:item, grade: nil)
+
+    expect(item).to be_valid
+  end
 end

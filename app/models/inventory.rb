@@ -75,6 +75,7 @@ class Inventory < ApplicationRecord
         'avatars' => avatars_with_item,
         'owner-id' => self.user_id,
         'producer' => self.item.producer_id,
+        'apply-first-hop-markup' => self.apply_first_hop_markup,
         'status' => self.status,
         'action-request' => self.action_request.nil? ? self.item_requests.where("(item_requests.friend_id = #{current_user.id} AND item_requests.status = 0) OR (item_requests.user_id = #{current_user.id} AND item_requests.status = 4)").count > 0 : self.action_request != 0,
         'unit-options' => generate_options,

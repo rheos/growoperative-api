@@ -87,6 +87,13 @@ module Api::V1
       if params.key?(:chain_limit) && params[:chain_limit].present?
         allowed[:chain_limit] = params[:chain_limit].to_i
       end
+      if params.key?(:default_markup) && params[:default_markup].present?
+        allowed[:default_markup] = params[:default_markup].to_f
+      end
+      if params.key?(:default_markup_type) && params[:default_markup_type].present?
+        type = params[:default_markup_type].to_s
+        allowed[:default_markup_type] = Markup::TYPES.include?(type) ? type : 'flat'
+      end
       allowed
     end
 

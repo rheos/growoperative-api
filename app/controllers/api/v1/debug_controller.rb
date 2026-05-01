@@ -329,10 +329,10 @@ class Api::V1::DebugController < Api::V1::ApiController
     ).distinct.includes(item: [:item_unit])
 
     result = inventories.map do |inv|
-      price = if inv.producer_owns?
-                inv.price.to_f
+      price = if inv.apply_first_hop_markup?
+                helpers.get_relation_price(inv.user_id, u.id).apply_to(inv.price || 0)
               else
-                (inv.price || 0).to_f + helpers.get_relation_price(inv.user_id, u.id).to_f
+                inv.price.to_f
               end
       {
         inventory_id: inv.id,
@@ -369,19 +369,17 @@ class Api::V1::DebugController < Api::V1::ApiController
 
     # BFS pathfinding — same algorithm as ItemRequestsController#create
     max_depth = 5
-    contacts = [{ user_id: user.id, path: [], prices: [], total: 0, route_price: 0 }]
+    contacts = [{ user_id: user.id, path: [] }]
     shortest = { total: BigDecimal::INFINITY, path: [], prices: [] }
-    checked_contacts = {}
 
     while contacts.size > 0
       contact = contacts.shift
-      checked_contacts[contact[:user_id]] = contact[:total]
 
       if contact[:user_id] == inventory.user_id
-        unless inventory.producer_owns?
-          contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
-        end
-        shortest = contact if contact[:total] < shortest[:total]
+        path = contact[:path] + [inventory.user_id]
+        prices = debug_request_chain_prices(inventory, path)
+        total = prices.last || inventory.price.to_f
+        shortest = { total: total, path: path, prices: prices.reverse } if total < shortest[:total]
       elsif contact[:path].size < max_depth
         rels = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")
         if rels.size > 0
@@ -389,25 +387,22 @@ class Api::V1::DebugController < Api::V1::ApiController
             .select { |id| !User.find(id).only_consumer_retailer? }
             .each do |relation_id|
               next if relation_id == contact[:user_id]
-              total = contact[:total] + contact[:route_price]
-              if total < shortest[:total] &&
-                (checked_contacts[relation_id].nil? || total < checked_contacts[relation_id])
-                contacts.push({
-                  user_id: relation_id,
-                  path: contact[:path] + [contact[:user_id]],
-                  prices: contact[:prices] + [total],
-                  total: total,
-                  route_price: helpers.get_relation_price(relation_id, contact[:user_id]),
-                })
-              end
+              next if contact[:path].include?(relation_id)
+
+              contacts.push({
+                user_id: relation_id,
+                path: contact[:path] + [contact[:user_id]],
+              })
             end
         end
       end
     end
 
-    if shortest[:total] == BigDecimal::INFINITY || shortest[:path].empty?
+    if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size <= 1
       return render json: { error: "No path found from #{user.user_name} to #{inventory.item.name}" }, status: 400
     end
+
+    chain_prices = debug_request_chain_prices(inventory, shortest[:path]).reverse
 
     # Create contract + request chain
     rc = RequestContract.create!(
@@ -415,22 +410,20 @@ class Api::V1::DebugController < Api::V1::ApiController
       inventory_id: inventory.id,
       item_id: inventory.item_id,
       quantity: quantity,
-      steps: shortest[:prices].size,
+      steps: chain_prices.size,
     )
 
-    shortest[:path] << inventory.user_id
-    final_price = inventory.price + shortest[:total]
     created_requests = []
 
-    shortest[:prices].each_with_index do |price, index|
+    chain_prices.each_with_index do |price, index|
       ir = ItemRequest.create!(
         request_contract_id: rc.id,
         user_id: shortest[:path][index],
         friend_id: shortest[:path][index + 1],
-        price: final_price - price,
+        price: price,
         status: :pending,
         sent: shortest[:path][index] == user.id ? 1 : 0,
-        step: shortest[:prices].size - index,
+        step: chain_prices.size - index,
       )
       created_requests << {
         item_request_id: ir.id,
@@ -760,5 +753,20 @@ class Api::V1::DebugController < Api::V1::ApiController
       users_with_foaf_address: User.where.not(foaf_address: nil).count,
       users_total: User.count
     }
+  end
+
+  def debug_request_chain_prices(inventory, buyer_to_owner_path)
+    owner_to_buyer_path = buyer_to_owner_path.reverse
+    prices = []
+    running_price = inventory.price.to_f
+
+    owner_to_buyer_path.each_cons(2).with_index do |(seller_id, buyer_id), index|
+      unless index.zero? && !inventory.apply_first_hop_markup?
+        running_price = helpers.get_relation_price(seller_id, buyer_id).apply_to(running_price)
+      end
+      prices << running_price
+    end
+
+    prices
   end
 end

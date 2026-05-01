@@ -16,6 +16,7 @@ class InvariantsService
     order_membership
     contract_current_step
     orphan_requests
+    chain_pricing
   ].freeze
 
   def self.run
@@ -136,6 +137,80 @@ class InvariantsService
         context: { contract_id: c.id, steps: c.steps, current_step: c.current_step, signed: signed },
       }
     end
+  end
+
+  # --- Pricing ----------------------------------------------------------------
+
+  # Each item_request's price must match what `request_chain_prices` produces
+  # for that hop given the inventory's base price, the apply_first_hop_markup
+  # flag, and the chain of UCP/URP/subnet-default markups along the path.
+  # Catches drift between the BFS-stored price and the markup configuration.
+  #
+  # Skips cancelled requests, requests with manual unit pricing
+  # (request_contract.unit_id present — those bypass the chain calc), and
+  # contracts whose inventory has been deleted.
+  def self.check_chain_pricing(violations)
+    RequestContract.where.not(status: 'cancelled').includes(:item_requests, :inventory).find_each do |c|
+      inv = c.inventory
+      next unless inv
+      next if c.respond_to?(:unit_id) && c.unit_id.present?
+
+      irs = c.item_requests.sort_by(&:step) # producer-side first
+      next if irs.empty?
+
+      # path = [buyer, ..., owner]; reconstruct from item_requests sorted by step desc
+      buyer_to_owner = [irs.last.user_id] + irs.reverse.map(&:friend_id)
+      expected = chain_prices_for(inv, buyer_to_owner)
+
+      irs.each_with_index do |ir, i|
+        exp = expected[i]
+        next if exp.nil?
+        next if (ir.price.to_f - exp).abs < 0.011 # tolerate sub-cent rounding
+        violations << {
+          name: :chain_pricing,
+          message: "contract #{c.id} step #{ir.step}: stored=$#{ir.price.to_f} expected=$#{exp}",
+          context: {
+            contract_id: c.id,
+            request_id: ir.id,
+            step: ir.step,
+            stored_price: ir.price.to_f,
+            expected_price: exp,
+            inventory_id: inv.id,
+            base_price: inv.price.to_f,
+            apply_first_hop_markup: inv.apply_first_hop_markup,
+            path: buyer_to_owner,
+          },
+        }
+      end
+    end
+  end
+
+  # Mirrors ItemRequestsController#request_chain_prices. Pure function over
+  # the markup graph: producer-side hop optionally suppressed when
+  # apply_first_hop_markup is false; subsequent hops always apply markup.
+  def self.chain_prices_for(inventory, buyer_to_owner_path)
+    owner_to_buyer = buyer_to_owner_path.reverse
+    prices = []
+    running = inventory.price.to_f
+    owner_to_buyer.each_cons(2).with_index do |(seller_id, buyer_id), idx|
+      skip = idx.zero? && !inventory.apply_first_hop_markup
+      unless skip
+        running = markup_for(seller_id, buyer_id).apply_to(running)
+      end
+      prices << running
+    end
+    prices # already in step-ascending order: index 0 = producer-side hop (step 1)
+  end
+
+  def self.markup_for(seller_id, buyer_id)
+    return Markup.flat(0) if seller_id == buyer_id
+    rp = UserRelationshipPrice.find_by(user_id: seller_id, friend_id: buyer_id)
+    return Markup.from_record(rp) if rp && rp.price
+    ucp = UserCategoryPrice.find_by(user_id: seller_id)
+    return Markup.from_record(ucp) if ucp
+    return Markup.flat(Category.first.default_node_price) if Category.first&.default_node_price
+    cfg = SiteConfig.for(User.find(seller_id).primary_subnet)
+    Markup.new(type: cfg[:default_markup_type], value: cfg[:default_markup])
   end
 
   # Non-cancelled item_requests must have a resolvable contract + inventory.

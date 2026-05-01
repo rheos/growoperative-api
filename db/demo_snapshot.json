@@ -589,7 +589,8 @@
       "price": 4.0,
       "status": "available",
       "description": "Some very fine tomatoes",
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "bruce",
@@ -598,7 +599,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "bob",
@@ -607,7 +609,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "barry",
@@ -616,7 +619,8 @@
       "price": 4.0,
       "status": "available",
       "description": "null",
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "barry",
@@ -625,7 +629,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "peter",
@@ -634,7 +639,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "peter",
@@ -643,7 +649,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "sara",
@@ -652,7 +659,8 @@
       "price": 5.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "sara",
@@ -661,7 +669,8 @@
       "price": 5.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "paul",
@@ -670,7 +679,8 @@
       "price": 5.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "mary",
@@ -679,7 +689,8 @@
       "price": 4.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "mary",
@@ -688,7 +699,8 @@
       "price": 6.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "clark",
@@ -697,7 +709,8 @@
       "price": 5.0,
       "status": "available",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "clark",
@@ -706,7 +719,8 @@
       "price": 3.0,
       "status": "available",
       "description": "null",
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "bob",
@@ -715,7 +729,8 @@
       "price": 4.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "bruce",
@@ -724,7 +739,8 @@
       "price": 4.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "peter",
@@ -733,7 +749,8 @@
       "price": 5.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "peter",
@@ -742,7 +759,8 @@
       "price": 5.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "peter",
@@ -751,7 +769,8 @@
       "price": 4.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": false
     },
     {
       "user_name": "clark",
@@ -760,7 +779,8 @@
       "price": 5.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     },
     {
       "user_name": "clark",
@@ -769,7 +789,8 @@
       "price": 5.0,
       "status": "reserved",
       "description": null,
-      "ref_price": 0.0
+      "ref_price": 0.0,
+      "apply_first_hop_markup": true
     }
   ],
   "unit_options": [
@@ -1729,10 +1750,83 @@
     }
   ],
   "user_category_prices": [
-
+    {
+      "user_name": "bruce",
+      "category_name": "herbs and greens",
+      "price": 15,
+      "price_type": "percent"
+    },
+    {
+      "user_name": "barry",
+      "category_name": "herbs and greens",
+      "price": 1.5,
+      "price_type": "flat"
+    },
+    {
+      "user_name": "clark",
+      "category_name": "herbs and greens",
+      "price": 8,
+      "price_type": "percent"
+    },
+    {
+      "user_name": "oliver",
+      "category_name": "herbs and greens",
+      "price": 0.75,
+      "price_type": "flat"
+    },
+    {
+      "user_name": "bob",
+      "category_name": "herbs and greens",
+      "price": 5,
+      "price_type": "percent"
+    }
   ],
   "user_relationship_prices": [
-
+    {
+      "user_name": "bob",
+      "friend_user_name": "dianna",
+      "category_name": "herbs and greens",
+      "price": 5,
+      "price_type": "percent",
+      "receiving_price": null,
+      "receiving_price_type": null
+    },
+    {
+      "user_name": "bruce",
+      "friend_user_name": "barry",
+      "category_name": "herbs and greens",
+      "price": 0.5,
+      "price_type": "flat",
+      "receiving_price": null,
+      "receiving_price_type": null
+    },
+    {
+      "user_name": "clark",
+      "friend_user_name": "oliver",
+      "category_name": "herbs and greens",
+      "price": 12,
+      "price_type": "percent",
+      "receiving_price": null,
+      "receiving_price_type": null
+    },
+    {
+      "user_name": "oliver",
+      "friend_user_name": "barry",
+      "category_name": "herbs and greens",
+      "price": 1.0,
+      "price_type": "flat",
+      "receiving_price": null,
+      "receiving_price_type": null
+    },
+    {
+      "user_name": "barry",
+      "friend_user_name": "john",
+      "category_name": "herbs and greens",
+      "price": 20,
+      "price_type": "percent",
+      "receiving_price": null,
+      "receiving_price_type": null
+    }
   ],
   "user_relationship_request_prices": [
 
