@@ -141,65 +141,63 @@ class InvariantsService
 
   # --- Pricing ----------------------------------------------------------------
 
-  # Each item_request's price must match what `request_chain_prices` produces
-  # for that hop given the inventory's base price, the apply_first_hop_markup
-  # flag, and the chain of UCP/URP/subnet-default markups along the path.
-  # Catches drift between the BFS-stored price and the markup configuration.
+  # Each non-anchor hop's stored price must equal the previous hop's stored
+  # price compounded by the per-hop markup (UCP / URP / subnet default).
   #
-  # Skips cancelled requests, requests with manual unit pricing
-  # (request_contract.unit_id present — those bypass the chain calc), and
-  # contracts whose inventory has been deleted.
+  # Step 1 (the inventory-holder hop) is treated as the anchor and trusted as
+  # given — we don't recompute it against inventory.price, because inventories
+  # can be re-priced after a contract is created and that drift would produce
+  # false positives. Steps 2..N are forward-computed from step 1's stored
+  # value: this catches any markup-graph mismatch without depending on the
+  # inventory's *current* base price.
+  #
+  # Skips: cancelled requests, manual-unit contracts (request_contract.unit_id
+  # present bypasses the chain calc), single-hop contracts (no math to check),
+  # and contracts whose inventory has been deleted.
   def self.check_chain_pricing(violations)
     RequestContract.where.not(status: 'cancelled').includes(:item_requests, :inventory).find_each do |c|
       inv = c.inventory
       next unless inv
       next if c.respond_to?(:unit_id) && c.unit_id.present?
 
-      irs = c.item_requests.sort_by(&:step) # producer-side first
-      next if irs.empty?
+      irs = c.item_requests.sort_by(&:step) # step 1 = inventory-holder hop
+      next if irs.size < 2
 
-      # path = [buyer, ..., owner]; reconstruct from item_requests sorted by step desc
-      buyer_to_owner = [irs.last.user_id] + irs.reverse.map(&:friend_id)
-      expected = chain_prices_for(inv, buyer_to_owner)
+      running = irs.first.price.to_f
 
       irs.each_with_index do |ir, i|
-        exp = expected[i]
-        next if exp.nil?
-        next if (ir.price.to_f - exp).abs < 0.011 # tolerate sub-cent rounding
+        next if i.zero? # anchor; not validated here
+
+        # On an item_request, user_id is the buyer at that hop and friend_id
+        # is the seller. The markup graph is keyed seller -> buyer.
+        seller_id, buyer_id = ir.friend_id, ir.user_id
+        markup = markup_for(seller_id, buyer_id)
+        running = markup.apply_to(running)
+
+        next if (ir.price.to_f - running).abs < 0.011 # nickel-rounding tolerance
+
         violations << {
           name: :chain_pricing,
-          message: "contract #{c.id} step #{ir.step}: stored=$#{ir.price.to_f} expected=$#{exp}",
+          message: "contract #{c.id} step #{ir.step}: stored=$#{ir.price.to_f} expected=$#{running} " \
+                   "(prev=$#{irs[i - 1].price.to_f} + #{markup.type} #{markup.value})",
           context: {
             contract_id: c.id,
             request_id: ir.id,
             step: ir.step,
             stored_price: ir.price.to_f,
-            expected_price: exp,
+            expected_price: running,
+            anchor_price: irs.first.price.to_f,
+            previous_step_price: irs[i - 1].price.to_f,
+            markup_type: markup.type,
+            markup_value: markup.value,
+            seller_id: seller_id,
+            buyer_id: buyer_id,
             inventory_id: inv.id,
-            base_price: inv.price.to_f,
             apply_first_hop_markup: inv.apply_first_hop_markup,
-            path: buyer_to_owner,
           },
         }
       end
     end
-  end
-
-  # Mirrors ItemRequestsController#request_chain_prices. Pure function over
-  # the markup graph: producer-side hop optionally suppressed when
-  # apply_first_hop_markup is false; subsequent hops always apply markup.
-  def self.chain_prices_for(inventory, buyer_to_owner_path)
-    owner_to_buyer = buyer_to_owner_path.reverse
-    prices = []
-    running = inventory.price.to_f
-    owner_to_buyer.each_cons(2).with_index do |(seller_id, buyer_id), idx|
-      skip = idx.zero? && !inventory.apply_first_hop_markup
-      unless skip
-        running = markup_for(seller_id, buyer_id).apply_to(running)
-      end
-      prices << running
-    end
-    prices # already in step-ascending order: index 0 = producer-side hop (step 1)
   end
 
   def self.markup_for(seller_id, buyer_id)
