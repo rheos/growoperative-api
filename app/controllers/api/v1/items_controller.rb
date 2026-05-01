@@ -38,21 +38,22 @@ module Api::V1
 
           @items.each do |item|
             item.target_user_id = item.user_id
-            if item.producer_owns?
-              item.total_price = item.price
-            else
+            if item.apply_first_hop_markup?
               if item.status == "reserved" && item.item_requests.count
                 adj_price = item.item_requests.where(user_id: current_user.id, status: "reserved").first&.price
               end
-              item.total_price = adj_price || (item.price || 0) + helpers.get_relation_price(item.user_id, current_user.id)
+              markup = helpers.get_relation_price(item.user_id, current_user.id)
+              item.total_price = adj_price || markup.apply_to(item.price || 0)
+            else
+              item.total_price = item.price
             end
           end
   
           if range_degree > 1 
             users.delete(current_user.id)
             users.each do |user|    
-              route_price = helpers.get_relation_price(user, current_user.id)
-              all_items(range_degree - 1, user, current_user.id, user, route_price)
+              route_markups = [helpers.get_relation_price(user, current_user.id)]
+              all_items(range_degree - 1, user, current_user.id, user, route_markups)
             end
           end
         else
@@ -102,7 +103,7 @@ module Api::V1
       render json: { data: result }, status: 200
     end
 
-    def all_items(step, related_user, before_user, target_user_id, route_price)
+    def all_items(step, related_user, before_user, target_user_id, route_markups)
       relationships = Relationship.where("user_id = #{related_user} OR friend_id = #{related_user}")
       users = relationships.pluck(:user_id, :friend_id).flatten!.uniq.select {|id| !User.find(id).only_consumer_retailer?}
       users.delete(before_user)
@@ -111,21 +112,16 @@ module Api::V1
       newitems = Inventory.where("user_id IN (?) AND quantity > 0 AND status = 1 AND user_id != #{current_user.id}", users)
       newitems.each do |item|
         item.target_user_id = target_user_id
-        item.total_price = item.price + route_price
-        unless item.producer_owns?
-          item.total_price += helpers.get_relation_price(item.user_id, related_user)
-        end
+        markups = item.apply_first_hop_markup? ? [helpers.get_relation_price(item.user_id, related_user)] + route_markups : route_markups
+        item.total_price = helpers.apply_markup_chain(item.price, markups)
       end
 
       @items = (@items + newitems)
 
       if(step > 1)
         users.each do |user|
-          next_route_price = route_price
-          next_route_price += helpers.get_relation_price(user, related_user)
-
-          # binding.pry
-          all_items(step - 1, user, related_user, target_user_id, next_route_price)
+          next_route_markups = [helpers.get_relation_price(user, related_user)] + route_markups
+          all_items(step - 1, user, related_user, target_user_id, next_route_markups)
         end
       end
       @items
@@ -146,10 +142,10 @@ module Api::V1
       data_without_description = data.except('description')
       @item = current_user.items.new(data_without_description)
       if @item.save
-        # Save description to the inventory record
-        if description.present?
-          @item.inventory.first.update(description: description)
-        end
+        @item.inventory.first.update(
+          description: description,
+          apply_first_hop_markup: apply_first_hop_markup_param
+        )
         
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
@@ -194,7 +190,9 @@ module Api::V1
           result = @inventory.update(description: data[:description])
         elsif item_params.keys.length > 1
           change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
-          result = @inventory.update(price: data[:price], quantity: data[:quantity], description: data[:description]) && @inventory.item.update(data_without_description)
+          inventory_data = { price: data[:price], quantity: data[:quantity], description: data[:description] }
+          inventory_data[:apply_first_hop_markup] = apply_first_hop_markup_param unless params[:apply_first_hop_markup].nil?
+          result = @inventory.update(inventory_data) && @inventory.item.update(data_without_description)
         elsif item_params.keys.length == 1 && (data[:price] || data[:quantity])
           result = @inventory.update(data_without_description)
         else
@@ -343,6 +341,10 @@ module Api::V1
 
     def item_params
       @item_params ||= params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, :description)
+    end
+
+    def apply_first_hop_markup_param
+      ActiveModel::Type::Boolean.new.cast(params[:apply_first_hop_markup])
     end
 
     def unit_option_params

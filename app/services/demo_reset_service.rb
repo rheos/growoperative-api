@@ -219,7 +219,9 @@ class DemoResetService
         user_id: uid, item_id: item_id,
         quantity: inv['quantity'], price: inv['price'],
         status: inv['status'],
-        description: inv['description'], ref_price: inv['ref_price'],
+        description: inv['description'],
+        apply_first_hop_markup: inv['apply_first_hop_markup'] || false,
+        ref_price: inv['ref_price'],
       )
       if inv['avatars_raw'].present?
         escaped = ActiveRecord::Base.connection.quote(inv['avatars_raw'])
@@ -294,6 +296,7 @@ class DemoResetService
         user_id: @name_to_id[ucp['user_name']],
         category_id: Category.find_by(category_name: ucp['category_name'])&.id,
         price: ucp['price'],
+        price_type: ucp['price_type'] || 'flat',
       )
     end
 
@@ -307,6 +310,7 @@ class DemoResetService
         category_id: Category.find_by(category_name: urp['category_name'])&.id,
         relationship_id: rel_id,
         price: urp['price'],
+        price_type: urp['price_type'] || 'flat',
         receiving_price: urp['receiving_price'],
         receiving_price_type: urp['receiving_price_type'],
       )

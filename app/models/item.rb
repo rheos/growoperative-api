@@ -2,7 +2,7 @@ class Item < ApplicationRecord
   belongs_to :user
   belongs_to :category
   belongs_to :item_name, optional: true
-  belongs_to :grade
+  belongs_to :grade, optional: true
   belongs_to :item_unit, optional: true
   has_many   :reviews, dependent: :destroy
   has_many   :inventory, dependent: :destroy

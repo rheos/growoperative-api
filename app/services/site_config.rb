@@ -4,7 +4,9 @@ class SiteConfig
     demo_mode: false,
     enforce_valid_email: false,
     visible_roles: %w[producer broker wholesaler retailer consumer],
-    chain_limit: 3
+    chain_limit: 3,
+    default_markup: 10,
+    default_markup_type: 'percent'
   }.freeze
 
   # Returns the merged flag hash for a subnet. Resolution order (first match wins):

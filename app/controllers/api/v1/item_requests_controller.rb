@@ -72,60 +72,48 @@ module Api::V1
       end
   
       request_unit = nil
-      contacts = [{ :user_id => current_user.id, :path => [], :prices => [], :total => 0, :route_price => 0 }]
+      contacts = [{ :user_id => current_user.id, :path => [] }]
       shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
-      checked_contacts = {}
 
       # default request chain calculation 
       if request_params[:unit].nil?
         # check if inventory is available
-        contacts = [{ :user_id => current_user.id, :path => [], :prices => [], :total => 0, :route_price => 0 }]
+        contacts = [{ :user_id => current_user.id, :path => [] }]
         shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
-        checked_contacts = {}
 
         while contacts.size > 0 do
           contact = contacts.shift
-          # mark as checked
-          checked_contacts[contact[:user_id]] = contact[:total]
-
           # check if selected user is current user, it means inventory is available
           if contact[:user_id] == inventory.user_id
-            # add user mark up if he is not owner
-            unless inventory.producer_owns?
-              contact[:total] += helpers.get_relation_price(inventory.user_id, contact[:path].last)
-            end
+            path = contact[:path] + [inventory.user_id]
+            prices = request_chain_prices(inventory, path)
+            total = prices.last || inventory.price.to_f
 
-            if contact[:total] < shortest[:total]            
-              shortest = contact
+            if total < shortest[:total]
+              shortest = { :total => total, :path => path, :prices => prices.reverse }
             end
           elsif contact[:path].size < MAX_DEPTH && 
             (relationships = Relationship.where("user_id = #{contact[:user_id]} OR friend_id = #{contact[:user_id]}")).size > 0
             # find from contacts
             relationships.pluck(:user_id, :friend_id).flatten!.uniq.select {|id| !User.find(id).only_consumer_retailer?}.each do |relation_id|
               next if relation_id == contact[:user_id]
+              next if contact[:path].include?(relation_id)
 
-              total = contact[:total] + contact[:route_price]
-              if total < shortest[:total] && 
-                (checked_contacts[:relation_id].nil? || total < checked_contacts[:relation_id])
-
-                contacts.push({
-                  :user_id => relation_id,
-                  :path => contact[:path] + [contact[:user_id]],
-                  :prices => contact[:prices] + [total],
-                  :total => total,
-                  :route_price => helpers.get_relation_price(relation_id, contact[:user_id]),
-                })
-              end
+              contacts.push({
+                :user_id => relation_id,
+                :path => contact[:path] + [contact[:user_id]],
+              })
             end
           end
         end
 
         # check if find a path
-        if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size == 0
+        if shortest[:total] == BigDecimal::INFINITY || shortest[:path].size <= 1
           render json: { message: 'Path not found' }, status: 400
           return
         end
 
+        chain_prices = request_chain_prices(inventory, shortest[:path]).reverse
 
         # create request contract
         request_contract = RequestContract.new
@@ -133,23 +121,20 @@ module Api::V1
         request_contract.inventory_id = inventory.id
         request_contract.item_id = inventory.item_id
         request_contract.quantity = request_params[:quantity]
-        request_contract.steps = shortest[:prices].size
+        request_contract.steps = chain_prices.size
 
         request_contract.save!
 
-        # add source user id
-        shortest[:path] << inventory.user_id
         # create requests
-        final_price = inventory.price + shortest[:total]
-        shortest[:prices].each_with_index do |price, index|
+        chain_prices.each_with_index do |price, index|
           request = ItemRequest.new
           request.request_contract_id = request_contract.id
           request.user_id = shortest[:path][index]
           request.friend_id = shortest[:path][index + 1]
-          request.price = final_price - price
+          request.price = price
           request.status = :pending
           request.sent = request.user_id == current_user.id ? 1 : 0
-          request.step = shortest[:prices].size - index
+          request.step = chain_prices.size - index
           request.save!
         end
       else
@@ -365,7 +350,11 @@ module Api::V1
       if !inventory || !user || reserve_params[:quantity].to_f > inventory.quantity
         return render json: { message: 'Unable to reserve an item!' }, status: 404
       end
-      price = helpers.get_relation_price(current_user.id, user.id) + inventory.price
+      price = if inventory.apply_first_hop_markup?
+                helpers.get_relation_price(current_user.id, user.id).apply_to(inventory.price)
+              else
+                inventory.price
+              end
 
       reserved = Inventory.new do |m|
         m.item_id = inventory.item_id
@@ -572,6 +561,22 @@ module Api::V1
     end
 
     private
+
+    def request_chain_prices(inventory, buyer_to_owner_path)
+      owner_to_buyer_path = buyer_to_owner_path.reverse
+      prices = []
+      running_price = inventory.price.to_f
+
+      owner_to_buyer_path.each_cons(2).with_index do |(seller_id, buyer_id), index|
+        unless index.zero? && !inventory.apply_first_hop_markup?
+          running_price = helpers.get_relation_price(seller_id, buyer_id).apply_to(running_price)
+        end
+        prices << running_price
+      end
+
+      prices
+    end
+
     def notify_request_chain!(request_contract)
       metadata = { request_contract_id: request_contract.id, quantity: request_contract.quantity.to_f }
 

@@ -35,7 +35,7 @@ module Api::V1
 
     private
     def user_relationship_price_params
-      params.require(:user_relationship_price).permit(:user_id,:friend_id, :category_id, :relationship_id, :price, :receiving_price, :receiving_price_type)
+      params.require(:user_relationship_price).permit(:user_id,:friend_id, :category_id, :relationship_id, :price, :price_type, :receiving_price, :receiving_price_type)
     end
   end
 end

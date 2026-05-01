@@ -162,11 +162,18 @@ module Api::V1
 			if params[:target_inventory_id].present? && Inventory.find(params[:target_inventory_id]).item.user_id != current_user.id
 				res.each do |relation|
 					friend_id = relation["user"]["id"] == current_user.id ? relation["friend"]["id"] : relation["user"]["id"]
-					relation["proposed_price"] = helpers.get_relation_price(current_user.id, friend_id)
+					markup = helpers.get_relation_price(current_user.id, friend_id)
+					relation["proposed_price"] = markup.value
+					relation["proposed_price_type"] = markup.type
+					relation["proposed_markup"] = markup.to_h
 				end
 			end
+			default_markup = helpers.get_user_markup(current_user.id)
 			render json: {
-				items: res, default_markup: helpers.get_user_markup(current_user.id)
+				items: res,
+				default_markup: default_markup.value,
+				default_markup_type: default_markup.type,
+				default_markup_config: default_markup.to_h
 			}, status: 200
 		end
 

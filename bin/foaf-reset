@@ -5,7 +5,7 @@
 # Usage (from railsbackend/):
 #   ./bin/foaf-reset [snapshot_file]
 #
-# Default snapshot: dev_clean_2026-04-20.sql — users + items only, no
+# Default snapshot: dev_clean_2026-04-30.sql — users + items only, no
 # pre-existing requests/orders/contracts/trustlines. Also includes subnet
 # fixtures: Bob's Network (demo config) and Crawford Bay (launch config,
 # Robin-only). Clean slate for the trade-test stress run.
@@ -14,7 +14,7 @@
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-04-20.sql}"
+SNAPSHOT="${1:-dev_clean_2026-04-30.sql}"
 SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
 
 if [ ! -f "${SNAPSHOT_PATH}" ]; then

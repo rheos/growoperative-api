@@ -48,7 +48,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.bigint "user_id"
     t.bigint "item_id"
     t.float "quantity"
-    t.decimal "price", precision: 10
+    t.decimal "price", precision: 10, scale: 2
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -57,6 +57,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "gallery_map", default: "---\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n- \"<-\"\n"
     t.float "ref_price"
     t.text "description"
+    t.boolean "apply_first_hop_markup", default: false, null: false
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -98,7 +99,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
 
   create_table "item_requests", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.bigint "user_id"
-    t.decimal "price", precision: 10
+    t.decimal "price", precision: 10, scale: 2
     t.integer "status"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
@@ -360,6 +361,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "unit"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "price_type", default: "flat", null: false
     t.index ["category_id"], name: "index_user_category_prices_on_category_id"
     t.index ["user_id"], name: "index_user_category_prices_on_user_id"
   end
@@ -382,6 +384,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "receiving_price_type"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "price_type", default: "flat", null: false
     t.index ["category_id"], name: "index_user_relationship_prices_on_category_id"
     t.index ["relationship_id"], name: "index_user_relationship_prices_on_relationship_id"
     t.index ["user_id"], name: "index_user_relationship_prices_on_user_id"

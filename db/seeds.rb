@@ -21,9 +21,6 @@
 def generate_global_setting
   global_setting = GlobalSetting.find_or_initialize_by(setting: "ChainLimit")
   global_setting.save
-  cat_price = GlobalSetting.find_or_initialize_by(setting: "user_category_relationship_price")
-  cat_price.value = 1
-  cat_price.save
   degree = GlobalSetting.find_or_initialize_by(setting: "RangeDegree")
   degree.value = 4
   degree.save
