@@ -5,9 +5,11 @@ RSpec.describe 'Global scenario test', type: :request, skip_hooks: true do
   DatabaseCleaner.strategy = :deletion
   DatabaseCleaner.clean_with(:truncation)
   Grade.create!([{value: 10,name: "C"},{value: 20,name: "B"},{value: 30,name: "A"},{value: 40,name: "AA"},{value: 50,name: "AAA"},{value: 60,name: "A+"},{value: 70,name: "A++"},])
-  ItemUnit.create!(unit_name: "pounds", item_symbol: "lbs")
-  Category.create!([{category_name: "herbs and greens", default_unit: 1, default_consumer_unit:2, default_node_price: 1.0},
-    {category_name: "tinctures", default_unit: 3, default_consumer_unit:4, default_node_price: 1.00}])
+  pound = ItemUnit.create!(unit_name: "pounds", item_symbol: "lb", unit_type: :weight, equivalent: 453.592)
+  Category.create!([
+    {category_name: "herbs and greens", default_unit: pound, kind: :produce, default_node_price: 1.0},
+    {category_name: "tinctures", default_unit: pound, kind: :produce, default_node_price: 1.00}
+  ])
 
   $token = nil
   $invitation_code = nil

@@ -14,10 +14,15 @@ RSpec.describe Order, type: :model do
       password: 'password123',
       user_name: 'seller',
     )
+    item_unit = ItemUnit.find_or_create_by!(item_symbol: 'lb') do |unit|
+      unit.unit_name = 'pounds'
+      unit.unit_type = :weight
+      unit.equivalent = 453.592
+    end
     category = Category.create!(
       category_name: 'Vegetables',
-      default_unit: 1,
-      default_consumer_unit: 1,
+      default_unit: item_unit,
+      kind: :produce,
       default_node_price: 0,
     )
     grade = Grade.create!(name: 'A', value: '1')
@@ -25,6 +30,7 @@ RSpec.describe Order, type: :model do
       user: seller,
       category: category,
       grade: grade,
+      item_unit: item_unit,
       quantity: 10,
       name: 'Lettuce',
       price: 5,

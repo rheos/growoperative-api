@@ -204,6 +204,8 @@ module Api::V1
       result = @request.accept_request
       if result == true
         render json: { message: 'Request has been accepted', data: serialize_request_result(@request) }, status: 200
+      elsif result[:error] == 'unit_conversion_mismatch'
+        render json: result.merge(data: serialize_request_result(@request)), status: 422
       elsif result[:message]
         render json: result.merge(data: serialize_request_result(@request)), status: 207
       else
