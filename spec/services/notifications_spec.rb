@@ -7,8 +7,8 @@ RSpec.describe Notifications, type: :model, skip_hooks: true do
 
   # Minimal object graph for request_created event
   let(:grade)    { Grade.create!(name: 'A', value: 30) }
-  let(:category) { Category.create!(category_name: 'greens', default_unit: 1, default_consumer_unit: 1, default_node_price: 1.0) }
-  let(:item_unit) { ItemUnit.create!(unit_name: 'pounds', item_symbol: 'lbs') }
+  let(:item_unit) { ItemUnit.create!(unit_name: 'pounds', item_symbol: 'lb', unit_type: :weight, equivalent: 453.592) }
+  let(:category) { Category.create!(category_name: 'greens', default_unit: item_unit, kind: :produce, default_node_price: 1.0) }
   let(:item_name) { ItemName.create!(name: 'Tomatoes', category: category) }
   let(:item) do
     Item.create!(

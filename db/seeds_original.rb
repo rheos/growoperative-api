@@ -93,18 +93,22 @@ generate_sample_data
 
 # Generate category seed data
 def generate_category
-  Category.create!([{category_name: "herbs and greens", default_unit: 1, default_consumer_unit:2, default_node_price: 1.0},
-    {category_name: "tinctures", default_unit: 3, default_consumer_unit:4, default_node_price: 1.00}])
+  pound = ItemUnit.find_or_create_by!(item_symbol: "lb") do |unit|
+    unit.unit_name = "pounds"
+    unit.unit_type = :weight
+    unit.equivalent = 453.592
+  end
+  Category.create!([{category_name: "herbs and greens", default_unit: pound, kind: :produce, default_node_price: 1.0},
+    {category_name: "tinctures", default_unit: pound, kind: :produce, default_node_price: 1.00}])
 end
 generate_category
 
 # generate Unit data
 def generate_item_unit
-  ItemUnit.create!(unit_name: "pounds", item_symbol: "lbs", equivalent: 453.592)
-  ItemUnit.create!(unit_name: "ounces", item_symbol: "oz")
-  ItemUnit.create!(unit_name: "boxes", item_symbol: "box")
-  ItemUnit.create!(unit_name: "bottles", item_symbol: "bottle")
-  ItemUnit.create!(unit_name: "grams", item_symbol: "g", equivalent: 1)
+  ItemUnit.create!(unit_name: "pounds", item_symbol: "lb", unit_type: :weight, equivalent: 453.592)
+  ItemUnit.create!(unit_name: "ounces", item_symbol: "oz", unit_type: :weight, equivalent: 28.3495)
+  ItemUnit.create!(unit_name: "bottle", item_symbol: "bottle", unit_type: :discrete)
+  ItemUnit.create!(unit_name: "grams", item_symbol: "g", unit_type: :weight, equivalent: 1)
 end
 generate_item_unit
 

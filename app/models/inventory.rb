@@ -11,6 +11,7 @@ class Inventory < ApplicationRecord
   # Prevent S3 image deletion for demo users — images are shared across resets
   skip_callback :destroy, :before, :remove_avatars!, raise: false
   before_destroy :remove_avatars_unless_demo
+  before_validation :set_canonical_quantity
 
   def remove_avatars_unless_demo
     return if user&.demo?
@@ -18,6 +19,13 @@ class Inventory < ApplicationRecord
   end
 
   enum status: [ :unavailable, :available, :reserved, :in_order ]
+
+  enum canonical_unit_type: {
+    weight: 0,
+    count: 1,
+    volume: 2,
+    discrete: 3
+  }, _prefix: :canonical
 
   attr_accessor :target_user_id
   attr_accessor :total_price
@@ -68,6 +76,10 @@ class Inventory < ApplicationRecord
         'grade-id' => self.item.grade_id,
         'item-unit-id' => self.item.item_unit_id, 
         'unit-name' => self.item.item_unit.item_symbol, 
+        'pack-contains-quantity' => self.item.pack_contains_quantity,
+        'pack-contains-unit-id' => self.item.pack_contains_unit_id,
+        'condition' => self.item.condition,
+        'one-time-listing' => self.item.one_time_listing,
         'item-name-id' => self.item.item_name_id, 
         'date-available' => self.item.date_available, 
         'organic' => self.item.organic, 
@@ -211,6 +223,53 @@ class Inventory < ApplicationRecord
       self.status == 'available' ? self.update(status: :unavailable) : false
     else
       return false
+    end
+  end
+
+  # Single write site for order/request decrements; keeps canonical quantity paired with quantity.
+  def decrement_for_request!(quantity, requested_unit = nil)
+    unit = item&.item_unit
+    requested_unit ||= unit
+    raise ArgumentError, 'Inventory item unit is missing' unless unit
+    raise ArgumentError, 'Requested unit is missing' unless requested_unit
+
+    quantity_decimal = BigDecimal(quantity.to_s)
+    if requested_unit.id == unit.id
+      update!(quantity: BigDecimal(self.quantity.to_s) - quantity_decimal)
+    elsif unit.unit_type == requested_unit.unit_type &&
+          unit.unit_type != 'discrete' &&
+          unit.equivalent.present? &&
+          requested_unit.equivalent.present?
+      canonical_left = BigDecimal(quantity_canonical.to_s) - (quantity_decimal * BigDecimal(requested_unit.equivalent.to_s))
+      update!(quantity: canonical_left / BigDecimal(unit.equivalent.to_s))
+    else
+      raise UnitConversionError.new(requested_unit, unit)
+    end
+  end
+
+  private
+
+  def set_canonical_quantity
+    return if quantity.nil?
+
+    unit = item&.item_unit
+    self.canonical_unit_type = unit&.unit_type || :weight
+
+    self.quantity_canonical =
+      if canonical_weight? && unit&.equivalent.present?
+        BigDecimal(quantity.to_s) * BigDecimal(unit.equivalent.to_s)
+      else
+        BigDecimal(quantity.to_s)
+      end
+  end
+
+  class UnitConversionError < StandardError
+    attr_reader :requested_unit, :inventory_unit
+
+    def initialize(requested_unit, inventory_unit)
+      @requested_unit = requested_unit
+      @inventory_unit = inventory_unit
+      super("Cannot convert #{requested_unit.unit_name} to #{inventory_unit.unit_name}")
     end
   end
 end
