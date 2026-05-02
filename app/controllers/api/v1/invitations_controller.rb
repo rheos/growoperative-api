@@ -6,23 +6,12 @@ module Api::V1
 		# url : v1/invitations
 		# method : GET
 		def index
-			@invitations = current_user.invitations.joins('LEFT JOIN users ON users.id = invitations.accepted_id').select("invitations.*, COALESCE(users.nickname, users.user_name) AS accepted_user_name").to_a
-			
+			@invitations = current_user.invitations.joins('LEFT JOIN users ON users.id = invitations.accepted_id').select("invitations.*, COALESCE(users.nickname, users.name, users.user_name) AS accepted_user_name").to_a
+
 			@invitations.each do |invitation|
-				if invitation.accepted_id
-					relation = Relationship.where("user_id IN (?) AND friend_id IN (?)", [current_user.id, invitation.accepted_id], [current_user.id, invitation.accepted_id])
-					if relation.first
-						if (relation.first.user_id == current_user.id) && relation.first.friend_label?
-							invitation.note_label = relation.first.friend_label
-						elsif (relation.first.friend_id == current_user.id) && relation.first.user_label?
-							invitation.note_label = relation.first.user_label
-						elsif User.find_by(id: invitation.accepted_id).nickname?
-							invitation.note_label = User.find_by(id: invitation.accepted_id).nickname
-						else
-							invitation.note_label = User.find_by(id: invitation.accepted_id).user_name
-						end
-					end
-				end
+				next unless invitation.accepted_id
+				accepted_user = User.find_by(id: invitation.accepted_id)
+				invitation.note_label = accepted_user.display_name_for(current_user) if accepted_user
 			end
 
 			render json: {

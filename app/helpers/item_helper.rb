@@ -43,21 +43,7 @@ module ItemHelper
   end
 
   def target_user_name(user_id, target_user_id)
-    relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
-      [user_id, target_user_id], [user_id, target_user_id]
-    if relation.first
-      if (relation.first.user_id == user_id) && relation.first.friend_label.present?
-        relation.first.friend_label
-      elsif (relation.first.friend_id == user_id) && relation.first.user_label.present?
-        relation.first.user_label
-      elsif target_user_id
-        user = User.find(target_user_id)
-        user.nickname ? user.nickname : user.user_name
-      end
-    else
-      user = User.find(target_user_id)
-      user.nickname ? user.nickname : user.user_name
-    end
-  end 
+    User.find(target_user_id).display_name_for(User.find_by(id: user_id))
+  end
     
 end

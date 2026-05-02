@@ -27,10 +27,12 @@ def generate_global_setting
 end
 generate_global_setting
 
-# Bootstrap admin user
+# Bootstrap admin user. Sets password ONLY on first creation — re-running the
+# seed must never overwrite an existing user's password (this happened on prod
+# 2026-05-02 and locked robin out).
 def generate_admin_user
   admin = User.find_or_initialize_by(user_name: "robin")
-  admin.password = "password"
+  admin.password = "password" if admin.new_record?
   admin.invite_limit = 1000000
   admin.depth = 0
   admin.save!

@@ -41,26 +41,8 @@ class Inventory < ApplicationRecord
 
   def target_user_name(current_user)
     target_id = self.target_user_id.nil? ? self.user_id : self.target_user_id
-    relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
-      [current_user.id, target_id], [current_user.id, target_id]
-    if relation.first
-      if (relation.first.user_id == current_user.id) && relation.first.friend_label.present?
-        relation.first.friend_label
-      elsif (relation.first.friend_id == current_user.id) && relation.first.user_label.present?
-        relation.first.user_label
-      elsif self.target_user_id
-        user = User.find(self.target_user_id)
-        user.nickname ? user.nickname : user.user_name
-      end
-    else
-      if self.target_user_id
-        user = User.find(self.target_user_id)
-        user.nickname ? user.nickname : user.user_name
-      else
-        self.user.user_name
-      end
-    end
-  end 
+    User.find(target_id).display_name_for(current_user)
+  end
 
   def to_json(current_user)
     {

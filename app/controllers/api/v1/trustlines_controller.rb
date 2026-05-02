@@ -219,7 +219,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         amount,
         current_user,
         to_user,
-        description: params[:description] || "Debt recorded by #{current_user.user_name}",
+        description: params[:description] || "Debt recorded by #{current_user.display_name}",
         force_capacity: true,
         operation: "adjustment"
       )
@@ -265,7 +265,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         amount,
         from_user,
         current_user,
-        description: params[:description] || "Receipt acknowledged by #{current_user.user_name}",
+        description: params[:description] || "Receipt acknowledged by #{current_user.display_name}",
         operation: "adjustment"
       )
 
@@ -309,7 +309,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     if path
       render json: {
         path_found: true,
-        path: path.map { |user| { id: user.id, name: user.user_name } },
+        path: path.map { |user| { id: user.id, name: user.display_name_for(current_user) } },
         path_length: path.length - 1,  # Number of hops
         estimated_cost: amount  # In a real system, might include fees
       }
@@ -360,7 +360,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         if result
           render json: {
             message: 'Path payment executed successfully',
-            path: path.map { |user| { id: user.id, name: user.user_name } },
+            path: path.map { |user| { id: user.id, name: user.display_name_for(current_user) } },
             amount: amount
           }
         else
@@ -419,7 +419,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       id: trustline.id,
       other_user: {
         id: counterparty.id,
-        name: counterparty.user_name
+        name: counterparty.display_name_for(current_user)
       },
       my_credit_limit: my_limit,
       their_credit_limit: row[:their_credit_limit],
@@ -442,7 +442,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       id: trustline.id,
       other_user: {
         id: other_user.id,
-        name: other_user.user_name
+        name: other_user.display_name_for(current_user)
       },
       my_credit_limit: trustline.credit_limit_for(current_user).to_f,
       their_credit_limit: trustline.credit_limit_for(other_user).to_f,
@@ -468,7 +468,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       balance_after: transaction.balance_after.to_f,
       is_reversed: transaction.is_reversed,
       initiated_by_id: transaction.initiated_by_id,
-      initiated_by_name: transaction.initiated_by&.user_name,
+      initiated_by_name: transaction.initiated_by&.display_name_for(current_user),
       order_id: transaction.order_id,
       order_label: transaction.order&.order_label,
       originating_request_id: transaction.originating_request_id,

@@ -142,8 +142,8 @@ module Api::V1
       {
         id: pp.id,
         kind: pp.kind,
-        from_user: { id: pp.from_user.id, name: pp.from_user.user_name },
-        to_user: { id: pp.to_user.id, name: pp.to_user.user_name },
+        from_user: { id: pp.from_user.id, name: pp.from_user.display_name_for(current_user) },
+        to_user: { id: pp.to_user.id, name: pp.to_user.display_name_for(current_user) },
         trustline_id: pp.trustline_id,
         amount: pp.amount.to_f,
         description: pp.description,

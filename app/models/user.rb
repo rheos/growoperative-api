@@ -53,6 +53,65 @@ class User < ApplicationRecord
     user_groups.exists?(group_label: 'superuser')
   end
 
+  # Viewer-relative display name. Returns the relationship label the viewer
+  # set when inviting/labelling this user, then falls through to the user's
+  # own preferences. Used everywhere a contact's name is rendered for a
+  # specific viewer (trustlines, orders, payment paths, contact book).
+  #
+  # Priority:
+  #   1. friend_label / user_label on the Relationship between viewer and self
+  #   2. self.nickname (their chosen handle)
+  #   3. self.name      (their real name)
+  #   4. self.user_name (last resort — may be email-shaped from older signups)
+  #
+  # The visibility invariant means a viewer should always have a Relationship
+  # with anyone they can see; the fallbacks below 1 fire only for degenerate
+  # relationships (no labels) or system-level callers without a viewer.
+  #
+  # Performance: looks up labels via the viewer's memoized label cache, so
+  # rendering N users for one viewer costs one DB query, not N.
+  def display_name_for(viewer)
+    return display_name if viewer.nil? || viewer.id == id
+    label = viewer.label_for(self)
+    return label if label.present?
+    display_name
+  end
+
+  # Self-display fallback (no viewer context). Used in description strings
+  # written from this user's own perspective (e.g. "Debt recorded by ...")
+  # and as the terminal fallback for display_name_for.
+  def display_name
+    nickname.presence || name.presence || user_name
+  end
+
+  # Returns the label this user (the viewer) has set on their relationship
+  # with `other_user`, or nil if no label is set or no relationship exists.
+  # Memoized: the first call loads all of this viewer's relationships into a
+  # hash keyed by the other side's user_id; subsequent calls are O(1) lookups.
+  # Cache lives on the User instance, which matches Devise's per-request
+  # memoization of current_user — one DB hit per request regardless of how
+  # many users get displayed in that request.
+  def label_for(other_user)
+    @display_label_cache ||= build_display_label_cache
+    @display_label_cache[other_user.id]
+  end
+
+  private
+
+  def build_display_label_cache
+    cache = {}
+    Relationship.where("user_id = ? OR friend_id = ?", id, id).find_each do |r|
+      if r.user_id == id
+        cache[r.friend_id] = r.friend_label if r.friend_label.present?
+      else
+        cache[r.user_id] = r.user_label if r.user_label.present?
+      end
+    end
+    cache
+  end
+
+  public
+
   # call_backs
   before_create :set_parent
   after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group, :join_subnet_from_invitation
