@@ -32,7 +32,7 @@
 
 set -euo pipefail
 
-SNAPSHOT="${1:-dev_clean_2026-04-30.sql}"
+SNAPSHOT="${1:-dev_clean_2026-05-02.sql}"
 SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
 BACKEND_CONTAINER="railsbackend-backend-demo-1"
 FOAF_CONTAINER="foaf-testnet"
