@@ -16,63 +16,63 @@ class ItemRequest < ApplicationRecord
   scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
 
   def accept_request
-    prev_status = self.status
-    self.update(status: :accepted, accepted_at: DateTime.now)
+    ActiveRecord::Base.transaction do
+      prev_status = self.status
+      self.update!(status: :accepted, accepted_at: DateTime.now)
 
-    # mark next request for sent 
-    request = ItemRequest.find_by(request_contract_id: self.request_contract_id, user_id: self.friend_id)
-    unless request.nil?
-      request.sent = 1
-      request.save!
-    end
+      # mark next request for sent
+      request = ItemRequest.find_by(request_contract_id: self.request_contract_id, user_id: self.friend_id)
+      unless request.nil?
+        request.sent = 1
+        request.save!
+      end
 
-    # or request is accepted by the inventory owner
-    pending_size = ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size
-    if self.step == 1 || pending_size == 0
-      self.update(sent: true) if (prev_status == "reserved" || self.step == 1)
-      if(prev_status == "pending")
-      #reserve new inventory
-        reserved = Inventory.new do |m|
-          m.item_id = self.inventory.item_id
-          m.user_id = self.inventory.user_id
-          m.price = self.inventory.price
-          m.quantity = self.request_contract.quantity
-          m.ref_id = self.inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
-          m.status = :reserved
-          m.gallery_map = self.inventory.gallery_map
-          m.save!
+      # or request is accepted by the inventory owner
+      pending_size = ItemRequest.where("request_contract_id = #{self.request_contract_id} AND status <> 1").size
+      if self.step == 1 || pending_size == 0
+        self.update!(sent: true) if (prev_status == "reserved" || self.step == 1)
+        if(prev_status == "pending")
+          source_inventory = self.inventory
+          request_unit = requested_item_unit
+          reserved_item = reserved_item_for_request(source_inventory, request_unit)
+          reserved_quantity = reserved_quantity_for_request(source_inventory.item)
+
+          # reserve new inventory
+          reserved = Inventory.new do |m|
+            m.item_id = reserved_item.id
+            m.user_id = source_inventory.user_id
+            m.price = source_inventory.price
+            m.quantity = reserved_quantity
+            m.ref_id = source_inventory.id #ref_id is pointing to previous inventory, which is needs do be restored
+            m.status = :reserved
+            m.gallery_map = source_inventory.gallery_map
+            m.save!
+          end
+
+          # decrease origin inventory quantity
+          source_inventory.decrement_for_request!(self.request_contract.quantity, request_unit)
+
+          # update inventory status if all item requests are accepted
+          self.request_contract.update!(status: :accepted) if pending_size == 0
+          # bind contract to a new reserved inventory and update status
+          RequestContract.find_by(id: self.request_contract_id).update!(inventory_id: reserved.id)
+
+          # create or find a pending order with no shipped/completed items
+          order = Order.find_or_create_pending(self.user_id, self.friend_id)
+          self.update!(order_id: order.id)
+        else
+          order = Order.find_or_create_pending(self.user_id, self.friend_id)
+          self.update!(order_id: order.id)
+          self.request_contract.update!(status: :accepted) if pending_size == 0
         end
-
-      # decrease origin inventory quantity
-        quantity_left = self.inventory.quantity - self.request_contract.quantity
-        if self.request_contract.unit && self.request_contract.unit.to_i != self.request_contract.inventory.item.item_unit_id
-          request_unit = ItemUnit.find(self.request_contract.unit.to_i)
-          self_unit = self.request_contract.inventory.item.item_unit
-          quantity_left = self.inventory.quantity - (self.request_contract.quantity * request_unit.equivalent)/self_unit.equivalent
-
-          converted_item = Item.new(self.inventory.item.attributes.merge({:unit => request_unit.unit_name, :id => nil}))
-          converted_item.avatars = self.inventory.item.avatars
-          converted_item.with_inventory = true
-          converted_item.save
-          reserved.update(item_id: converted_item.id)
-        end
-        self.inventory.update(quantity: quantity_left)
-
-        # update inventory status if all item requests are accepted
-        self.request_contract.update(status: :accepted) if pending_size == 0
-        # bind contract to a new reserved inventory and update status
-        RequestContract.find_by(id: self.request_contract_id).update(inventory_id: reserved.id)
-
-        # create or find a pending order with no shipped/completed items
-        order = Order.find_or_create_pending(self.user_id, self.friend_id)
-        self.update(order_id: order.id)
-      else
-        order = Order.find_or_create_pending(self.user_id, self.friend_id)
-        self.update(order_id: order.id)
-        self.request_contract.update(status: :accepted) if pending_size == 0
       end
     end
     true
+  rescue Inventory::UnitConversionError => e
+    {
+      message: "This item is sold by #{e.inventory_unit.unit_name}; you requested #{e.requested_unit.unit_name}. Please pick a matching unit.",
+      error: 'unit_conversion_mismatch'
+    }
   end
 
   def ship (multi = false)
@@ -149,5 +149,45 @@ class ItemRequest < ApplicationRecord
         'unit' => self.request_contract.unit
       }
     }
+  end
+
+  private
+
+  def requested_item_unit
+    if request_contract.unit.present?
+      ItemUnit.find(request_contract.unit.to_i)
+    else
+      inventory.item.item_unit
+    end
+  end
+
+  def reserved_quantity_for_request(source_item)
+    request_contract.quantity
+  end
+
+  def reserved_item_for_request(source_inventory, request_unit)
+    source_item = source_inventory.item
+
+    if request_unit.id != source_item.item_unit_id
+      # Existing inventory-in-different-unit flow: create a derived item for the reserved copy.
+      derived_item_for(source_item, request_unit, source_item.user_id)
+    else
+      source_item
+    end
+  end
+
+  def derived_item_for(source_item, item_unit, user_id)
+    derived_item = Item.new(source_item.attributes.merge(
+      id: nil,
+      user_id: user_id,
+      item_unit_id: item_unit.id,
+      unit: nil,
+      created_at: nil,
+      updated_at: nil
+    ))
+    derived_item.avatars = source_item.avatars
+    derived_item.with_inventory = true
+    derived_item.save!
+    derived_item
   end
 end

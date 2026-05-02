@@ -52,8 +52,8 @@ puts "Backing up Categories..."
 seeds_content << "# Categories"
 Category.all.each do |category|
   seeds_content << "cat_#{category.id} = Category.find_or_create_by(category_name: #{category.category_name.inspect}) do |c|"
-  seeds_content << "  c.default_unit = #{category.default_unit}"
-  seeds_content << "  c.default_consumer_unit = #{category.default_consumer_unit}"
+  seeds_content << "  c.default_unit_id = #{category.default_unit_id.inspect}"
+  seeds_content << "  c.kind = #{category.kind.inspect}"
   seeds_content << "  c.default_node_price = #{category.default_node_price}"
   seeds_content << "  c.price = #{category.price}" if category.price
   seeds_content << "end"
@@ -67,7 +67,7 @@ ItemUnit.all.each do |unit|
   seeds_content << "unit_#{unit.id} = ItemUnit.find_or_create_by(unit_name: #{unit.unit_name.inspect}) do |u|"
   seeds_content << "  u.item_symbol = #{unit.item_symbol.inspect}"
   seeds_content << "  u.equivalent = #{unit.equivalent}" if unit.equivalent
-  seeds_content << "  u.type = #{unit.type}" if unit.type
+  seeds_content << "  u.unit_type = #{unit.unit_type.inspect}" if unit.unit_type
   seeds_content << "end"
 end
 seeds_content << ""

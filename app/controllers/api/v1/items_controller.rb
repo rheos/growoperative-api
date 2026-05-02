@@ -142,7 +142,8 @@ module Api::V1
       data_without_description = data.except('description')
       @item = current_user.items.new(data_without_description)
       if @item.save
-        @item.inventory.first.update(
+        inventory = @item.inventory.first
+        inventory.update(
           description: description,
           apply_first_hop_markup: apply_first_hop_markup_param
         )
@@ -155,12 +156,12 @@ module Api::V1
         end
 
         if(inventory_avatar_params[:inventory_avatars].present?)
-          @item.inventory.first.update_avatars(inventory_avatar_params, current_user.id)
-          @item.reload
+          inventory.update_avatars(inventory_avatar_params, current_user.id)
+          inventory.reload
         end
 
         render json: {
-          data: @item.inventory[0].to_json(current_user)
+          data: inventory.reload.to_json(current_user)
         }, status: 200
       else
         render :json=> @item.errors, :status=>422
@@ -221,7 +222,7 @@ module Api::V1
 
       if result
         render json: {
-          data: @inventory.to_json(current_user)
+          data: @inventory.reload.to_json(current_user)
         }, status: 200
       else
         render :json=> @inventory.errors, :status=>422
@@ -340,7 +341,25 @@ module Api::V1
     end
 
     def item_params
-      @item_params ||= params.require(:item).permit(:user_id, :quantity, :category_id, :item_name_id, :name, :grade_id, :price, :date_available, :item_unit_id, :unit, :created_at, :organic, :description)
+      @item_params ||= params.require(:item).permit(
+        :user_id,
+        :quantity,
+        :category_id,
+        :item_name_id,
+        :name,
+        :grade_id,
+        :price,
+        :date_available,
+        :item_unit_id,
+        :unit,
+        :created_at,
+        :organic,
+        :description,
+        :pack_contains_quantity,
+        :pack_contains_unit_id,
+        :condition,
+        :one_time_listing
+      )
     end
 
     def apply_first_hop_markup_param
