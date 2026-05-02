@@ -14,12 +14,13 @@ ActiveRecord::Schema.define(version: 201811070122202) do
 
   create_table "categories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "category_name"
-    t.integer "default_unit"
-    t.integer "default_consumer_unit"
     t.decimal "default_node_price", precision: 10, scale: 2
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.decimal "price", precision: 10
+    t.bigint "default_unit_id"
+    t.integer "kind", default: 0, null: false
+    t.index ["default_unit_id"], name: "index_categories_on_default_unit_id"
   end
 
   create_table "category_sizes", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
@@ -28,6 +29,19 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "item_unit_id", null: false
     t.float "quantity"
     t.float "price"
+    t.decimal "quantity_canonical", precision: 14, scale: 4
+    t.integer "canonical_unit_type"
+  end
+
+  create_table "category_units", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "category_id", null: false
+    t.bigint "item_unit_id", null: false
+    t.integer "display_order", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_id", "item_unit_id"], name: "index_category_units_on_category_id_and_item_unit_id", unique: true
+    t.index ["category_id"], name: "index_category_units_on_category_id"
+    t.index ["item_unit_id"], name: "index_category_units_on_item_unit_id"
   end
 
   create_table "global_settings", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
@@ -58,6 +72,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.float "ref_price"
     t.text "description"
     t.boolean "apply_first_hop_markup", default: false, null: false
+    t.decimal "quantity_canonical", precision: 14, scale: 4, null: false
+    t.integer "canonical_unit_type"
     t.index ["item_id"], name: "index_inventories_on_item_id"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
@@ -120,9 +136,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "unit_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "type"
     t.float "equivalent"
     t.string "item_symbol"
+    t.integer "unit_type", default: 0, null: false
   end
 
   create_table "items", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
@@ -140,10 +156,15 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.boolean "organic", default: false
     t.integer "producer_id"
     t.json "avatars"
+    t.decimal "pack_contains_quantity", precision: 14, scale: 4
+    t.bigint "pack_contains_unit_id"
+    t.integer "condition"
+    t.boolean "one_time_listing", default: false, null: false
     t.index ["category_id"], name: "index_items_on_category_id"
     t.index ["grade_id"], name: "index_items_on_grade_id"
     t.index ["item_name_id"], name: "index_items_on_item_name_id"
     t.index ["item_unit_id"], name: "index_items_on_item_unit_id"
+    t.index ["pack_contains_unit_id"], name: "index_items_on_pack_contains_unit_id"
     t.index ["user_id"], name: "index_items_on_user_id"
   end
 
@@ -352,6 +373,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.float "quantity"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "quantity_canonical", precision: 14, scale: 4
+    t.integer "canonical_unit_type"
+    t.string "label"
   end
 
   create_table "user_category_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
@@ -443,6 +467,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_name"], name: "index_users_on_user_name", unique: true
   end
 
+  add_foreign_key "categories", "item_units", column: "default_unit_id"
+  add_foreign_key "category_units", "categories"
+  add_foreign_key "category_units", "item_units"
   add_foreign_key "inventories", "items"
   add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
@@ -455,6 +482,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "items", "grades"
   add_foreign_key "items", "item_names"
   add_foreign_key "items", "item_units"
+  add_foreign_key "items", "item_units", column: "pack_contains_unit_id"
   add_foreign_key "items", "users"
   add_foreign_key "notifications", "users", column: "actor_id"
   add_foreign_key "notifications", "users", column: "recipient_id"

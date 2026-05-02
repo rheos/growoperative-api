@@ -8,8 +8,8 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
   let(:john)   { User.create!(user_name: 'john',   password: 'password123') }
 
   let(:grade)     { Grade.create!(name: 'A', value: 30) }
-  let(:category)  { Category.create!(category_name: 'greens', default_unit: 1, default_consumer_unit: 1, default_node_price: 1.0) }
-  let(:item_unit) { ItemUnit.create!(unit_name: 'pounds', item_symbol: 'lbs') }
+  let(:item_unit) { ItemUnit.create!(unit_name: 'pounds', item_symbol: 'lb', unit_type: :weight, equivalent: 453.592) }
+  let(:category)  { Category.create!(category_name: 'greens', default_unit: item_unit, kind: :produce, default_node_price: 1.0) }
   let(:item_name) { ItemName.create!(name: 'Black Krim', category: category) }
   let(:item) do
     Item.create!(
@@ -182,6 +182,36 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
         ['barry', 'bruce', 4.7],
         ['john', 'barry', 5.65],
       ])
+    end
+  end
+
+  describe 'POST #accept' do
+    it 'returns a 4xx when the requested unit cannot be converted' do
+      allow(controller).to receive(:current_user).and_return(dianna)
+      bunch = ItemUnit.create!(unit_name: 'bunch', item_symbol: 'bunch', unit_type: :discrete)
+      contract = RequestContract.create!(
+        user: barry,
+        item: item,
+        inventory_id: inventory.id,
+        quantity: 1,
+        steps: 1,
+        unit: bunch.id
+      )
+      request = ItemRequest.create!(
+        user: barry,
+        friend: dianna,
+        request_contract: contract,
+        price: 5,
+        status: :pending,
+        step: 1,
+        sent: true
+      )
+
+      post :accept, params: { id: request.id }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)['error']).to eq('unit_conversion_mismatch')
+      expect(request.reload).to be_pending
     end
   end
 end

@@ -4,6 +4,7 @@ class Item < ApplicationRecord
   belongs_to :item_name, optional: true
   belongs_to :grade, optional: true
   belongs_to :item_unit, optional: true
+  belongs_to :pack_contains_unit, class_name: 'ItemUnit', optional: true
   has_many   :reviews, dependent: :destroy
   has_many   :inventory, dependent: :destroy
 
@@ -21,6 +22,12 @@ class Item < ApplicationRecord
   validates :quantity, presence:true, numericality: true
 
   attr_accessor :unit, :with_inventory
+
+  enum condition: {
+    condition_new: 0,
+    condition_used: 1,
+    condition_n_a: 2
+  }
   
   # callbacks
   before_create :set_item_name
