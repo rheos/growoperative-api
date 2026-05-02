@@ -182,11 +182,19 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
 ## Deployment
 
 - **Server:** AWS Lightsail `growoperative-rails` (`35.163.185.37`)
-- **Deploy:** GitHub Actions on push to `master` → SSH → `git pull` → `docker compose build` → `docker compose up -d` → nginx restart
-- **No tests in CI pipeline** — deploy goes straight to production
-- **Production Docker:** `docker-compose.prod.yml` (backend only, no MySQL — connects to Lightsail DB at `172.26.13.168`)
-- **Nginx:** reverse proxy with Certbot SSL, serves `api.growoperative.app` + `beta.growoperative.app` + `growoperative.app`
-- **URL:** `https://api.growoperative.app`
+- **Two backend containers, one repo:** `backend` (production, `.env.production`, prod MySQL DB) and `backend-demo` (demo + beta soak, `.env.demo`, demo MySQL DB). Both build from the same code on master.
+- **Demo doubles as beta:** push to `master` → auto-deploys to `backend-demo` only (`demo.growoperative.app`). Soak there, then promote to prod manually.
+- **Deploy workflows:**
+  - `.github/workflows/deploy-demo.yml` — auto on push to master, builds & deploys `backend-demo`.
+  - `.github/workflows/deploy-prod.yml` — manual `workflow_dispatch`, requires typing `deploy-prod` to confirm. Optional SHA input for rolling back. Deploys `backend`.
+- **No tests in CI pipeline** — soak-time on demo is the safety net.
+- **Production Docker:** `docker-compose.prod.yml` (no MySQL — connects to Lightsail DB at `172.26.13.168`)
+- **Nginx:** reverse proxy with Certbot SSL.
+  - `api.growoperative.app` → `backend` (prod API)
+  - `growoperative.app` → static frontend at `/var/www/prod` (manually-promoted soaked build)
+  - `demo.growoperative.app` + `beta.growoperative.app` → static frontend at `/var/www/demo` (auto-deploy on push to `growoperative-app` `main`); `/v1/` proxies to `backend-demo`
+- **Frontend dist mounts (host paths):** `/home/ubuntu/growoperative-app/dist-prod` and `/home/ubuntu/growoperative-app/dist-demo`. Both must exist before nginx starts.
+- **URLs:** prod API `https://api.growoperative.app`, demo/beta API `https://demo.growoperative.app/v1/`
 
 ## Key Environment Variables
 

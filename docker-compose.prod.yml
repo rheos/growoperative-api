@@ -47,7 +47,12 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
       - ./nginx/certbot/www:/var/www/certbot:ro
-      - /home/ubuntu/growoperative-app/dist:/var/www/beta:ro
+      # Production frontend (growoperative.app) — promoted manually via the
+      # frontend repo's deploy-prod workflow.
+      - /home/ubuntu/growoperative-app/dist-prod:/var/www/prod:ro
+      # Demo / beta frontend (demo.growoperative.app + beta.growoperative.app)
+      # — auto-deploys on every push to growoperative-app `main`.
+      - /home/ubuntu/growoperative-app/dist-demo:/var/www/demo:ro
     depends_on:
       - backend
       - backend-demo

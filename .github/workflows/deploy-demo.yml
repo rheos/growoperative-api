@@ -1,4 +1,9 @@
-name: Deploy to Lightsail
+name: Deploy backend to Demo (Lightsail)
+
+# Auto-deploys every push to master to the demo backend
+# (demo.growoperative.app -> backend-demo container, .env.demo, demo MySQL DB).
+# Demo doubles as our beta soak environment. Production (api.growoperative.app)
+# is promoted manually via the deploy-prod workflow once changes have soaked.
 
 on:
   push:
@@ -7,14 +12,9 @@ on:
 
 jobs:
   deploy:
-    name: Deploy app
+    name: Deploy backend-demo
     runs-on: ubuntu-latest
     steps:
-      # Both backend containers auto-run `rails db:migrate` on startup via
-      # entrypoint.prod.sh (RAILS_ENV=production branch). Building backend-demo
-      # alongside backend — and recreating it on `up -d` — ensures migrations
-      # added since the last deploy apply to both databases without a manual
-      # SSH step.
       - name: Deploy to Lightsail
         env:
           SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
@@ -27,8 +27,10 @@ jobs:
 
           ssh -i ~/.ssh/key.pem ubuntu@$HOST "\
             cd ~/railsbackend && \
+            git fetch origin master && \
+            git checkout master && \
             git pull && \
             chmod +x docker-entrypoint.sh entrypoint.sh entrypoint.prod.sh bin/* && \
-            sudo docker compose -f docker-compose.prod.yml build backend backend-demo && \
-            sudo docker compose -f docker-compose.prod.yml up -d backend backend-demo && \
+            sudo docker compose -f docker-compose.prod.yml build backend-demo && \
+            sudo docker compose -f docker-compose.prod.yml up -d backend-demo && \
             sudo docker compose -f docker-compose.prod.yml restart nginx"
