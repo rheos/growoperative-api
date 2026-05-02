@@ -32,4 +32,6 @@ jobs:
             git pull && \
             chmod +x docker-entrypoint.sh entrypoint.sh entrypoint.prod.sh bin/* && \
             sudo docker compose -f docker-compose.prod.yml build backend-demo && \
-            sudo docker compose -f docker-compose.prod.yml up -d backend-demo nginx"
+            sudo docker compose -f docker-compose.prod.yml up -d backend-demo nginx && \
+            sudo docker exec railsbackend-nginx-1 nginx -t && \
+            sudo docker exec railsbackend-nginx-1 nginx -s reload"

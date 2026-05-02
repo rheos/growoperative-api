@@ -50,4 +50,6 @@ jobs:
             ( git symbolic-ref -q HEAD >/dev/null && git pull || true ) && \
             chmod +x docker-entrypoint.sh entrypoint.sh entrypoint.prod.sh bin/* && \
             sudo docker compose -f docker-compose.prod.yml build backend && \
-            sudo docker compose -f docker-compose.prod.yml up -d backend nginx"
+            sudo docker compose -f docker-compose.prod.yml up -d backend nginx && \
+            sudo docker exec railsbackend-nginx-1 nginx -t && \
+            sudo docker exec railsbackend-nginx-1 nginx -s reload"
