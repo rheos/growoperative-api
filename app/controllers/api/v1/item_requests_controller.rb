@@ -409,7 +409,7 @@ module Api::V1
         json[:id] = json[:attributes]["inventory_id"]
         next_request = item.request_contract.item_requests.find_by(friend_id: current_user.id)
         json[:attributes]["need_sign"] = (item.shipped_at && !item.signed_at) || (next_request && next_request.status == "pending" ) || (item.status == 'reserved')
-        json[:attributes]["action-request"] = item.inventory.item_requests.where(friend_id: current_user.id, status: :pending).exists?
+        json[:attributes]["action-request"] = item.inventory.item_requests.where(friend_id: current_user.id, status: :pending).exists? || item.status == 'reserved'
         json
       end
 
