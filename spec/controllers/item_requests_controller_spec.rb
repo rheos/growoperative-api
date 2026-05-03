@@ -205,6 +205,13 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
         price: 225,
         status: :available
       )
+      Relationship.create!(
+        user: bruce,
+        friend: bob,
+        status: :accepted,
+        user_label: 'Alex',
+        friend_label: 'Bruce'
+      )
 
       post :reserve, params: {
         inventory_id: listing.id,
@@ -229,6 +236,7 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
       expect(order['is_ready']).to eq(false)
       expect(reserved_item['attributes']['total-price'].to_f).to eq(200.0)
       expect(reserved_item['attributes']['expected-price'].to_f).to eq(200.0)
+      expect(reserved_item['attributes']['target-user-name']).to eq('Alex')
     end
 
     it 'marks seller-created reserved offers as actionable for the buyer' do

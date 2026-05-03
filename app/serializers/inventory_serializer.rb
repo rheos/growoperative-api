@@ -13,10 +13,10 @@ class InventorySerializer < ActiveModel::Serializer
     relation = Relationship.where "user_id IN (?) AND friend_id IN (?)",
       [current_user.id, object.target_user_id], [current_user.id, object.target_user_id]
     if relation.first
-      if (relation.first.user_id == current_user.id) && relation.first.friend_label.present?
-        relation.first.friend_label
-      elsif (relation.first.friend_id == current_user.id) && relation.first.user_label.present?
+      if (relation.first.user_id == current_user.id) && relation.first.user_label.present?
         relation.first.user_label
+      elsif (relation.first.friend_id == current_user.id) && relation.first.friend_label.present?
+        relation.first.friend_label
       elsif object.target_user_id
         user = User.find(object.target_user_id)
         user.nickname ? user.nickname : user.user_name
