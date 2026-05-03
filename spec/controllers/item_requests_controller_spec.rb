@@ -185,6 +185,50 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
     end
   end
 
+  describe 'POST #reserve' do
+    it 'uses the owner-entered reserve price in reserved dashboard payloads' do
+      allow(controller).to receive(:current_user).and_return(bruce)
+      listing_item = Item.create!(
+        user: bruce,
+        category: category,
+        item_name: item_name,
+        grade: grade,
+        item_unit: item_unit,
+        name: 'Egg Incubator',
+        price: 225,
+        quantity: 1
+      )
+      listing = Inventory.create!(
+        user: bruce,
+        item: listing_item,
+        quantity: 1,
+        price: 225,
+        status: :available
+      )
+
+      post :reserve, params: {
+        inventory_id: listing.id,
+        user_id: bob.id,
+        quantity: 1,
+        price: 200
+      }
+
+      expect(response).to have_http_status(:ok)
+      request = ItemRequest.last
+      reserved_inventory = request.inventory
+      expect(request.price.to_f).to eq(200.0)
+      expect(reserved_inventory.price.to_f).to eq(200.0)
+
+      get :reserved
+
+      expect(response).to have_http_status(:ok)
+      payload = JSON.parse(response.body)
+      reserved_item = payload['data'].find { |group| group.is_a?(Hash) }.dig('items', 0)
+      expect(reserved_item['attributes']['total-price'].to_f).to eq(200.0)
+      expect(reserved_item['attributes']['expected-price'].to_f).to eq(200.0)
+    end
+  end
+
   describe 'POST #accept' do
     it 'returns a 4xx when the requested unit cannot be converted' do
       allow(controller).to receive(:current_user).and_return(dianna)
