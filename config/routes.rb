@@ -19,7 +19,14 @@ Rails.application.routes.draw do
       post 'set_debug_api' => 'global_settings#set_debug_api'
       post 'signup' => 'registrations#create'
       resource :sessions, only: %i[show create destroy]
-      resources :users, only: [:index, :show] do 
+
+      # Job 11: v1 onboarding contract (master plan §1 / §Atomic
+      # accept/onboarding recovery). Idempotent on (invitation_code,
+      # accepted user). Status endpoint is pollable for the saga's
+      # session-restore "finish joining" repair path.
+      post 'onboarding'        => 'onboarding#create'
+      get  'onboarding/status' => 'onboarding#status'
+      resources :users, only: [:index, :show] do
         collection do
           get 'generate_invitation'
           get 'contact_list'
@@ -33,6 +40,17 @@ Rails.application.routes.draw do
           get 'category_sizes'
           post 'create_category_size'
           delete 'destroy_category_size'
+          # v1 endpoint aliases (Job 10) targeted by FoafAuthClient.
+          # Legacy `update_password` / `update_avatar` paths stay live for
+          # the version-skew window; saga refactor (Job 13) flips callers.
+          patch 'password' => 'users#update_password'
+          patch 'avatar'   => 'users#update_avatar'
+          get   'profile'  => 'users#profile'
+          patch 'profile'  => 'users#update_profile'
+          # Public handle availability check (no auth). Rate-limited per IP
+          # in the controller; full rack-attack lands with auth.foaf.io
+          # (Job 26 in Phase 3).
+          get   'handle_available' => 'users#handle_available'
         end
         member do 
           get 'get_invitation_limit'
@@ -145,6 +163,13 @@ Rails.application.routes.draw do
           get   'graph'  => 'subnets#graph'
         end
       end
+
+      # Public handle lookup (master plan §Handle Lookup Contract). No
+       # auth — returns the minimal identity summary used for trustline
+       # setup, mentions, invitations, and cross-app identity lookup.
+       # Rate-limited per IP in the controller. Constraint allows handles
+       # with `.` and other URL-safe punctuation.
+      get 'users/by_handle/:handle' => 'users#by_handle', constraints: { handle: /[^\/?#]+/ }
 
       post 'verify_invitation_code' => 'home#verify_invitation_code'
       get 'available_user_type' => 'home#available_user_type'

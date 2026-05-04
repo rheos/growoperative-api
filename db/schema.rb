@@ -90,6 +90,10 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.integer "accepted_id"
     t.float "user_price"
     t.bigint "subnet_id"
+    t.string "app_onboarding_status", default: "pending", null: false
+    t.string "app_onboarding_rejection_code"
+    t.datetime "app_onboarding_completed_at"
+    t.index ["app_onboarding_status", "user_id"], name: "index_invitations_on_app_onboarding_status_user"
     t.index ["subnet_id"], name: "index_invitations_on_subnet_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
