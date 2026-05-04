@@ -1,6 +1,12 @@
 module Api::V1
 	class UsersController < ApiController
 		# before_action :authenticate_user!
+		# Public handle endpoints (master plan §Handle Lookup Contract):
+		# unauthenticated, rate-limited inside the actions. Skipping the
+		# Authorization-header lookup keeps the lookup surface enumeration-
+		# noisy rather than account-bearer-leakable.
+		skip_before_action :authenticate!, only: [:by_handle, :handle_available]
+		before_action :throttle_handle_lookup!, only: [:by_handle, :handle_available]
 		before_action :is_admin_user, only: [:index, :get_invitation_limit, :set_invitation_limit, :chain_limit, :set_chain_limit]
 		before_action :set_user, only: [:item_list, :get_invitation_limit, :set_invitation_limit, :chain_limit, :get_nickname, :set_nickname]
 		# GET /v1/users
@@ -390,7 +396,119 @@ module Api::V1
 		end
 	end
 
+	# GET /v1/users/profile
+	# Self-profile read used by FoafAuthClient. Returns the same v1
+	# `{ token, identity }`-shaped envelope as `GET /v1/sessions` so a
+	# client doing `client.updateProfile()` and `client.login()` parses
+	# both responses through the same mapper. Token is reissued so a
+	# successful profile read keeps the bearer warm.
+	def profile
+		token = JwtGenerationService.new(current_user).token
+		render json: UserSerializer.new(current_user).serializable_hash.merge(
+			token: token,
+			identity: identity_payload(current_user),
+		), status: 200
+	end
+
+	# PATCH /v1/users/profile
+	# Identity-shaped self-update. Accepts first_name, last_name,
+	# display_name today; email lands when auth.foaf.io owns email
+	# verification (Phase 3 / Job 17). Fields outside the FoafIdentity
+	# whitelist are ignored — profile-shaped updates (role, subnet,
+	# invite_limit) live elsewhere on purpose.
+	def update_profile
+		patch = profile_update_params
+		if current_user.update(patch)
+			render json: UserSerializer.new(current_user).serializable_hash.merge(
+				token: JwtGenerationService.new(current_user).token,
+				identity: identity_payload(current_user),
+			), status: 200
+		else
+			render json: { errors: current_user.errors.full_messages }, status: 422
+		end
+	end
+
+	# GET /v1/users/by_handle/:handle
+	# Public handle lookup (master plan §Handle Lookup Contract). Returns
+	# only the four documented fields. 404 for missing/deleted users —
+	# never reveal email, role, subnet, admin flags, or invite limits.
+	def by_handle
+		handle = params[:handle].to_s.downcase
+		user = User.find_by(user_name: handle)
+		if user
+			render json: {
+				foaf_id: user.foaf_id,
+				user_name: user.user_name,
+				display_name: user.display_name,
+				avatar_url: user.avatar_url,
+			}, status: 200
+		else
+			render json: { error: 'not_found' }, status: 404
+		end
+	end
+
+	# GET /v1/users/handle_available?handle=...
+	# Active-identity check + format check. Phase-3 (Job 17) layers
+	# reserved-handle, cooldown, and reserved-word checks on top.
+	def handle_available
+		handle = params[:handle].to_s.downcase
+		if !valid_handle_format?(handle)
+			render json: { available: false, reason: 'invalid_format' }, status: 200
+			return
+		end
+		taken = User.where('LOWER(user_name) = ?', handle).exists?
+		render json: { available: !taken }, status: 200
+	end
+
 		private
+
+		# Phase-2 interim rate limit for the public handle endpoints.
+		# Per-IP sliding window via Rails.cache.increment; full
+		# rack-attack throttles land with auth.foaf.io (Job 26). Limit
+		# is generous so signup UX (live availability checks while
+		# typing) doesn't trip it; tighten once we have observability.
+		HANDLE_LOOKUP_LIMIT = 60   # requests
+		HANDLE_LOOKUP_WINDOW = 60  # seconds
+
+		def throttle_handle_lookup!
+			ip = request.remote_ip.to_s
+			# Bucket by 60-second wall-clock window so the cache key TTL
+			# matches the window — increment is atomic, key auto-expires.
+			bucket = (Time.now.to_i / HANDLE_LOOKUP_WINDOW)
+			key = "rate:handle_lookup:#{ip}:#{bucket}"
+			count = Rails.cache.increment(key, 1, expires_in: HANDLE_LOOKUP_WINDOW * 2)
+			# Some cache stores return nil on first increment — initialize.
+			if count.nil?
+				Rails.cache.write(key, 1, expires_in: HANDLE_LOOKUP_WINDOW * 2)
+				count = 1
+			end
+			if count > HANDLE_LOOKUP_LIMIT
+				response.set_header('Retry-After', HANDLE_LOOKUP_WINDOW.to_s)
+				render json: { error: 'rate_limited' }, status: 429
+			end
+		end
+
+		# Mirrors User.normalize_user_name expectations: lowercase only,
+		# 2–32 chars, alphanumerics + `_` + `.` + `-`. Keep this loose
+		# enough to accept the existing dataset (no migration required)
+		# but tight enough to reject obvious junk in handle_available.
+		HANDLE_FORMAT = /\A[a-z0-9][a-z0-9_.\-]{1,31}\z/
+
+		def valid_handle_format?(handle)
+			HANDLE_FORMAT.match?(handle)
+		end
+
+		def profile_update_params
+			# Tolerate both nested (`{user: {...}}`) and flat shapes — same
+			# bridge-window contract as Job 06's signup body. Whitelist is
+			# strictly FoafIdentity fields; profile-shaped fields like
+			# `invite_limit` and `is_admin` go through their own routes.
+			source = params[:user].present? ? params[:user] : params
+			source = ActionController::Parameters.new(source) unless source.is_a?(ActionController::Parameters)
+			source.permit(:first_name, :last_name, :display_name)
+		end
+
+
 		def set_user
 			@user = User.find_by(id: params[:id])
 			unless @user
