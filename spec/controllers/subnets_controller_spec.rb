@@ -8,8 +8,8 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
     u
   end
   let(:regular) { User.create!(user_name: 'sa_reg', password: password) }
-  let(:super_headers) { { 'Authorization' => "Bearer #{JwtGenerationService.new(user_id: superuser.id).token}" } }
-  let(:reg_headers)   { { 'Authorization' => "Bearer #{JwtGenerationService.new(user_id: regular.id).token}" } }
+  let(:super_headers) { { 'Authorization' => "Bearer #{JwtGenerationService.new(superuser).token}" } }
+  let(:reg_headers)   { { 'Authorization' => "Bearer #{JwtGenerationService.new(regular).token}" } }
 
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
 

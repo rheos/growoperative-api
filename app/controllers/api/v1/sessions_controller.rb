@@ -2,21 +2,27 @@ class Api::V1::SessionsController < Api::V1::ApiController
   skip_before_action :authenticate!, only: :create
 
   def show
-    token = JwtGenerationService.new(user_id: current_user.id).token
-    render json: UserSerializer.new(current_user).serializable_hash.merge(token: token), status: 200
+    token = JwtGenerationService.new(current_user).token
+    render json: UserSerializer.new(current_user).serializable_hash.merge(
+      token: token,
+      identity: identity_payload(current_user),
+    ), status: 200
   end
 
   def create
     Rails.logger.debug("Login attempt - Params: #{params.inspect}")
-    
+
     user = User.find_by(user_name: params[:username])
     Rails.logger.debug("User found: #{user.present?}")
-    
+
     if user&.valid_password?(params[:password])
       Rails.logger.debug("Password valid for user: #{user.user_name}")
       assign_jwt_cookies(user)
-      token = JwtGenerationService.new(user_id: user.id).token
-      render json: UserSerializer.new(user).serializable_hash.merge(token: token), status: 200
+      token = JwtGenerationService.new(user).token
+      render json: UserSerializer.new(user).serializable_hash.merge(
+        token: token,
+        identity: identity_payload(user),
+      ), status: 200
     else
       Rails.logger.warn("Failed login attempt for username: #{params[:username]}")
       render json: { error: "Username or password are invalid" }, status: :unauthorized

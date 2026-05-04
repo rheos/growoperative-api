@@ -9,7 +9,11 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
     user = User.new(sign_up_params)
     if user.save
       assign_jwt_cookies(user)
-      render json: UserSerializer.new(user), status: 201
+      token = JwtGenerationService.new(user).token
+      render json: UserSerializer.new(user).serializable_hash.merge(
+        token: token,
+        identity: identity_payload(user),
+      ), status: 201
     else
       warden.custom_failure!
       render :json=> user.errors, :status=>422

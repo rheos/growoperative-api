@@ -6,7 +6,7 @@ RSpec.describe 'Notifications API', type: :request, skip_hooks: true do
     User.create!(user_name: 'notif_testuser', password: password)
   end
   let(:actor) { User.create!(user_name: 'notif_alice', password: password) }
-  let(:token) { "Bearer #{JwtGenerationService.new(user_id: user.id).token}" }
+  let(:token) { "Bearer #{JwtGenerationService.new(user).token}" }
   let(:auth_headers) { { 'Authorization' => token } }
 
   def create_notification(attrs = {})

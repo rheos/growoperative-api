@@ -12,7 +12,7 @@ RSpec.describe 'Signup subnet wiring', type: :request, skip_hooks: true do
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
 
   describe 'invitation generation' do
-    let(:token) { "Bearer #{JwtGenerationService.new(user_id: inviter.id).token}" }
+    let(:token) { "Bearer #{JwtGenerationService.new(inviter).token}" }
 
     it 'inherits the inviter primary subnet' do
       get '/v1/users/generate_invitation', params: { user_type: 'consumer' },
