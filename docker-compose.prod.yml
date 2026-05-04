@@ -47,6 +47,10 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
       - ./nginx/certbot/www:/var/www/certbot:ro
+      # Maintenance page — served via `error_page 502 503 504` on every
+      # block that proxies to a backend. Catches deploy windows, MySQL
+      # CPU-credit exhaustion, container restarts.
+      - ./nginx/maintenance.html:/var/www/maintenance/maintenance.html:ro
       # Production frontend (growoperative.app) — promoted manually via the
       # frontend repo's deploy-prod workflow.
       - /home/ubuntu/growoperative-app/dist-prod:/var/www/prod:ro

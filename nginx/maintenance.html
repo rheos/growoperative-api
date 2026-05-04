@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>GrowOperative is updating</title>
+  <!-- Returned by nginx when the upstream backend is unreachable: deploys,
+       MySQL CPU exhaustion windows, container restarts. Auto-reload polls
+       every 15s so users land back on the app the moment service returns. -->
+  <meta http-equiv="refresh" content="15">
+  <style>
+    :root {
+      --bg:        #f6f8f4;
+      --ink:       #1c2a1e;
+      --muted:     #5a6c5b;
+      --leaf:      #4a8f3d;
+      --card:      #ffffff;
+      --shadow:    0 4px 18px rgba(28, 42, 30, 0.06);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: 40px 32px;
+      text-align: center;
+    }
+    .leaf {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 20px;
+      color: var(--leaf);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+    .small {
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .retry {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: var(--leaf);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    .retry:hover { filter: brightness(0.95); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <svg class="leaf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M11 20A7 7 0 0 1 4 13V8a4 4 0 0 1 4-4h7a4 4 0 0 1 4 4v3a9 9 0 0 1-9 9z"/>
+        <path d="M2 22c1-5 4-9 9-12"/>
+      </svg>
+      <h1>GrowOperative is updating.</h1>
+      <p>This page will refresh on its own. Usually about 30 seconds.</p>
+      <a class="retry" href="javascript:location.reload()">Try again now</a>
+      <p class="small">If you keep seeing this for more than a few minutes, drop us a note and we will look into it.</p>
+    </div>
+  </div>
+</body>
+</html>
