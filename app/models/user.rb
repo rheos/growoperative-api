@@ -13,6 +13,15 @@ class User < ApplicationRecord
 	# Validation
   validates :user_name, presence: :true, uniqueness: { case_sensitive: false }
   validates :invitations_count, numericality: { only_integer: true }
+
+  # Lowercase canonical handle (auth.foaf.io contract). UI re-displays as
+  # @handle. Catches even legacy controllers that bypass the form layer.
+  before_validation :normalize_user_name
+
+  # Assign an auth.foaf.io UUID on create so callers (controllers,
+  # factories, seeds, demo) don't need to know the column exists.
+  before_validation :assign_foaf_id, on: :create
+
   # Association
   has_many   :sub_users, class_name: "User", foreign_key: "parent_id", dependent: :destroy
   has_many   :invitations, dependent: :destroy
@@ -325,5 +334,15 @@ class User < ApplicationRecord
   def avatar_url
     return nil unless image.present?
     image.thumb500.url
+  end
+
+  private
+
+  def normalize_user_name
+    self.user_name = user_name.downcase if user_name.is_a?(String)
+  end
+
+  def assign_foaf_id
+    self.foaf_id ||= SecureRandom.uuid
   end
 end

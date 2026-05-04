@@ -33,8 +33,11 @@ class Api::V1::DemoController < Api::V1::ApiController
     user = User.demo.find_by(id: params[:user_id])
     if user
       assign_jwt_cookies(user)
-      token = JwtGenerationService.new(user_id: user.id).token
-      render json: UserSerializer.new(user).serializable_hash.merge(token: token), status: 200
+      token = JwtGenerationService.new(user).token
+      render json: UserSerializer.new(user).serializable_hash.merge(
+        token: token,
+        identity: identity_payload(user),
+      ), status: 200
     else
       render json: { error: 'Demo user not found' }, status: :not_found
     end

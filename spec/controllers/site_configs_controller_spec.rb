@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
   let(:password) { 'bobsentme!' }
   let(:user) { User.create!(user_name: 'sc_user', password: password) }
-  let(:token) { "Bearer #{JwtGenerationService.new(user_id: user.id).token}" }
+  let(:token) { "Bearer #{JwtGenerationService.new(user).token}" }
   let(:auth_headers) { { 'Authorization' => token } }
 
   after(:each) { DatabaseCleaner.clean_with(:truncation) }

@@ -3,7 +3,7 @@ require 'rails_helper'
 RSpec.describe 'Invitation role policy', type: :request, skip_hooks: true do
   let(:password) { 'bobsentme!' }
   let(:inviter) { User.create!(user_name: 'irp_inviter', password: password) }
-  let(:auth_headers) { { 'Authorization' => "Bearer #{JwtGenerationService.new(user_id: inviter.id).token}" } }
+  let(:auth_headers) { { 'Authorization' => "Bearer #{JwtGenerationService.new(inviter).token}" } }
 
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
 
