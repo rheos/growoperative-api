@@ -10,13 +10,9 @@ class Api::V1::SessionsController < Api::V1::ApiController
   end
 
   def create
-    Rails.logger.debug("Login attempt - Params: #{params.inspect}")
-
     user = User.find_by(user_name: params[:username])
-    Rails.logger.debug("User found: #{user.present?}")
 
     if user&.valid_password?(params[:password])
-      Rails.logger.debug("Password valid for user: #{user.user_name}")
       assign_jwt_cookies(user)
       token = JwtGenerationService.new(user).token
       render json: UserSerializer.new(user).serializable_hash.merge(
@@ -24,7 +20,11 @@ class Api::V1::SessionsController < Api::V1::ApiController
         identity: identity_payload(user),
       ), status: 200
     else
-      Rails.logger.warn("Failed login attempt for username: #{params[:username]}")
+      # Master plan §Logging and Audit / Job 12: log the *outcome*, not
+      # the submitted handle. Per-IP / handle bucketing for the failed-
+      # login lockout (master plan §Account Lockout, Job 18) lives in
+      # auth.foaf.io; logging the raw handle here would defeat that.
+      Rails.logger.warn("Failed login attempt")
       render json: { error: "Username or password are invalid" }, status: :unauthorized
     end
   end

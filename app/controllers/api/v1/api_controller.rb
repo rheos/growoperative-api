@@ -35,7 +35,9 @@ class Api::V1::ApiController < ApplicationController
 
     begin
       decoded = JwtDecodingService.new(jwt).decrypt!
-      Rails.logger.debug("Decoded JWT: #{decoded.inspect}")
+      # NOTE: never log `decoded` here — claims contain user_name and
+      # may contain email. Use jti / sub fingerprints in incident
+      # forensics instead.
 
       if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
         clear_jwt_cookie! if cookie_jwt
