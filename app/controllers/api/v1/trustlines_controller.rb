@@ -309,7 +309,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     if path
       render json: {
         path_found: true,
-        path: path.map { |user| { id: user.id, name: user.user_name } },
+        path: path.map { |user| { id: user.id, name: display_name_for(user) } },
         path_length: path.length - 1,  # Number of hops
         estimated_cost: amount  # In a real system, might include fees
       }
@@ -360,7 +360,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         if result
           render json: {
             message: 'Path payment executed successfully',
-            path: path.map { |user| { id: user.id, name: user.user_name } },
+            path: path.map { |user| { id: user.id, name: display_name_for(user) } },
             amount: amount
           }
         else
@@ -419,7 +419,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       id: trustline.id,
       other_user: {
         id: counterparty.id,
-        name: counterparty.user_name
+        name: display_name_for(counterparty)
       },
       my_credit_limit: my_limit,
       their_credit_limit: row[:their_credit_limit],
@@ -442,7 +442,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       id: trustline.id,
       other_user: {
         id: other_user.id,
-        name: other_user.user_name
+        name: display_name_for(other_user)
       },
       my_credit_limit: trustline.credit_limit_for(current_user).to_f,
       their_credit_limit: trustline.credit_limit_for(other_user).to_f,
@@ -468,11 +468,30 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       balance_after: transaction.balance_after.to_f,
       is_reversed: transaction.is_reversed,
       initiated_by_id: transaction.initiated_by_id,
-      initiated_by_name: transaction.initiated_by&.user_name,
+      initiated_by_name: transaction.initiated_by && display_name_for(transaction.initiated_by),
       order_id: transaction.order_id,
       order_label: transaction.order&.order_label,
       originating_request_id: transaction.originating_request_id,
       path_info: transaction.path_info
     }
   end
-end 
+
+  def display_name_for(user)
+    return nil unless user
+    return user.user_name if user.id == current_user.id
+
+    relation = Relationship.where(
+      'user_id IN (?) AND friend_id IN (?)',
+      [current_user.id, user.id],
+      [current_user.id, user.id]
+    ).first
+
+    if relation&.user_id == current_user.id && relation.user_label.present?
+      relation.user_label
+    elsif relation&.friend_id == current_user.id && relation.friend_label.present?
+      relation.friend_label
+    else
+      user.nickname.presence || user.user_name
+    end
+  end
+end
