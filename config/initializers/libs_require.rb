@@ -1,2 +1,5 @@
+require 'jwt/current_request_id'
+require 'jwt/auth_jwks_client'
+require 'jwt/auth_revocation_snapshot'
 require 'jwt/decoding_service'
 require 'jwt/generation_service'

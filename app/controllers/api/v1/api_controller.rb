@@ -1,3 +1,5 @@
+require_dependency 'jwt/current_request_id'
+
 class Api::V1::ApiController < ApplicationController
   protect_from_forgery prepend: true, with: :exception
 
@@ -34,7 +36,9 @@ class Api::V1::ApiController < ApplicationController
     return unless jwt
 
     begin
-      decoded = JwtDecodingService.new(jwt).decrypt!
+      decoded = CurrentRequestId.with(request.request_id) do
+        JwtDecodingService.new(jwt).decrypt!
+      end
       # NOTE: never log `decoded` here — claims contain user_name and
       # may contain email. Use jti / sub fingerprints in incident
       # forensics instead.
