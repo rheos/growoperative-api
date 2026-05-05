@@ -10,7 +10,24 @@ class DemoResetService
     ActiveRecord::Base.transaction do
       delete_spawned_users
       delete_core_demo_data
+      rotate_core_demo_foaf_ids
       restore_core_demo_data
+    end
+  end
+
+  # Job 14 (master plan §Demo mode tasks): rotate `foaf_id` on every core
+  # demo user during reset so any token issued before reset stops resolving
+  # via `api_controller#resolve_user_from_jwt` (the User.find_by(foaf_id:)
+  # branch returns nil → 401 → client clears stale session). Phase 3 (Job 29)
+  # replaces this with `tokens_invalid_before` + revocation snapshot refresh
+  # in auth.foaf.io, but until that exists, foaf_id rotation is the cleanest
+  # interim invalidation: no separate revocation list to coordinate, no
+  # blacklist row growth per reset, and pre-reset tokens fail at the
+  # resolution boundary rather than passing decode and authenticating a
+  # post-reset identity.
+  def rotate_core_demo_foaf_ids
+    User.where(user_name: @core_usernames).find_each do |user|
+      user.update_columns(foaf_id: SecureRandom.uuid)
     end
   end
 
