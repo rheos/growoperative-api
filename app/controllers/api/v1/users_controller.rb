@@ -410,6 +410,14 @@ module Api::V1
 		), status: 200
 	end
 
+	# GET /v1/profile
+	# App-owned profile only. Identity fields live in auth.foaf.io and the
+	# protocol identity payload; this endpoint returns Growoperative-local
+	# fields keyed by foaf_id.
+	def app_profile
+		render json: app_profile_payload(current_user), status: 200
+	end
+
 	# PATCH /v1/users/profile
 	# Identity-shaped self-update. Accepts first_name, last_name,
 	# display_name today; email lands when auth.foaf.io owns email

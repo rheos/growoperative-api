@@ -10,6 +10,8 @@ class Api::V1::OnboardingController < Api::V1::ApiController
   # Returns the v1 envelope ({ token, identity }) on success, with a
   # top-level `onboarding` block describing the terminal status.
   def create
+    ensure_local_user_for_current_identity!
+
     code = params[:invitation_code] || params[:invited_code] || params.dig(:onboarding, :invitation_code)
     if code.blank?
       render json: { error: 'invitation_code is required' }, status: :bad_request

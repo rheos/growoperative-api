@@ -29,41 +29,31 @@ class Api::V1::ApiController < ApplicationController
   end
 
   def current_user
-    # Try cookie first, fall back to Authorization Bearer header
-    cookie_jwt = cookies.signed[:jwt]
-    header_jwt = request.headers['Authorization']&.sub(/^Bearer\s+/, '')
-    jwt = cookie_jwt || header_jwt
-    return unless jwt
+    return @current_user if defined?(@current_user)
 
-    begin
-      decoded = CurrentRequestId.with(request.request_id) do
-        JwtDecodingService.new(jwt).decrypt!
-      end
-      # NOTE: never log `decoded` here — claims contain user_name and
-      # may contain email. Use jti / sub fingerprints in incident
-      # forensics instead.
+    decoded = current_jwt_payload
+    return @current_user = nil unless decoded
 
-      if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
-        clear_jwt_cookie! if cookie_jwt
-        return
-      end
-
-      user = resolve_user_from_jwt(decoded)
-      # Stale cookie pointing at a user that no longer exists (e.g. after a
-      # demo DB reset, or an unresolvable v1 sub during the bridge). Kill it
-      # so the next request arrives clean rather than producing a confusing
-      # dashboard-flash-then-401 loop on the client.
-      if user.nil? && cookie_jwt
-        clear_jwt_cookie!
-        return
-      end
-
-      @current_user ||= user
-    rescue JwtDecodingService::JWTDecodingError => e
-      Rails.logger.error("JWT Decoding Error: #{e.message}")
-      clear_jwt_cookie! if cookie_jwt
-      nil
+    if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
+      clear_jwt_cookie! if current_jwt_from_cookie?
+      return @current_user = nil
     end
+
+    user = resolve_user_from_jwt(decoded)
+    if user&.auth_inactive?
+      clear_jwt_cookie! if current_jwt_from_cookie?
+      return @current_user = nil
+    end
+
+    # Stale cookie pointing at a user that no longer exists (e.g. after a
+    # demo DB reset, or an unresolvable v1 sub during the bridge). Kill it
+    # so the next request arrives clean rather than producing a confusing
+    # dashboard-flash-then-401 loop on the client.
+    if user.nil? && current_jwt_from_cookie?
+      clear_jwt_cookie!
+    end
+
+    @current_user = user
   end
 
   def assign_jwt_cookies(user)
@@ -131,14 +121,85 @@ class Api::V1::ApiController < ApplicationController
     }
   end
 
+  def app_profile_payload(user)
+    labels = user.user_groups.map(&:group_label)
+    {
+      id: user.id,
+      foaf_id: user.foaf_id,
+      role: growoperative_role_for(labels),
+      invitation_limit: user.invite_limit,
+      invite_limit: user.invite_limit,
+      is_demo: labels.include?('demo'),
+      is_admin: labels.include?('admin') || labels.include?('superuser'),
+      is_superuser: labels.include?('superuser'),
+      user_types: user.user_groups.map { |group| { id: group.id, group_label: group.group_label } },
+      subnet_memberships: user.subnet_memberships.includes(:subnet).map do |membership|
+        {
+          id: membership.id,
+          subnet_id: membership.subnet_id,
+          subnet_name: membership.subnet.name,
+          is_primary: membership.is_primary
+        }
+      end,
+      app_preferences: {}
+    }
+  end
+
   private
 
   def authenticate!
-    unauthorized! unless current_user
+    return if current_user
+    return if profileless_onboarding_request? && current_jwt_foaf_id.present?
+
+    unauthorized!
   end
 
   def unauthorized!
     head(:unauthorized)
+  end
+
+  def current_jwt_payload
+    return @current_jwt_payload if defined?(@current_jwt_payload)
+
+    jwt, source = current_jwt_token_and_source
+    @current_jwt_source = source
+    return @current_jwt_payload = nil unless jwt
+
+    @current_jwt_payload = CurrentRequestId.with(request.request_id) do
+      JwtDecodingService.new(jwt).decrypt!
+    end
+    # NOTE: never log decoded claims here — they contain user_name and
+    # may contain email. Use jti / sub fingerprints in incident forensics.
+  rescue JwtDecodingService::JWTDecodingError => e
+    Rails.logger.error("JWT Decoding Error: #{e.message}")
+    clear_jwt_cookie! if current_jwt_from_cookie?
+    @current_jwt_payload = nil
+  end
+
+  def current_jwt_foaf_id
+    sub = current_jwt_payload && current_jwt_payload['sub']
+    sub if sub.is_a?(String) && sub.present?
+  end
+
+  def ensure_local_user_for_current_identity!
+    return current_user if current_user
+    return unless profileless_onboarding_request?
+
+    foaf_id = current_jwt_foaf_id
+    return if foaf_id.blank?
+
+    User.find_or_create_by!(foaf_id: foaf_id) do |user|
+      user.user_name = unique_local_handle_for(current_jwt_payload['user_name'], foaf_id)
+      email = current_jwt_payload['email'].to_s.downcase.presence
+      user.email = email if email && !User.where.not(foaf_id: foaf_id).exists?(email: email)
+      user.first_name = current_jwt_payload['first_name'].presence
+      user.last_name = current_jwt_payload['last_name'].presence
+      user.display_name = current_jwt_payload['display_name'].presence || user.user_name
+      user.name = [user.first_name, user.last_name].compact.join(' ').presence || user.display_name
+      password = SecureRandom.hex(32)
+      user.password = password
+      user.password_confirmation = password
+    end.tap { |user| @current_user = user unless user.auth_inactive? }
   end
 
   # JWT bridge resolution (master plan §JWT Contract → Bridge token contract).
@@ -166,5 +227,37 @@ class Api::V1::ApiController < ApplicationController
     end
     return nil if user_id.nil?
     User.find_by(id: user_id)
+  end
+
+  def current_jwt_token_and_source
+    header_jwt = request.headers['Authorization']&.sub(/^Bearer\s+/, '')
+    return [header_jwt, :header] if header_jwt.present?
+
+    cookie_jwt = cookies.signed[:jwt]
+    return [cookie_jwt, :cookie] if cookie_jwt.present?
+
+    [nil, nil]
+  end
+
+  def current_jwt_from_cookie?
+    @current_jwt_source == :cookie
+  end
+
+  def profileless_onboarding_request?
+    controller_path == 'api/v1/onboarding' && %w[create status].include?(action_name)
+  end
+
+  def unique_local_handle_for(preferred, foaf_id)
+    base = preferred.to_s.downcase.gsub(/[^a-z0-9_.-]/, '').presence || "user-#{foaf_id.delete('-')[0, 8]}"
+    base = base[0, 32]
+    return base unless User.where.not(foaf_id: foaf_id).exists?(user_name: base)
+
+    suffix = foaf_id.delete('-')[0, 8]
+    "#{base[0, 23]}-#{suffix}"
+  end
+
+  def growoperative_role_for(labels)
+    primary = (labels - %w[demo]).first || 'consumer'
+    %w[admin superuser].include?(primary) ? 'broker' : primary
   end
 end

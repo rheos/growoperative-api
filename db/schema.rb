@@ -466,6 +466,10 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "first_name"
     t.string "last_name"
     t.string "display_name"
+    t.datetime "deleted_at"
+    t.datetime "disabled_at"
+    t.index ["deleted_at"], name: "index_users_on_deleted_at"
+    t.index ["disabled_at"], name: "index_users_on_disabled_at"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["foaf_address"], name: "index_users_on_foaf_address", unique: true
     t.index ["foaf_id"], name: "index_users_on_foaf_id", unique: true

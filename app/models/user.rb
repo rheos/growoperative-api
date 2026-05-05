@@ -53,9 +53,14 @@ class User < ApplicationRecord
 
   # Demo user support
   scope :demo, -> { joins(:user_groups).where(user_groups: { group_label: 'demo' }).distinct }
+  scope :auth_active, -> { where(deleted_at: nil, disabled_at: nil) }
 
   def demo?
     user_groups.exists?(group_label: 'demo')
+  end
+
+  def auth_inactive?
+    deleted_at.present? || disabled_at.present?
   end
 
   def superuser?
