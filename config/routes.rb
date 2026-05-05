@@ -19,6 +19,7 @@ Rails.application.routes.draw do
       post 'set_debug_api' => 'global_settings#set_debug_api'
       post 'signup' => 'registrations#create'
       resource :sessions, only: %i[show create destroy]
+      get 'profile' => 'users#app_profile'
 
       # Job 11: v1 onboarding contract (master plan §1 / §Atomic
       # accept/onboarding recovery). Idempotent on (invitation_code,

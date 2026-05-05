@@ -6,9 +6,10 @@ RSpec.describe 'auth.foaf.io JWKS verifier', skip_hooks: true do
   let(:kid) { 'prod-test-kid' }
   let(:rsa) { OpenSSL::PKey::RSA.generate(2048) }
   let(:user) do
+    suffix = SecureRandom.hex(4)
     User.create!(
-      user_name: 'rs256user',
-      email: 'rs256user@example.com',
+      user_name: "rs256user_#{suffix}",
+      email: "rs256user_#{suffix}@example.com",
       password: 'bobsentme!',
       password_confirmation: 'bobsentme!'
     )
@@ -16,7 +17,6 @@ RSpec.describe 'auth.foaf.io JWKS verifier', skip_hooks: true do
   let(:now) { Time.zone.parse('2026-05-05T17:00:00Z') }
 
   before do
-    User.delete_all
     AuthJwksClient.reset!
     AuthRevocationSnapshot.reset!
     AuthJwksClient.http_get = ->(_url, _headers) { { keys: [jwk] }.to_json }
