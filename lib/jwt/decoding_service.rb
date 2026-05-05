@@ -1,6 +1,9 @@
 class JwtDecodingService
   SIGNING_ALGORITHM = 'HS256'
+  AUTH_SIGNING_ALGORITHM = 'RS256'
   DEFAULT_AUDIENCE = 'growoperative'.freeze
+  AUTH_ISSUER = 'auth.foaf.io'.freeze
+  CLOCK_SKEW = 30
 
   class JWTDecodingError < StandardError; end
 
@@ -13,6 +16,9 @@ class JwtDecodingService
     raise JWTDecodingError, "Token is required" if @token.nil? || @token.empty?
 
     begin
+      header = JWT.decode(@token, nil, false).last
+      return decrypt_auth_token!(header) if header['alg'] == AUTH_SIGNING_ALGORITHM
+
       decoded = JWT.decode(@token, secret, true, { algorithm: SIGNING_ALGORITHM }).first
       enforce_audience!(decoded)
       decoded
@@ -34,6 +40,50 @@ class JwtDecodingService
   end
 
   private
+
+  def decrypt_auth_token!(header)
+    kid = header['kid'].to_s
+    snapshot = AuthRevocationSnapshot.current(audience: @audience, request_id: CurrentRequestId.value)
+    if snapshot&.revoked_kid?(kid)
+      Rails.logger.warn("JWT rejected: kid=#{kid.inspect} revoked request_id=#{CurrentRequestId.value}")
+      raise JWTDecodingError, "JWT signing key has been revoked"
+    end
+
+    key = AuthJwksClient.public_key_for(kid, request_id: CurrentRequestId.value)
+    decoded = JWT.decode(
+      @token,
+      key,
+      true,
+      algorithm: AUTH_SIGNING_ALGORITHM,
+      iss: AUTH_ISSUER,
+      verify_iss: true,
+      aud: @audience,
+      verify_aud: true,
+      leeway: CLOCK_SKEW
+    ).first
+
+    enforce_revocation_snapshot!(decoded, snapshot)
+    decoded
+  rescue AuthJwksClient::Error, AuthRevocationSnapshot::Error => e
+    Rails.logger.warn("JWT auth.foaf.io verification failed request_id=#{CurrentRequestId.value}: #{e.message}")
+    raise JWTDecodingError, e.message
+  end
+
+  def enforce_revocation_snapshot!(decoded, snapshot)
+    return unless snapshot
+
+    sub = decoded['sub'].to_s
+    cutoff = snapshot.cutoff_for(sub)
+    if cutoff && decoded['iat'].to_i > 0 && decoded['iat'].to_i < cutoff.to_i
+      Rails.logger.warn("JWT rejected: sub cutoff reached request_id=#{CurrentRequestId.value}")
+      raise JWTDecodingError, "JWT was issued before the identity cutoff"
+    end
+
+    if snapshot.revoked_jti?(decoded['jti'].to_s)
+      Rails.logger.warn("JWT rejected: jti revoked request_id=#{CurrentRequestId.value}")
+      raise JWTDecodingError, "JWT has been revoked"
+    end
+  end
 
   # Master plan §12 (Audience Enforcement) + §JWT Contract:
   # "Each app backend rejects tokens whose `aud` does not exactly match
