@@ -28,19 +28,28 @@ class Api::V1::DemoController < Api::V1::ApiController
   end
 
   # POST /v1/demo/login
-  # Passwordless login for demo users only
+  # Passwordless login for demo users only. Issues a v1-shaped token
+  # (sub = foaf_id, aud = growoperative) via JwtGenerationService — there
+  # is no separate demo verifier path. The response envelope mirrors
+  # POST /v1/sessions so the FoafAuthClient pipeline treats demo and
+  # production logins identically (master plan §Demo mode tasks, Job 14).
   def login
     user = User.demo.find_by(id: params[:user_id])
-    if user
-      assign_jwt_cookies(user)
-      token = JwtGenerationService.new(user).token
-      render json: UserSerializer.new(user).serializable_hash.merge(
-        token: token,
-        identity: identity_payload(user),
-      ), status: 200
-    else
-      render json: { error: 'Demo user not found' }, status: :not_found
+    return render json: { error: 'Demo user not found' }, status: :not_found unless user
+
+    # `JwtGenerationService` raises on missing foaf_id; surface a clear 422
+    # rather than a 500 if a demo row somehow lost its identity column.
+    if user.foaf_id.blank?
+      Rails.logger.error("Demo login refused: user_id=#{user.id} has no foaf_id")
+      return render json: { error: 'Demo user is not provisioned for v1 auth' }, status: :unprocessable_entity
     end
+
+    assign_jwt_cookies(user)
+    token = JwtGenerationService.new(user).token
+    render json: UserSerializer.new(user).serializable_hash.merge(
+      token: token,
+      identity: identity_payload(user),
+    ), status: 200
   end
 
   # POST /v1/demo/setup
