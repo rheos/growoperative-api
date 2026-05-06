@@ -76,7 +76,15 @@ class OnboardingService
     # Inviter / accepter sanity — same checks as legacy accept_invitation.
     return reject('role_policy_violation', invitation, 'You can not accept your own invitation.') if invitation.user_id == @user.id
     return reject('role_policy_violation', invitation, 'Demo/non-demo crossover not allowed.') if invitation.user.demo? != @user.demo?
-    return Result.new(status: 'failed', invitation: invitation, error_message: 'Invitation already used') unless invitation.pending? || invitation.app_onboarding_status == 'failed'
+    # User#after_create callbacks (set_relationship → @invitation.update(status: :accepted, accepted_id: ...))
+    # flip legacy `status` to accepted as a side effect of signup. That happens
+    # BEFORE the app calls /v1/onboarding, so by the time we get here the
+    # invitation is no longer `pending?` even though Job 11's app_onboarding_status
+    # column is still 'pending'. The onboarding contract is idempotent on
+    # (invitation_code, accepted user) — if accepted_id already points at @user
+    # we treat it as a retry and proceed. apply_effects! is idempotent.
+    accepted_by_caller = invitation.accepted_id.present? && invitation.accepted_id == @user.id
+    return Result.new(status: 'failed', invitation: invitation, error_message: 'Invitation already used') unless invitation.pending? || invitation.app_onboarding_status == 'failed' || accepted_by_caller
 
     apply_effects!(invitation)
   rescue PolicyRejection => e
