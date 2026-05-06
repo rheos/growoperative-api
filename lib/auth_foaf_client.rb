@@ -63,6 +63,7 @@ class AuthFoafClient
 
   def self.change_password(current_password:, new_password:, bearer:)
     new.put_json('/v1/users/password', {
+      client_id: audience,
       current_password: current_password,
       password: new_password,
       password_confirmation: new_password
