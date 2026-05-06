@@ -2,15 +2,20 @@ class Api::V1::SessionsController < Api::V1::ApiController
   skip_before_action :authenticate!, only: :create
 
   def show
-    # Job 43: proxy to auth.foaf.io's GET /v1/sessions to refresh the
-    # bearer. Client passes its current token; auth.foaf.io returns a
-    # fresh one alongside the canonical identity.
-    bearer = bearer_token
-    status, body = AuthFoafClient.refresh_session(bearer: bearer)
+    # Proxy to auth.foaf.io's GET /v1/sessions for a fresh bearer when
+    # the caller already presented a v1 RS256 token. Legacy HS256 bridge
+    # tokens skip the proxy — auth.foaf.io can't refresh them and the
+    # bridge will be retired (Job 37 sunset) anyway.
     payload = UserSerializer.new(current_user).serializable_hash.merge(
-      identity: (body && body['identity']) || identity_payload(current_user)
+      identity: identity_payload(current_user)
     )
-    payload[:token] = body['token'] if status == 200 && body && body['token']
+    if v1_bearer?
+      status, body = AuthFoafClient.refresh_session(bearer: bearer_token)
+      if status == 200 && body
+        payload[:identity] = body['identity'] if body['identity']
+        payload[:token] = body['token'] if body['token']
+      end
+    end
     render json: payload, status: 200
   end
 
@@ -67,5 +72,12 @@ class Api::V1::SessionsController < Api::V1::ApiController
   def bearer_token
     match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
     match && match[1]
+  end
+
+  def v1_bearer?
+    token = bearer_token
+    return false if token.blank?
+    header = JWT.decode(token, nil, false).last rescue nil
+    header && header['alg'] == 'RS256'
   end
 end

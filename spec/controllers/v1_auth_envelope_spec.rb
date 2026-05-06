@@ -27,10 +27,8 @@ RSpec.describe 'v1 auth envelope', type: :request do
     JSON.parse(response.body)
   end
 
-  shared_examples 'a v1 envelope response' do
-    it 'returns top-level token + FoafIdentity-shaped identity' do
-      expect(parsed['token']).to be_a(String).and(be_present)
-
+  shared_examples 'a v1 identity envelope' do
+    it 'returns the FoafIdentity-shaped identity block' do
       identity = parsed['identity']
       expect(identity).to be_a(Hash)
       expect(identity['foaf_id']).to eq(user.foaf_id)
@@ -47,6 +45,13 @@ RSpec.describe 'v1 auth envelope', type: :request do
     it 'ships the app profile data.attributes block' do
       expect(parsed.dig('data', 'attributes', 'user_name')).to eq(user.user_name)
     end
+  end
+
+  shared_examples 'a v1 envelope response' do
+    it 'returns top-level token + identity' do
+      expect(parsed['token']).to be_a(String).and(be_present)
+    end
+    include_examples 'a v1 identity envelope'
   end
 
   describe 'POST /v1/sessions' do
@@ -76,7 +81,12 @@ RSpec.describe 'v1 auth envelope', type: :request do
       expect(response).to have_http_status(:ok)
     end
 
-    include_examples 'a v1 envelope response'
+    # Token is only refreshed when the bearer is RS256 (Job 43 proxies
+    # GET /v1/sessions to auth.foaf.io for v1 tokens; HS256 bridge
+    # tokens get identity but not a refreshed token). In test env the
+    # AuthFoafClient stub produces HS256 v1 tokens, so the proxy isn't
+    # exercised here — identity envelope only.
+    include_examples 'a v1 identity envelope'
   end
 
   describe 'POST /v1/demo/login' do
