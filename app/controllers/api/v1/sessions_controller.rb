@@ -2,11 +2,16 @@ class Api::V1::SessionsController < Api::V1::ApiController
   skip_before_action :authenticate!, only: :create
 
   def show
-    # Job 42: re-issue is via auth.foaf.io. Currently shows the bearer
-    # the client already has — we don't mint a fresh one here.
-    render json: UserSerializer.new(current_user).serializable_hash.merge(
-      identity: identity_payload(current_user),
-    ), status: 200
+    # Job 43: proxy to auth.foaf.io's GET /v1/sessions to refresh the
+    # bearer. Client passes its current token; auth.foaf.io returns a
+    # fresh one alongside the canonical identity.
+    bearer = bearer_token
+    status, body = AuthFoafClient.refresh_session(bearer: bearer)
+    payload = UserSerializer.new(current_user).serializable_hash.merge(
+      identity: (body && body['identity']) || identity_payload(current_user)
+    )
+    payload[:token] = body['token'] if status == 200 && body && body['token']
+    render json: payload, status: 200
   end
 
   def create
