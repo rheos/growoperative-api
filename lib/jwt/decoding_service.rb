@@ -2,7 +2,11 @@ class JwtDecodingService
   SIGNING_ALGORITHM = 'HS256'
   AUTH_SIGNING_ALGORITHM = 'RS256'
   DEFAULT_AUDIENCE = 'growoperative'.freeze
-  AUTH_ISSUER = 'auth.foaf.io'.freeze
+  DEFAULT_AUTH_ISSUER = 'auth.foaf.io'.freeze
+
+  def self.auth_issuer
+    ENV.fetch('FOAF_AUTH_ISSUER', DEFAULT_AUTH_ISSUER)
+  end
   CLOCK_SKEW = 30
   BRIDGE_EXPIRED_CODE = 'client_too_old_auth_bridge_expired'.freeze
 
@@ -77,7 +81,7 @@ class JwtDecodingService
       key,
       true,
       algorithm: AUTH_SIGNING_ALGORITHM,
-      iss: AUTH_ISSUER,
+      iss: self.class.auth_issuer,
       verify_iss: true,
       aud: @audience,
       verify_aud: true,
