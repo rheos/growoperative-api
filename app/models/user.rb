@@ -113,7 +113,7 @@ class User < ApplicationRecord
 
   def invited_by_name
     return nil if invited_code.blank?
-    invitation = Invitation.find_by(invitation_code: invited_code)
+    invitation = Invitation.find_by_code(invited_code)
     return nil unless invitation
     User.find_by(id: invitation.user_id)&.user_name
   end
@@ -215,7 +215,7 @@ class User < ApplicationRecord
     end
   end
   def find_invitation
-    @invitation = Invitation.find_by(invitation_code: self.invited_code)
+    @invitation = Invitation.find_by_code(self.invited_code)
   end
 
   # If the inviting user is a demo user, the new user inherits the demo group

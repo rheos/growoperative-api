@@ -50,7 +50,29 @@ module Api::V1
 		def generate_invitation
 			if current_user.ramaining_invitation_limit > 0
 				@invitation = current_user.invitations.new()
-				# @invitation.label = current_user.user_name
+
+				# Pull a pronounceable code from auth.foaf.io's invitation
+				# primitive (Job 23, CVCV-CVCV "mavo-leni") instead of the
+				# legacy random alphanumeric. canonicalize_invitation_code
+				# strips the hyphen and uppercases on save. On FOAF failure
+				# we fall through to the local random-code generator so a
+				# transient auth.foaf.io blip doesn't kill the inviter UX.
+				if current_user.foaf_id.present?
+					begin
+						auth_status, auth_body = AuthFoafClient.create_invitation(
+							inviter_foaf_id: current_user.foaf_id,
+							target_app: 'growoperative'
+						)
+						if auth_status == 201 && auth_body['code'].present?
+							@invitation.invitation_code = auth_body['code']
+						else
+							Rails.logger.warn("auth.foaf.io invite mint returned status=#{auth_status}; falling back to local random code")
+						end
+					rescue StandardError => e
+						Rails.logger.warn("auth.foaf.io invite mint failed (#{e.class}: #{e.message}); falling back to local random code")
+					end
+				end
+
 				if params[:user_type] != ''
 					@invitation.user_type = params[:user_type]
 				end
@@ -195,7 +217,7 @@ module Api::V1
 				return
 			end
 
-			invitation = Invitation.find_by(invitation_code: params[:invited_code])
+			invitation = Invitation.find_by_code(params[:invited_code])
 			if invitation.nil?
 				render json: {
 					message: "Invalid invitation code."
@@ -226,10 +248,12 @@ module Api::V1
 			end
 			
 			# create a relationship if not exists
-			relationship = Relationship.where("(user_id = #{invitation.user.id} AND friend_id = #{current_user.id}) 
+			relationship = Relationship.where("(user_id = #{invitation.user.id} AND friend_id = #{current_user.id})
 																						OR (user_id = #{current_user.id} AND friend_id = #{invitation.user.id})")
 			if relationship.size == 0
-				relationship = Relationship.new
+				# Status defaults to :pending if not set — the contract here is
+				# an active acceptance, so set :accepted explicitly.
+				relationship = Relationship.new(status: :accepted, action_user_id: current_user.id)
 
 				if current_user.id < invitation.user_id
 					relationship.user_id = current_user.id
@@ -251,6 +275,23 @@ module Api::V1
 
 			# update status
 			invitation.update(status: :accepted, accepted_id: current_user.id)
+
+			# Record the connection in FOAF's contact_edges. Best-effort —
+			# don't fail the local accept if the FOAF call errors (the local
+			# Relationship + Invitation rows are still consistent). Phase 6
+			# unifies this so railsbackend's invitations table itself moves
+			# to auth.foaf.io and the contact_edge gets created server-side
+			# during accept.
+			begin
+				if current_user.foaf_id.present? && invitation.user.foaf_id.present?
+					AuthFoafClient.add_contact_edge(
+						foaf_id_a: current_user.foaf_id,
+						foaf_id_b: invitation.user.foaf_id
+					)
+				end
+			rescue StandardError => e
+				Rails.logger.warn("accept_invitation: FOAF contact_edge upsert failed (non-fatal): #{e.message}")
+			end
 
 			render json:{
 				message: "Invitation accepted."
@@ -295,18 +336,53 @@ module Api::V1
 		# Method : PATCH
 		# Parameter : multipart form with `avatar` file
 		def update_avatar
-			if params[:avatar].present?
-				if current_user.update(image: params[:avatar])
-					render json: {
-						message: "Avatar updated successfully.",
-						avatar_url: current_user.avatar_url
-					}
-				else
-					render json: { error: current_user.errors.full_messages.join(', ') }, status: 422
-				end
-			else
+			unless params[:avatar].present?
 				render json: { error: "No avatar file provided" }, status: 422
+				return
 			end
+
+			file = params[:avatar]
+			# Read the bytes once for the auth.foaf.io mirror BEFORE CarrierWave
+			# consumes the IO. Rewind defensively for the local save below.
+			file.rewind if file.respond_to?(:rewind)
+			bytes = file.respond_to?(:read) ? file.read : nil
+			content_type = file.respond_to?(:content_type) ? file.content_type : 'application/octet-stream'
+			file.rewind if file.respond_to?(:rewind)
+
+			# Local save (CarrierWave → Growoperative S3, populates users.image).
+			# Keeps railsbackend's contact_list and other consumers working
+			# without an N+1 fetch into auth.foaf.io. (Phase 5+ dual-write —
+			# see project_avatar_dual_write_then_per_app memory.)
+			unless current_user.update(image: file)
+				render json: { error: current_user.errors.full_messages.join(', ') }, status: 422
+				return
+			end
+
+			# Mirror to auth.foaf.io so identities.avatar_url is populated and
+			# the avatar shows up after re-login (the saga reads from
+			# identity.avatar_url, not from the local users column).
+			begin
+				match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
+				bearer = match && match[1]
+				if bytes && bearer
+					auth_status, _auth_body = AuthFoafClient.upload_avatar(
+						bytes: bytes,
+						content_type: content_type,
+						bearer: bearer
+					)
+					Rails.logger.info("auth.foaf.io avatar mirror status=#{auth_status}") if auth_status != 200
+				end
+			rescue StandardError => e
+				# Non-fatal — local save already succeeded. Avatar will appear
+				# on next refresh in-session but not after re-login until the
+				# next successful upload mirrors to auth.foaf.io.
+				Rails.logger.warn("auth.foaf.io avatar mirror failed: #{e.class}: #{e.message}")
+			end
+
+			render json: {
+				message: "Avatar updated successfully.",
+				avatar_url: current_user.avatar_url
+			}
 		end
 
 		# This api will update userlabel

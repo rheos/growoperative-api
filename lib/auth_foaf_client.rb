@@ -38,7 +38,7 @@ class AuthFoafClient
     new.get_json('/v1/sessions', bearer: bearer)
   end
 
-  def self.signup(user_name:, password:, email: nil, first_name: nil, last_name: nil, display_name: nil, recovery_phrase_acknowledged: false)
+  def self.signup(user_name:, password:, email: nil, first_name: nil, last_name: nil, display_name: nil, recovery_phrase_acknowledged: false, invited_by_foaf_id: nil)
     body = {
       client_id: audience,
       user: {
@@ -52,6 +52,11 @@ class AuthFoafClient
         recovery_phrase_acknowledged: recovery_phrase_acknowledged
       }.compact
     }
+    # Optional minimum-viable contact-graph hint. When present, auth.foaf.io
+    # creates a ContactEdge between the new identity and the inviter so the
+    # FOAF contact graph reflects who-invited-whom even before Phase 6 wires
+    # the full invitation primitive.
+    body[:invited_by_foaf_id] = invited_by_foaf_id if invited_by_foaf_id
     new.post_json('/v1/signup', body)
   end
 
@@ -59,6 +64,44 @@ class AuthFoafClient
     body = { foaf_id: foaf_id, audience: audience }
     body[:lifetime_seconds] = lifetime_seconds if lifetime_seconds
     new.post_json('/v1/internal/demo_tokens', body, service_token: true)
+  end
+
+  # Minimum-viable contact-graph hint. Records a connection between
+  # two foaf_ids in auth.foaf.io's contact_edges. Used when an
+  # existing user accepts an invitation that lives in railsbackend's
+  # invitations table (Phase 6 unifies invitations into FOAF). Idempotent.
+  def self.add_contact_edge(foaf_id_a:, foaf_id_b:)
+    new.post_json('/v1/internal/contact_edges', {
+      foaf_id_a: foaf_id_a,
+      foaf_id_b: foaf_id_b
+    }, service_token: true)
+  end
+
+  # Mint a pronounceable invite code via auth.foaf.io's invitation
+  # primitive (Job 23, CVCV-CVCV like "mavo-leni"). Returns the code
+  # plaintext exactly once — railsbackend stores the canonical form.
+  # `target_app` is the app label (defaults to the audience).
+  def self.create_invitation(inviter_foaf_id:, target_app: nil, expires_in_seconds: nil)
+    body = {
+      inviter_foaf_id: inviter_foaf_id,
+      target_app: target_app || audience
+    }
+    body[:expires_in_seconds] = expires_in_seconds if expires_in_seconds
+    new.post_json('/v1/internal/invitations', body, service_token: true)
+  end
+
+  # Mirror an avatar upload to auth.foaf.io. Bytes are base64'd into the
+  # JSON body so we don't need multipart-post wrangling. The user's
+  # bearer authorizes the call (auth.foaf.io issued it via railsbackend's
+  # signup/login proxy). Response includes the canonical identity with
+  # the new avatar_url.
+  def self.upload_avatar(bytes:, content_type:, bearer:)
+    require 'base64'
+    new.put_json('/v1/users/avatar', {
+      client_id: audience,
+      data_base64: Base64.strict_encode64(bytes),
+      content_type: content_type
+    }, bearer: bearer)
   end
 
   def self.change_password(current_password:, new_password:, bearer:)

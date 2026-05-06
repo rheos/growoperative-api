@@ -32,7 +32,7 @@ class Api::V1::OnboardingController < Api::V1::ApiController
   # session-restore path when an onboarding is mid-flight.
   def status
     code = params[:invitation_code] || params[:invited_code]
-    invitation = Invitation.find_by(invitation_code: code) if code.present?
+    invitation = Invitation.find_by_code(code) if code.present?
 
     if invitation.nil?
       render json: { error: 'invitation_not_found' }, status: :not_found
