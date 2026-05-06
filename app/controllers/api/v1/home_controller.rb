@@ -20,7 +20,7 @@ class Api::V1::HomeController < Api::V1::ApiController
 		# Legacy web app sends `invitation_token`; new RN app sends `invitation_code`.
 		# Accept either so both can hit this endpoint.
 		code = params[:invitation_code] || params[:invitation_token]
-		@invitation = Invitation.find_by(invitation_code: code)
+		@invitation = Invitation.find_by_code(code)
 		if @invitation
 			if @invitation.pending?
 				render json: {invitation_code: code, invitation_token: code}, status: 200

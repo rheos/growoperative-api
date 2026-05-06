@@ -104,7 +104,7 @@ module Api::V1
 		# method : Patch
 		# parametet: {code: "code"}
 		def user_info
-			@invitation = Invitation.find_by(invitation_code: params[:code])
+			@invitation = Invitation.find_by_code(params[:code])
 			if @invitation
 				@user = User.find_by(invited_code: params[:code])
 				if @user

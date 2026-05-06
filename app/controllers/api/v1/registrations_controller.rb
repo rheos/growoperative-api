@@ -18,6 +18,12 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       return render json: user.errors, status: 422
     end
 
+    # Look up the inviter's foaf_id so auth.foaf.io can create a ContactEdge
+    # alongside the new identity. invitation_limit before_action already
+    # validated the code resolves; re-look up here to grab the inviter.
+    inviter_code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
+    inviter_foaf_id = Invitation.find_by_code(inviter_code)&.user&.foaf_id
+
     status, body = AuthFoafClient.signup(
       user_name: user.user_name,
       password: attrs[:password],
@@ -25,7 +31,8 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       first_name: nil,
       last_name: nil,
       display_name: user.name.presence,
-      recovery_phrase_acknowledged: user.email.blank?
+      recovery_phrase_acknowledged: user.email.blank?,
+      invited_by_foaf_id: inviter_foaf_id
     )
 
     if status != 201 || body['token'].blank?
@@ -84,7 +91,7 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
 
   def invitation_limit
     code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
-    invitation = Invitation.find_by(invitation_code: code)
+    invitation = Invitation.find_by_code(code)
 
     if invitation.nil?
       return render json: { message: "Invitation code is wrong" }, status: 422
@@ -104,7 +111,7 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   def check_chain_limit
     code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
     global_setting = GlobalSetting.find_by(setting: "ChainLimit")
-    invited_user = Invitation.find_by(invitation_code: code)&.user
+    invited_user = Invitation.find_by_code(code)&.user
 
     if invited_user.nil?
       return render json: { message: "Invitation code is wrong" }, status: 422
@@ -120,7 +127,7 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   # malformed one). Subnets that don't set the flag accept email-less signups.
   def check_subnet_email_policy
     code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
-    invitation = Invitation.find_by(invitation_code: code)
+    invitation = Invitation.find_by_code(code)
     subnet = invitation&.subnet
     return unless subnet
 
