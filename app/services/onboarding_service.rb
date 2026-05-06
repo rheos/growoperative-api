@@ -171,7 +171,7 @@ class OnboardingService
     ).exists?
     return if existing
 
-    rel = Relationship.new
+    rel = Relationship.new(status: :accepted, action_user_id: inviter_id)
     if accepter_id < inviter_id
       rel.user_id = accepter_id
       rel.friend_id = inviter_id
