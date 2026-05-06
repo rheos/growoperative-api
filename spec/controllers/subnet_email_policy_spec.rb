@@ -22,10 +22,10 @@ RSpec.describe 'Subnet email policy on signup', type: :request, skip_hooks: true
   it 'rejects email-less signup when subnet enforces email' do
     _subnet, invitation = build_subnet_with_email_policy!(enforce: true)
 
-    post '/v1/signup', params: {
+    post '/v1/signup', params: { user: {
       user_name: 'sep_user', password: password, password_confirmation: password,
       invited_code: invitation.invitation_code
-    }.to_json, headers: { 'Content-Type' => 'application/json' }
+    } }.to_json, headers: { 'Content-Type' => 'application/json' }
 
     expect(response).to have_http_status(422)
     expect(JSON.parse(response.body)['message']).to match(/valid email/i)
@@ -34,10 +34,10 @@ RSpec.describe 'Subnet email policy on signup', type: :request, skip_hooks: true
   it 'rejects malformed email when subnet enforces email' do
     _subnet, invitation = build_subnet_with_email_policy!(enforce: true)
 
-    post '/v1/signup', params: {
+    post '/v1/signup', params: { user: {
       user_name: 'sep_user', password: password, password_confirmation: password,
       email: 'not-an-email', invited_code: invitation.invitation_code
-    }.to_json, headers: { 'Content-Type' => 'application/json' }
+    } }.to_json, headers: { 'Content-Type' => 'application/json' }
 
     expect(response).to have_http_status(422)
   end
@@ -45,10 +45,10 @@ RSpec.describe 'Subnet email policy on signup', type: :request, skip_hooks: true
   it 'accepts valid email when subnet enforces email' do
     _subnet, invitation = build_subnet_with_email_policy!(enforce: true)
 
-    post '/v1/signup', params: {
+    post '/v1/signup', params: { user: {
       user_name: 'sep_user', password: password, password_confirmation: password,
       email: 'ok@example.com', invited_code: invitation.invitation_code
-    }.to_json, headers: { 'Content-Type' => 'application/json' }
+    } }.to_json, headers: { 'Content-Type' => 'application/json' }
 
     expect(response).to have_http_status(201)
   end
@@ -56,10 +56,10 @@ RSpec.describe 'Subnet email policy on signup', type: :request, skip_hooks: true
   it 'accepts email-less signup when subnet does NOT enforce email' do
     _subnet, invitation = build_subnet_with_email_policy!(enforce: false)
 
-    post '/v1/signup', params: {
+    post '/v1/signup', params: { user: {
       user_name: 'sep_user', password: password, password_confirmation: password,
       invited_code: invitation.invitation_code
-    }.to_json, headers: { 'Content-Type' => 'application/json' }
+    } }.to_json, headers: { 'Content-Type' => 'application/json' }
 
     expect(response).to have_http_status(201)
   end

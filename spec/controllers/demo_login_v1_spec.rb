@@ -4,7 +4,8 @@ require 'rails_helper'
 # exactly like real login. That means the issued token carries the
 # v1 claims (sub = foaf_id, aud = growoperative, legacy_uid, jti) and
 # the response envelope is the bridge superset (legacy `data` block
-# plus top-level `token` and `identity`). No demo-only verifier path.
+# plus top-level `token` and `identity`). No demo-only verifier path and no
+# platform auth cookie.
 RSpec.describe 'POST /v1/demo/login (v1 envelope)', type: :request do
   let!(:demo_user) do
     user = User.create!(
@@ -48,14 +49,12 @@ RSpec.describe 'POST /v1/demo/login (v1 envelope)', type: :request do
     expect(decoded['jti']).to be_present
   end
 
-  it 'sets the SameSite=Lax JWT cookie alongside the body token' do
-    # Secure cookies require HTTPS; without this header the cookie is dropped.
+  it 'does not set a JWT cookie alongside the body token' do
     post '/v1/demo/login', params: { user_id: demo_user.id }, env: { 'HTTPS' => 'on' }
     raw = response.headers['Set-Cookie']
     cookie_lines = raw.is_a?(Array) ? raw : raw.to_s.split("\n")
-    jwt_line = cookie_lines.find { |h| h.start_with?('jwt=') }
-    expect(jwt_line).to be_present, "jwt cookie not set. Raw Set-Cookie: #{raw.inspect}"
-    expect(jwt_line).to match(/;\s*SameSite=Lax/i)
+    jwt_line = cookie_lines.find { |h| h.start_with?('jwt=') && !h.match?(/expires=Thu, 01 Jan 1970/i) }
+    expect(jwt_line).to be_nil, "jwt cookie should not be set. Raw Set-Cookie: #{raw.inspect}"
   end
 
   it '404s a non-demo user (demo login does not bypass the demo group check)' do

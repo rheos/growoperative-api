@@ -1,10 +1,9 @@
 require 'rails_helper'
 
-# CSRF defense lives at the cookie's SameSite attribute (audit at
-# foaf-auth/docs/audits/csrf-coverage-audit.md). These specs lock that
-# attribute so a future change to api_controller.rb cannot silently
-# regress the production cookie back to SameSite=None.
-RSpec.describe 'Session cookie attributes', type: :request do
+# Job 38 sunset: platform cookie auth is retired. Login still returns a
+# body token for current app web/native clients, but Rails must not mint a
+# fresh auth cookie.
+RSpec.describe 'Session cookie sunset', type: :request do
   let!(:user) do
     User.create!(
       user_name: 'csrf_user',
@@ -15,31 +14,38 @@ RSpec.describe 'Session cookie attributes', type: :request do
   end
 
   describe 'POST /v1/sessions in non-development env' do
-    it 'sets the jwt cookie with SameSite=Lax, HttpOnly, Secure' do
-      # Test env hits the non-development branch in api_controller#assign_jwt_cookies
+    it 'does not set a jwt cookie on successful login' do
       expect(Rails.env.development?).to be(false)
 
-      # Secure cookies require HTTPS; without this header the cookie is dropped.
       post '/v1/sessions',
         params: { username: 'csrf_user', password: 'bobsentme!' },
         env: { 'HTTPS' => 'on' }
       expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)['token']).to be_present
 
-      # Set-Cookie may be a single string with newline separators or an Array.
       raw = response.headers['Set-Cookie']
       cookie_lines = raw.is_a?(Array) ? raw : raw.to_s.split("\n")
-      set_cookie_header = cookie_lines.find { |h| h.start_with?('jwt=') }
-      expect(set_cookie_header).to be_present,
-        "jwt cookie not set on successful login. Raw Set-Cookie: #{raw.inspect}"
+      jwt_cookie = cookie_lines.find { |h| h.start_with?('jwt=') && !h.match?(/expires=Thu, 01 Jan 1970/i) }
+      expect(jwt_cookie).to be_nil, "jwt cookie should not be set. Raw Set-Cookie: #{raw.inspect}"
+    end
+  end
 
-      expect(set_cookie_header).to match(/;\s*SameSite=Lax/i),
-        "expected SameSite=Lax in production cookie; got: #{set_cookie_header}"
-      expect(set_cookie_header).to match(/;\s*HttpOnly/i),
-        "expected HttpOnly in production cookie; got: #{set_cookie_header}"
-      expect(set_cookie_header).to match(/;\s*secure/i),
-        "expected Secure in production cookie; got: #{set_cookie_header}"
-      expect(set_cookie_header).not_to match(/SameSite=None/i),
-        "production cookie regressed to SameSite=None; CSRF surface reopened"
+  describe 'DELETE /v1/sessions' do
+    it 'blacklists the presented bearer token' do
+      post '/v1/sessions',
+        params: { username: 'csrf_user', password: 'bobsentme!' },
+        env: { 'HTTPS' => 'on' }
+      token = JSON.parse(response.body)['token']
+      decoded = JWT.decode(token, ENV['SECRET_KEY_BASE'], true, { algorithm: 'HS256' }).first
+
+      delete '/v1/sessions',
+        env: { 'HTTPS' => 'on', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+      expect(response).to have_http_status(:ok)
+      expect(JWTBlacklist.exists?(jti: decoded['jti'])).to be(true)
+
+      get '/v1/sessions',
+        env: { 'HTTPS' => 'on', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+      expect(response).to have_http_status(:unauthorized)
     end
   end
 end

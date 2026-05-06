@@ -15,6 +15,11 @@ class JwtGenerationService
   #
   # `iss = "auth.foaf.io"` is intentionally absent until the Phase-3 cutover
   # (Job 16 ships RS256 + JWKS); until then no `iss` claim is emitted.
+  #
+  # TODO(Job 38/40): drop `legacy_uid` once auth.foaf.io owns login and
+  # growoperative-rails no longer mints session tokens. Until then, downstream
+  # bridge tokens reaching this code path during demo logins still benefit
+  # from the legacy fallback in resolve_user_from_jwt.
   def initialize(user, aud: nil)
     @user = user
     @aud = aud || ENV.fetch('FOAF_AUD', DEFAULT_AUDIENCE)
