@@ -47,8 +47,9 @@ class Api::V1::OnboardingController < Api::V1::ApiController
   def render_result(result)
     case result.status
     when 'completed'
+      # Job 43: railsbackend no longer mints tokens. Client already has a
+      # valid bearer from signup/login; no reissue needed on onboarding.
       render json: UserSerializer.new(result.user).serializable_hash.merge(
-        token: JwtGenerationService.new(result.user).token,
         identity: identity_payload(result.user),
         onboarding: status_payload(result.invitation),
       ), status: :ok

@@ -32,7 +32,6 @@ RSpec.describe 'v1 user endpoints', type: :request do
       expect(response).to have_http_status(:ok)
       expect(parsed['identity']['foaf_id']).to eq(user.foaf_id)
       expect(parsed['identity']['user_name']).to eq('job10_user')
-      expect(parsed['token']).to be_a(String).and(be_present)
     end
 
     it 'requires authentication' do

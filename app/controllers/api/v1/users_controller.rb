@@ -408,15 +408,12 @@ module Api::V1
 	end
 
 	# GET /v1/users/profile
-	# Self-profile read used by FoafAuthClient. Returns the same v1
-	# `{ token, identity }`-shaped envelope as `GET /v1/sessions` so a
-	# client doing `client.updateProfile()` and `client.login()` parses
-	# both responses through the same mapper. Token is reissued so a
-	# successful profile read keeps the bearer warm.
+	# Self-profile read used by FoafAuthClient. Returns identity + the
+	# legacy data.attributes envelope. Job 43: token is no longer reissued
+	# here (railsbackend stopped minting). Client uses its existing bearer;
+	# refresh via re-login when expiry approaches.
 	def profile
-		token = JwtGenerationService.new(current_user).token
 		render json: UserSerializer.new(current_user).serializable_hash.merge(
-			token: token,
 			identity: identity_payload(current_user),
 		), status: 200
 	end
@@ -439,7 +436,6 @@ module Api::V1
 		patch = profile_update_params
 		if current_user.update(patch)
 			render json: UserSerializer.new(current_user).serializable_hash.merge(
-				token: JwtGenerationService.new(current_user).token,
 				identity: identity_payload(current_user),
 			), status: 200
 		else

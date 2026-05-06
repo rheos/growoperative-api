@@ -14,6 +14,8 @@ rescue ActiveRecord::PendingMigrationError => e
   exit 1
 end
 
+Dir[Rails.root.join('spec/support/**/*.rb')].sort.each { |f| require f }
+
 def RSpec.set_user(name)
   @current_user = name
 end

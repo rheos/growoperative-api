@@ -34,6 +34,10 @@ class AuthFoafClient
     })
   end
 
+  def self.refresh_session(bearer:)
+    new.get_json('/v1/sessions', bearer: bearer)
+  end
+
   def self.signup(user_name:, password:, email: nil, first_name: nil, last_name: nil, display_name: nil, recovery_phrase_acknowledged: false)
     body = {
       client_id: audience,
@@ -85,6 +89,10 @@ class AuthFoafClient
     request_json(:put, path, body, service_token: service_token, bearer: bearer)
   end
 
+  def get_json(path, bearer:)
+    request_json(:get, path, nil, service_token: false, bearer: bearer)
+  end
+
   private
 
   def request_json(method, path, body, service_token:, bearer:)
@@ -94,7 +102,12 @@ class AuthFoafClient
     http.read_timeout = DEFAULT_TIMEOUT
     http.open_timeout = DEFAULT_TIMEOUT
 
-    req_class = method == :put ? Net::HTTP::Put : Net::HTTP::Post
+    req_class =
+      case method
+      when :put then Net::HTTP::Put
+      when :get then Net::HTTP::Get
+      else Net::HTTP::Post
+      end
     req = req_class.new(uri.request_uri)
     req['Content-Type'] = 'application/json'
     req['Accept'] = 'application/json'
@@ -103,7 +116,7 @@ class AuthFoafClient
     elsif bearer
       req['Authorization'] = "Bearer #{bearer}"
     end
-    req.body = body.to_json
+    req.body = body.to_json if body
 
     res = http.request(req)
     parsed = res.body.present? ? safe_parse(res.body) : {}
