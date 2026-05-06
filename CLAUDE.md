@@ -104,17 +104,15 @@ Rake tasks: `demo:mark_users`, `demo:snapshot`, `demo:reset`, `user:update_passw
 
 ### JWT Generation (`lib/jwt/jwt_generation_service.rb`)
 
-- Algorithm: HS256 with `SECRET_KEY_BASE`
-- Payload: `{ iat, exp (1 year), sub: { user_id }, jti (UUID) }`
-- Token set in signed httpOnly cookie AND returned in response body
-- Dev: `SameSite=None, Secure=false` (needed for cross-origin localhost)
-- Prod: cookie scoped via `COOKIE_DOMAIN` env var
+- Algorithm: HS256 bridge tokens with `SECRET_KEY_BASE` until auth.foaf.io RS256 fully owns issuance
+- Payload: `{ sub: foaf_id, aud: "growoperative", legacy_uid, iat, exp, jti }`
+- Token returned in the response body only. Legacy `jwt` cookies are cleared, not minted.
 
 ### JWT Validation (`lib/jwt/jwt_decoding_service.rb`)
 
-- Checks signature, expiration, algorithm
-- `current_user` reads from cookie first, falls back to Authorization header
-- Has double-nesting handling for JWT subject (historical payload migration)
+- Checks signature, expiration, algorithm, audience, JWKS, and revocation snapshot where applicable
+- `current_user` reads Bearer tokens from the `Authorization` header only
+- HS256 bridge handling is controlled by `FOAF_AUTH_HS256_BRIDGE_ENABLED`
 
 ### Session Controller (`app/controllers/api/v1/sessions_controller.rb`)
 

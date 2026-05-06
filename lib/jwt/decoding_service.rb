@@ -4,8 +4,22 @@ class JwtDecodingService
   DEFAULT_AUDIENCE = 'growoperative'.freeze
   AUTH_ISSUER = 'auth.foaf.io'.freeze
   CLOCK_SKEW = 30
+  BRIDGE_EXPIRED_CODE = 'client_too_old_auth_bridge_expired'.freeze
 
-  class JWTDecodingError < StandardError; end
+  class JWTDecodingError < StandardError
+    attr_reader :code
+
+    def initialize(message, code: nil)
+      super(message)
+      @code = code
+    end
+  end
+
+  def self.hs256_bridge_enabled?
+    flag = ENV['FOAF_AUTH_HS256_BRIDGE_ENABLED']
+    return true if flag.nil? || flag.empty?
+    !%w[0 false no off].include?(flag.downcase)
+  end
 
   def initialize(token, audience: nil)
     @token = token
@@ -18,6 +32,14 @@ class JwtDecodingService
     begin
       header = JWT.decode(@token, nil, false).last
       return decrypt_auth_token!(header) if header['alg'] == AUTH_SIGNING_ALGORITHM
+
+      unless self.class.hs256_bridge_enabled?
+        Rails.logger.warn("JWT rejected: HS256 bridge disabled, stale client")
+        raise JWTDecodingError.new(
+          "Legacy auth bridge has been retired; client must re-authenticate",
+          code: BRIDGE_EXPIRED_CODE
+        )
+      end
 
       decoded = JWT.decode(@token, secret, true, { algorithm: SIGNING_ALGORITHM }).first
       enforce_audience!(decoded)

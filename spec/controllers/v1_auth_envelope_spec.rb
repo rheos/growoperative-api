@@ -1,8 +1,8 @@
 require 'rails_helper'
 
 # Job 09 acceptance: login/signup/restore/demo all return the v1
-# `{ token, identity }` envelope alongside the legacy `data.attributes`
-# JSON:API block (kept so the platform/ web app keeps working until job 38).
+# `{ token, identity }` envelope alongside app profile data in
+# `data.attributes` while growoperative-rails still owns the local profile.
 #
 # The `identity` block is the FoafIdentity contract from the
 # `foaf-auth/client` mapper; if a key is missing here the app's mapper
@@ -44,7 +44,7 @@ RSpec.describe 'v1 auth envelope', type: :request do
       expect(identity['updated_at']).to be_a(String)
     end
 
-    it 'still ships the legacy data.attributes block (platform/ web reads it)' do
+    it 'ships the app profile data.attributes block' do
       expect(parsed.dig('data', 'attributes', 'user_name')).to eq(user.user_name)
     end
   end

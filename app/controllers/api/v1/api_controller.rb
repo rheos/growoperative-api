@@ -34,65 +34,18 @@ class Api::V1::ApiController < ApplicationController
     decoded = current_jwt_payload
     return @current_user = nil unless decoded
 
-    if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
-      clear_jwt_cookie! if current_jwt_from_cookie?
-      return @current_user = nil
-    end
+    return @current_user = nil if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
 
     user = resolve_user_from_jwt(decoded)
     if user&.auth_inactive?
-      clear_jwt_cookie! if current_jwt_from_cookie?
       return @current_user = nil
-    end
-
-    # Stale cookie pointing at a user that no longer exists (e.g. after a
-    # demo DB reset, or an unresolvable v1 sub during the bridge). Kill it
-    # so the next request arrives clean rather than producing a confusing
-    # dashboard-flash-then-401 loop on the client.
-    if user.nil? && current_jwt_from_cookie?
-      clear_jwt_cookie!
     end
 
     @current_user = user
   end
 
-  def assign_jwt_cookies(user)
-    return unless user
-
-    # Defensive: explicitly delete first so any pre-existing cookie at the
-    # configured domain is cleared before we write the new one. Without this,
-    # a cookie left over from a different deployment with a different path or
-    # SameSite attribute could coexist alongside the new one and cause auth
-    # to flap depending on which the browser sends first.
+  def clear_legacy_jwt_cookie!
     clear_jwt_cookie!
-
-    token = JwtGenerationService.new(user).token
-    time = 1.year.from_now
-
-    # Dev: Lax is sufficient because localhost ports are same-site.
-    # None+Secure=false is rejected by modern browsers.
-    if Rails.env.development?
-      cookies.signed[:jwt] = {
-        value: token,
-        expires: time,
-        httponly: true,
-        same_site: :lax,
-        secure: false
-      }
-    else
-      # SameSite=Lax: blocks cross-site state-changing requests (CSRF defense).
-      # All current frontends (growoperative.app, app/demo/beta.growoperative.app)
-      # share the registrable domain growoperative.app, so Lax permits the
-      # legitimate same-site flow. See foaf-auth/docs/audits/csrf-coverage-audit.md.
-      cookies.signed[:jwt] = {
-        value: token,
-        expires: time,
-        httponly: true,
-        domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app'),
-        same_site: :lax,
-        secure: true
-      }
-    end
   end
 
   def clear_jwt_cookie!
@@ -151,18 +104,31 @@ class Api::V1::ApiController < ApplicationController
     return if current_user
     return if profileless_onboarding_request? && current_jwt_foaf_id.present?
 
-    unauthorized!
+    if @bridge_expired_jwt
+      render_bridge_expired!
+    else
+      unauthorized!
+    end
   end
 
   def unauthorized!
     head(:unauthorized)
   end
 
+  # Stale-client signal: a token was presented that we no longer accept
+  # (HS256 after the bridge sunset). Tell the app to clear local auth and
+  # route the user back through login. See foaf-auth/docs/plans/37-...
+  def render_bridge_expired!
+    render json: {
+      error: 'Legacy auth bridge has been retired; please sign in again.',
+      code: JwtDecodingService::BRIDGE_EXPIRED_CODE
+    }, status: :unauthorized
+  end
+
   def current_jwt_payload
     return @current_jwt_payload if defined?(@current_jwt_payload)
 
-    jwt, source = current_jwt_token_and_source
-    @current_jwt_source = source
+    jwt = current_jwt_token
     return @current_jwt_payload = nil unless jwt
 
     @current_jwt_payload = CurrentRequestId.with(request.request_id) do
@@ -172,7 +138,8 @@ class Api::V1::ApiController < ApplicationController
     # may contain email. Use jti / sub fingerprints in incident forensics.
   rescue JwtDecodingService::JWTDecodingError => e
     Rails.logger.error("JWT Decoding Error: #{e.message}")
-    clear_jwt_cookie! if current_jwt_from_cookie?
+    @bridge_expired_jwt = true if e.code == JwtDecodingService::BRIDGE_EXPIRED_CODE
+    clear_legacy_jwt_cookie!
     @current_jwt_payload = nil
   end
 
@@ -229,18 +196,10 @@ class Api::V1::ApiController < ApplicationController
     User.find_by(id: user_id)
   end
 
-  def current_jwt_token_and_source
-    header_jwt = request.headers['Authorization']&.sub(/^Bearer\s+/, '')
-    return [header_jwt, :header] if header_jwt.present?
-
-    cookie_jwt = cookies.signed[:jwt]
-    return [cookie_jwt, :cookie] if cookie_jwt.present?
-
-    [nil, nil]
-  end
-
-  def current_jwt_from_cookie?
-    @current_jwt_source == :cookie
+  def current_jwt_token
+    authorization = request.headers['Authorization'].to_s
+    match = authorization.match(/\ABearer\s+(.+)\z/i)
+    match && match[1]
   end
 
   def profileless_onboarding_request?

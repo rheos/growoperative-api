@@ -44,7 +44,7 @@ class Api::V1::DemoController < Api::V1::ApiController
       return render json: { error: 'Demo user is not provisioned for v1 auth' }, status: :unprocessable_entity
     end
 
-    assign_jwt_cookies(user)
+    clear_legacy_jwt_cookie!
     token = JwtGenerationService.new(user).token
     render json: UserSerializer.new(user).serializable_hash.merge(
       token: token,

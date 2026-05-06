@@ -13,7 +13,7 @@ class Api::V1::SessionsController < Api::V1::ApiController
     user = User.find_by(user_name: params[:username])
 
     if user&.valid_password?(params[:password])
-      assign_jwt_cookies(user)
+      clear_legacy_jwt_cookie!
       token = JwtGenerationService.new(user).token
       render json: UserSerializer.new(user).serializable_hash.merge(
         token: token,
@@ -30,30 +30,21 @@ class Api::V1::SessionsController < Api::V1::ApiController
   end
 
   def destroy
-    # Get the current JWT token before deleting the cookie
-    jwt = cookies.signed[:jwt]
-    
-    # Add the token to the blacklist if it exists
+    jwt = bearer_token
+
     if jwt.present?
       begin
         decoded = JwtDecodingService.new(jwt).decrypt!
-        # Add to blacklist using datetime instead of Unix timestamp
         JWTBlacklist.create!(
           jti: decoded['jti'] || SecureRandom.uuid,
-          exp: Time.at(decoded['exp'] || 1.year.from_now.to_i)  # Convert to datetime
+          exp: Time.at(decoded['exp'] || 1.year.from_now.to_i)
         )
       rescue JwtDecodingService::JWTDecodingError => e
         Rails.logger.warn("Failed to blacklist JWT on logout due to decoding error: #{e.message}")
       end
     end
-    
-    # Delete the cookie
-    if Rails.env.development?
-      cookies.delete :jwt  # No domain needed for development
-    else
-      cookies.delete :jwt, domain: ENV.fetch('COOKIE_DOMAIN', '.growoperative.app')
-    end
-    
+
+    clear_legacy_jwt_cookie!
     head :ok
   end
 
@@ -65,5 +56,10 @@ class Api::V1::SessionsController < Api::V1::ApiController
 
   def create_params
     params.permit(:username, :password)
+  end
+
+  def bearer_token
+    match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
+    match && match[1]
   end
 end

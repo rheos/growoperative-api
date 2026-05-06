@@ -8,7 +8,7 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   def create
     user = User.new(sign_up_params)
     if user.save
-      assign_jwt_cookies(user)
+      clear_legacy_jwt_cookie!
       token = JwtGenerationService.new(user).token
       render json: UserSerializer.new(user).serializable_hash.merge(
         token: token,
@@ -23,10 +23,7 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   private
 
   def sign_up_params
-    # Accept both the legacy flat-param shape (old platform/) and the new
-    # nested-under-:user shape (growoperative-app). Tolerate spelling variants
-    # since the legacy contract used misspelled / hyphenated keys.
-    source = params[:user].present? ? params[:user] : params
+    source = params.require(:user)
     permitted = source.permit(
       :user_name, :password, :password_confirmation, :password_conformation,
       :first_name, :last_name, :name, :email, :invite_code, :invited_code,
