@@ -69,7 +69,15 @@ class User < ApplicationRecord
 
   # call_backs
   before_create :set_parent
-  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :set_relationship, :set_category_sizes, :inherit_demo_group, :join_subnet_from_invitation
+  # `inherit_demo_group` must run BEFORE `set_relationship`. Relationship's
+  # demo_boundary validation rejects pairs where one user is demo and the
+  # other isn't; the inviter (e.g. mary) carries the demo group, but the
+  # new user only gets it via inherit_demo_group. If the demo group isn't
+  # in place by the time set_relationship fires, the Relationship.create
+  # (note: not create!) silently fails validation and no contact-graph
+  # row is ever persisted. Order: invitation accept + role assignment →
+  # depth + limits → demo group → relationship → category sizes + subnet.
+  after_create :update_invitiation_limit, :set_depth, :set_invitation_limit, :inherit_demo_group, :set_relationship, :set_category_sizes, :join_subnet_from_invitation
 
   def set_category_sizes
     CategorySize.where(user_id: nil).each do |c| 
