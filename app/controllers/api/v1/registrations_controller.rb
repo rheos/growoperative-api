@@ -6,18 +6,51 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
   respond_to :json
 
   def create
-    user = User.new(sign_up_params)
-    if user.save
-      clear_legacy_jwt_cookie!
-      token = JwtGenerationService.new(user).token
-      render json: UserSerializer.new(user).serializable_hash.merge(
-        token: token,
-        identity: identity_payload(user),
-      ), status: 201
-    else
+    # Job 42: signup flow now goes through auth.foaf.io for the identity
+    # record + token issuance; railsbackend keeps the local users row
+    # because the rest of the app (relationships, items, trustlines) is
+    # foreign-keyed to users.id. We pre-validate locally, call auth.foaf.io,
+    # then link the local row via the returned foaf_id.
+    attrs = sign_up_params
+    user = User.new(attrs)
+    unless user.valid?
       warden.custom_failure!
-      render :json=> user.errors, :status=>422
+      return render json: user.errors, status: 422
     end
+
+    status, body = AuthFoafClient.signup(
+      user_name: user.user_name,
+      password: attrs[:password],
+      email: user.email.presence,
+      first_name: nil,
+      last_name: nil,
+      display_name: user.name.presence,
+      recovery_phrase_acknowledged: user.email.blank?
+    )
+
+    if status != 201 || body['token'].blank?
+      warden.custom_failure!
+      Rails.logger.warn("auth.foaf.io signup rejected: status=#{status} error=#{body.is_a?(Hash) ? body['error'] : nil}")
+      return render json: { error: (body.is_a?(Hash) && body['error']) || 'Signup failed' }, status: 422
+    end
+
+    foaf_id = body.dig('identity', 'foaf_id')
+    user.foaf_id = foaf_id if foaf_id.present?
+    unless user.save
+      # auth.foaf.io minted an identity but the local row failed to save.
+      # We orphan the auth identity for now — operator cleanup is fine
+      # given the small user volume and the post-validate ordering above
+      # makes this race extremely unlikely.
+      warden.custom_failure!
+      Rails.logger.error("local User.save failed after auth.foaf.io signup created foaf_id=#{foaf_id}: #{user.errors.full_messages}")
+      return render json: user.errors, status: 422
+    end
+
+    clear_legacy_jwt_cookie!
+    render json: UserSerializer.new(user).serializable_hash.merge(
+      token: body['token'],
+      identity: body['identity']
+    ), status: 201
   end
 
   private

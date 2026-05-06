@@ -262,20 +262,31 @@ module Api::V1
 		# Method : PATCH
 		# Parameter : {"user": {"password": "hello124","password_confirmation": "hello124"}}
 		def update_password
-			@user = current_user
-			if @user.valid_password?(params[:user][:current_password])
-				if @user.update(user_params)
-					bypass_sign_in current_user
-					render json: {
-						message: "Password changed successfully."
-					}
-				else
-					render :json=> @user.errors, :status=>422
-				end
+			# Job 42: proxy password change to auth.foaf.io (which owns the
+			# canonical hash). Returns the new RS256 token from the auth
+			# service so the client can refresh its bearer.
+			current_password = params.dig(:user, :current_password).to_s
+			new_password = params.dig(:user, :password).to_s
+			confirm = params.dig(:user, :password_confirmation).to_s
+			if current_password.blank? || new_password.blank? || new_password != confirm
+				return render json: { message: 'Invalid password params' }, status: 422
+			end
+
+			match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
+			bearer = match && match[1]
+
+			status, body = AuthFoafClient.change_password(
+				current_password: current_password,
+				new_password: new_password,
+				bearer: bearer
+			)
+			if status == 200 && body['token']
+				render json: { message: 'Password changed successfully.', token: body['token'] }
+			elsif status == 422
+				render json: { message: body['error'] || 'current password is not valid' }, status: 422
 			else
-				render json: {
-					message: "current password is not valid"
-				}, status: 422
+				Rails.logger.error("auth.foaf.io password change failed: status=#{status} body=#{body.inspect}")
+				render json: { message: 'Password change failed' }, status: :bad_gateway
 			end
 		end
 
