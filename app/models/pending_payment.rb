@@ -41,7 +41,8 @@ class PendingPayment < ApplicationRecord
         amount,
         payer,
         payee,
-        description: description || default_description(payer, payee)
+        description: description || default_description(payer, payee),
+        path_info: audit_metadata(payer, payee)
       )
 
       update!(
@@ -108,6 +109,21 @@ class PendingPayment < ApplicationRecord
     when 'request'
       "Cash settlement from #{payer.user_name} to #{payee.user_name}"
     end
+  end
+
+  def audit_metadata(payer, payee)
+    return nil unless request?
+
+    {
+      payment_request: {
+        requested_by_id: from_user_id,
+        requested_by_name: from_user.user_name,
+        paid_by_id: payer.id,
+        paid_by_name: payer.user_name,
+        payee_id: payee.id,
+        payee_name: payee.user_name
+      }
+    }
   end
 
   def users_on_trustline
