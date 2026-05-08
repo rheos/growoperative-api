@@ -24,6 +24,7 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
   # The trustline-as-stored canonicalizes its sides. Resolve through it.
   let(:canonical_user_a) { trustline.user_a }
   let(:canonical_user_b) { trustline.user_b }
+  let(:fake_client) { instance_double(Foaf::Client) }
 
   # Two FOAF Transfer events: canonical_user_a sends $50 to canonical_user_b,
   # then $30 more. Running balance ends at +80 in canonical (user_a) terms.
@@ -41,7 +42,6 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
 
   before do
     allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
-    fake_client = instance_double(Foaf::Client)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
     allow(fake_client).to receive(:user_events).and_return([
@@ -89,6 +89,63 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
       b_amounts = from_b[:rows].map { |r| r[:transaction][:amount] }
       expect(a_amounts).to eq([30.0, 50.0])
       expect(b_amounts).to eq([30.0, 50.0])
+    end
+
+    it 'attributes mirrored settlement transfers to the actual payer' do
+      allow(fake_client).to receive(:user_events).and_return([
+        {
+          'type'         => 'Transfer',
+          'value'        => 80.20,
+          'direction'    => 'sent',
+          'timestamp'    => 1_000_200,
+          'blockNumber'  => 103,
+          'extraData'    => {
+            app: 'growoperative',
+            operation: 'settlement',
+            payment_request: {
+              requested_by_name: canonical_user_a.user_name,
+              paid_by_name: canonical_user_b.user_name,
+              payee_name: canonical_user_a.user_name,
+            },
+            description: "Cash settlement from #{canonical_user_b.user_name} to #{canonical_user_a.user_name}",
+          }.to_json,
+          'counterParty' => canonical_user_b.foaf_address,
+        },
+      ])
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      row = result[:rows].first
+
+      expect(row[:transaction][:transaction_type]).to eq('settlement')
+      expect(row[:transaction][:initiated_by_id]).to eq(canonical_user_b.id)
+      expect(row[:transaction][:initiated_by_name]).to eq(canonical_user_b.user_name)
+      expect(row[:transaction][:description]).to eq(
+        "Cash settlement from #{canonical_user_b.user_name} to #{canonical_user_a.user_name}"
+      )
+      expect(row[:transaction][:path_info][:payment_request]["requested_by_name"]).to eq(canonical_user_a.user_name)
+    end
+
+    it 'recognizes legacy cash settlement descriptions without operation metadata' do
+      allow(fake_client).to receive(:user_events).and_return([
+        {
+          'type'         => 'Transfer',
+          'value'        => 80.20,
+          'direction'    => 'sent',
+          'timestamp'    => 1_000_200,
+          'blockNumber'  => 104,
+          'extraData'    => {
+            app: 'growoperative',
+            description: "Cash settlement from #{canonical_user_b.user_name} to #{canonical_user_a.user_name}",
+          }.to_json,
+          'counterParty' => canonical_user_b.foaf_address,
+        },
+      ])
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      row = result[:rows].first
+
+      expect(row[:transaction][:transaction_type]).to eq('settlement')
+      expect(row[:transaction][:initiated_by_name]).to eq(canonical_user_b.user_name)
     end
   end
 end

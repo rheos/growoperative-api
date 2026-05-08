@@ -170,7 +170,7 @@ class Trustline < ApplicationRecord
   # This is what the Pay button does — bruce hits Pay, bob confirms, bruce's
   # debt to bob goes down. Conventional pay semantics, requires recipient
   # confirmation (handled by PendingPayment#confirm!).
-  def settle_payment!(amount, from_user, to_user, description: nil, order: nil, operation: "settlement")
+  def settle_payment!(amount, from_user, to_user, description: nil, order: nil, operation: "settlement", path_info: nil)
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
     raise ArgumentError, "Amount must be positive" unless amount.to_f > 0
 
@@ -190,6 +190,7 @@ class Trustline < ApplicationRecord
         amount: amount,
         description: description || "Settlement from #{from_user.user_name} to #{to_user.user_name}",
         order: order,
+        path_info: path_info,
         transaction_type: 'payment',
         initiated_by: from_user,
         balance_after: new_balance,
@@ -206,6 +207,7 @@ class Trustline < ApplicationRecord
       # a native settle primitive yet).
       Foaf::ShadowHooks.after_settlement(self, amount, from_user, to_user,
                                           description: description, order: order,
+                                          metadata: path_info,
                                           operation: operation, tx_row: tx_row)
 
       new_balance

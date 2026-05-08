@@ -91,9 +91,9 @@ module Foaf
     # more indebted to receiver). To express settlement via transfer, we send
     # payee→payer (making payee more indebted to payer = payer less indebted
     # to payee — same net result). See project_settlement_vs_extension memory.
-    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", tx_row: nil)
+    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", metadata: nil, tx_row: nil)
       mirror_payment(trustline, amount, payee, payer,
-                      description: description, order: order, operation: operation, tx_row: tx_row)
+                      description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
     end
 
     # Mirror a payment to FOAF. Honors FOAF's existing credit limits — if the
@@ -104,7 +104,7 @@ module Foaf
     # When tx_row is supplied, a successful confirm writes foaf_operation_id
     # and foaf_posted_at back onto the row. On any failure the row stays
     # with foaf_posted_at nil — Foaf::ReplayWorker retries later.
-    def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", tx_row: nil)
+    def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
       return unless Foaf::Config.shadow_mode?
       return unless ensure_network!
 
@@ -118,7 +118,7 @@ module Foaf
         order_id: order&.id,
         order_label: order&.try(:order_label),
         mirrored_at: Time.current.iso8601
-      }.compact.to_json
+      }.merge(metadata || {}).compact.to_json
 
       result = @client.create_pending_transfer(
         network_address: @network_address,

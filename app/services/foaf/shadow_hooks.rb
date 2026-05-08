@@ -27,11 +27,11 @@ module Foaf
     # Call after process_payment! succeeds. On successful FOAF confirm the
     # mirror writes foaf_operation_id + foaf_posted_at onto tx_row. On failure
     # tx_row is left unposted for Foaf::ReplayWorker to pick up.
-    def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", tx_row: nil)
+    def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
       return unless Foaf::Config.shadow_mode?
 
       shadow.mirror_payment(trustline, amount, from_user, to_user,
-                            description: description, order: order, operation: operation, tx_row: tx_row)
+                            description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end
@@ -41,11 +41,11 @@ module Foaf
     # mirror auto-expands the (swapped) sender's credit room before the
     # transfer so settling existing debt isn't blocked by limits that don't
     # apply to repayment.
-    def after_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", tx_row: nil)
+    def after_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", metadata: nil, tx_row: nil)
       return unless Foaf::Config.shadow_mode?
 
       shadow.mirror_settlement(trustline, amount, payer, payee,
-                                description: description, order: order, operation: operation, tx_row: tx_row)
+                                description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Settlement mirror failed: #{e.message}")
     end

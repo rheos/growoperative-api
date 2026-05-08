@@ -230,6 +230,9 @@ module Foaf
       order_id = extra["order_id"]
       order_label = extra["order_label"]
       description = extra["description"] || (is_credloop ? "Credit loop cancellation" : nil)
+      is_settlement = extra["operation"] == "settlement" ||
+                      description.to_s.start_with?("Cash settlement from ")
+      payment_request = extra["payment_request"]
 
       classification = if is_credloop
         "credloop"
@@ -243,14 +246,16 @@ module Foaf
 
       transaction_type = if is_adjustment
         "adjustment"
-      elsif order_id
+      elsif order_id || is_settlement
         "settlement"
       else
         "payment"
       end
 
       path = event["path"]
-      initiator = event["direction"] == "sent" ? user_a : user_b
+      foaf_sender = event["direction"] == "sent" ? user_a : user_b
+      foaf_receiver = event["direction"] == "sent" ? user_b : user_a
+      initiator = is_settlement ? foaf_receiver : foaf_sender
 
       # Adjustment descriptions (record_debt / record_receipt) bake the
       # username in at controller time, which rots when demo data is
@@ -280,7 +285,7 @@ module Foaf
           created_at: Time.at(event["timestamp"].to_i).iso8601,
           initiated_by_name: initiator.user_name,
           order_label: order_label,
-          path_info: path.is_a?(Array) && path.size > 2 ? { hops: path } : nil,
+          path_info: transfer_path_info(path, payment_request),
           _direction: event["direction"],
         },
         balance_before: 0.0,
@@ -288,6 +293,13 @@ module Foaf
         balance_mismatch: false,
         missing_linkage: false,
       }
+    end
+
+    def transfer_path_info(path, payment_request)
+      info = {}
+      info[:hops] = path if path.is_a?(Array) && path.size > 2
+      info[:payment_request] = payment_request if payment_request.present?
+      info.presence
     end
 
     def build_trustline_update_row(event, trustline, user_a, user_b)
