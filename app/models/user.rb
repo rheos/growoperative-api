@@ -343,10 +343,15 @@ class User < ApplicationRecord
     end
   end
 
-  # Returns the avatar URL (thumbnail version if available)
+  # Returns the avatar URL (thumbnail version if available).
+  # Appends ?v=<updated_at> so a re-uploaded avatar at the same S3 path
+  # bypasses the year-long browser cache set in carrierwave.rb.
   def avatar_url
     return nil unless image.present?
-    image.thumb500.url
+    base = image.thumb500.url
+    return base unless base
+    sep = base.include?('?') ? '&' : '?'
+    "#{base}#{sep}v=#{updated_at.to_i}"
   end
 
   private
