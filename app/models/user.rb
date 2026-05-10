@@ -8,7 +8,7 @@ class User < ApplicationRecord
 				 :recoverable, :rememberable, :validatable, :jwt_authenticatable, jwt_revocation_strategy: JWTBlacklist, authentication_keys: [:user_name]
 
 	# Avatar upload (uses existing `image` column)
-	mount_uploader :image, ImagesUploader
+	mount_uploader :image, UserAvatarUploader
 
 	# Validation
   validates :user_name, presence: :true, uniqueness: { case_sensitive: false }
@@ -344,14 +344,11 @@ class User < ApplicationRecord
   end
 
   # Returns the avatar URL (thumbnail version if available).
-  # Appends ?v=<updated_at> so a re-uploaded avatar at the same S3 path
-  # bypasses the year-long browser cache set in carrierwave.rb.
+  # Each upload writes to a fresh randomized filename (see ImagesUploader),
+  # so the URL changes naturally and the year-long S3 cache_control is safe.
   def avatar_url
     return nil unless image.present?
-    base = image.thumb500.url
-    return base unless base
-    sep = base.include?('?') ? '&' : '?'
-    "#{base}#{sep}v=#{updated_at.to_i}"
+    image.thumb500.url
   end
 
   private
