@@ -165,6 +165,10 @@ Rails.application.routes.draw do
         end
       end
 
+      # Public intake for new-subnet requests (POST). Admin list/update
+      # are superuser-gated in the controller.
+      resources :subnet_applications, only: [:create, :index, :update]
+
       # Public handle lookup (master plan §Handle Lookup Contract). No
        # auth — returns the minimal identity summary used for trustline
        # setup, mentions, invitations, and cross-app identity lookup.

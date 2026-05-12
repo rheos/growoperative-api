@@ -297,6 +297,23 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_reviews_on_user_id"
   end
 
+  create_table "subnet_applications", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.string "community_name", null: false
+    t.string "location", null: false
+    t.string "contact_name", null: false
+    t.string "contact_email", null: false
+    t.text "description"
+    t.string "status", default: "pending", null: false
+    t.bigint "reviewed_by_user_id"
+    t.datetime "reviewed_at"
+    t.bigint "created_subnet_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_subnet_applications_on_created_at"
+    t.index ["location"], name: "index_subnet_applications_on_location"
+    t.index ["status"], name: "index_subnet_applications_on_status"
+  end
+
   create_table "subnet_configs", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
     t.bigint "subnet_id", null: false
     t.integer "version", null: false
