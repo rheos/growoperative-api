@@ -1,29 +1,42 @@
 #!/bin/bash
 #
-# Reset both the app DB and FOAF DB to a clean synced starting state.
+# Reset the app DB, auth DB, and FOAF DB to a clean synced starting state.
 #
 # Usage (from railsbackend/):
-#   ./bin/foaf-reset [snapshot_file]
+#   ./bin/foaf-reset [snapshot_date]
 #
-# Default snapshot: dev_clean_2026-05-02.sql — users + items only, no
-# pre-existing requests/orders/contracts/trustlines. Also includes subnet
-# fixtures: Bob's Network (demo config) and Crawford Bay (launch config,
-# Robin-only). Clean slate for the trade-test stress run.
-# Older baseline with pre-shipment chains still available at:
-#   ./bin/foaf-reset dev_preshipment_rebalanced_2026-04-13.sql
+# Default snapshot date: 2026-05-13. The script loads two paired files:
+#   db/snapshots/dev_clean_<date>.sql   → growoperative_development
+#   db/snapshots/auth_clean_<date>.sql  → foaf_auth_development.identities
+# Pairing matters because users.foaf_id (app side) must equal
+# identities.foaf_id (auth side) for token verification to resolve.
+#
+# Auth signing keys, service tokens, and reserved-handle YAML state are
+# left alone — those are infrastructure, not data.
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-05-02.sql}"
-SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
+SNAPSHOT_DATE="${1:-2026-05-13}"
+APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
+AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
+APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
+AUTH_SNAPSHOT_PATH="db/snapshots/${AUTH_SNAPSHOT}"
 
-if [ ! -f "${SNAPSHOT_PATH}" ]; then
-  echo "ERROR: Snapshot not found: ${SNAPSHOT_PATH}"
+if [ ! -f "${APP_SNAPSHOT_PATH}" ]; then
+  echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
+  exit 1
+fi
+
+if [ ! -f "${AUTH_SNAPSHOT_PATH}" ]; then
+  echo "ERROR: Auth snapshot not found: ${AUTH_SNAPSHOT_PATH}"
+  echo "       Both halves are required so users.foaf_id and identities.foaf_id stay aligned."
   exit 1
 fi
 
 echo "=== FOAF Reset ==="
-echo "Snapshot: ${SNAPSHOT}"
+echo "Snapshot date: ${SNAPSHOT_DATE}"
+echo "  App:  ${APP_SNAPSHOT}"
+echo "  Auth: ${AUTH_SNAPSHOT}"
 echo ""
 
 # --- Step 1: Restore app DB ---
@@ -33,17 +46,36 @@ echo ""
 # flag depends on the client: --ssl-mode=DISABLED for Oracle's mysql client,
 # --skip-ssl for MariaDB's. (Prod's bin/foaf-reset-demo already uses --skip-ssl
 # because the foaf-testnet container ships MariaDB.)
-echo "[1/5] Restoring app DB..."
-docker-compose exec -T db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < "${SNAPSHOT_PATH}"
+echo "[1/6] Restoring app DB..."
+docker-compose exec -T db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < "${APP_SNAPSHOT_PATH}"
 echo "  OK"
 
 # --- Step 2: Run app migrations ---
-echo "[2/5] Running migrations..."
+echo "[2/6] Running app migrations..."
 docker-compose exec backend rails db:migrate 2>&1 | grep -v "warning:" | grep -E "(migrat|==)" || true
 echo "  OK"
 
-# --- Step 3: Clear FOAF DB ---
-echo "[3/5] Clearing FOAF DB..."
+# --- Step 2.5: Restore auth identities, clear transactional auth state ---
+# identities.foaf_id must match users.foaf_id from step 1 or token verification
+# silently fails at User.find_by(foaf_id: sub). The paired snapshot guarantees
+# this — both halves were dumped from the same local DB state.
+echo "[3/6] Restoring auth identities + clearing transactional auth state..."
+docker exec -i service-db-1 mysql -u foaf_auth -ppassword foaf_auth_development 2>/dev/null <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+TRUNCATE login_lockouts;
+TRUNCATE recovery_phrases;
+TRUNCATE recovery_attempts;
+TRUNCATE revoked_jtis;
+TRUNCATE invitations;
+TRUNCATE contact_edges;
+TRUNCATE audit_logs;
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+docker exec -i service-db-1 mysql -u foaf_auth -ppassword foaf_auth_development 2>/dev/null < "${AUTH_SNAPSHOT_PATH}"
+echo "  OK"
+
+# --- Step 4: Clear FOAF DB ---
+echo "[4/6] Clearing FOAF DB..."
 docker-compose -f ../foaf-protocol-ruby/docker-compose.yml exec -T foaf bundle exec rails runner '
 [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, Operation,
  PendingTransfer, CurrencyNetwork].each(&:destroy_all)
@@ -51,8 +83,8 @@ puts "  Cleared."
 ' 2>&1
 echo "  OK"
 
-# --- Step 4: Generate FOAF addresses for app users ---
-echo "[4/5] Generating FOAF addresses..."
+# --- Step 5: Generate FOAF addresses for app users ---
+echo "[5/6] Generating FOAF addresses..."
 docker-compose exec backend rails runner '
 user_ids = (Trustline.pluck(:user_a_id) + Trustline.pluck(:user_b_id)).uniq
 user_ids.each { |uid| Foaf::Signer.ensure_keypair!(User.find(uid)) rescue nil }
@@ -63,8 +95,8 @@ puts "  No trustlines yet — addresses will be generated as users transact." if
 ' 2>&1 | grep -v "warning:"
 echo "  OK"
 
-# --- Step 5: Seed FOAF with current trustline state ---
-echo "[5/5] Seeding FOAF..."
+# --- Step 6: Seed FOAF with current trustline state ---
+echo "[6/6] Seeding FOAF..."
 
 # Export trustline data from app, pipe directly into FOAF
 docker-compose exec -T backend rails runner '

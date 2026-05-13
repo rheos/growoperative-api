@@ -32,27 +32,31 @@
 
 set -euo pipefail
 
-SNAPSHOT="${1:-dev_clean_2026-05-02.sql}"
-SNAPSHOT_PATH="db/snapshots/${SNAPSHOT}"
+SNAPSHOT_DATE="${1:-2026-05-13}"
+APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
+AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
+APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
+AUTH_SNAPSHOT_PATH="db/snapshots/${AUTH_SNAPSHOT}"
 BACKEND_CONTAINER="railsbackend-backend-demo-1"
+AUTH_CONTAINER="foaf-auth-auth-demo-1"
 FOAF_CONTAINER="foaf-testnet"
 
-# --- Hard allowlist: refuse to touch anything but the demo + testnet -------
+# --- Hard allowlist: refuse to touch anything but demo, dauth, and testnet -
 # These are the ONLY targets this script is allowed to wipe. If any of these
 # expectations is violated, abort before any destructive operation.
 EXPECTED_APP_DB="growoperative_demo"
+EXPECTED_AUTH_DB="foaf_auth_demo"
 EXPECTED_FOAF_NETWORK="testnet"
 
-# --- Safety: snapshot must be a clean baseline ------------------------------
-if [[ "${SNAPSHOT}" != dev_clean_* ]]; then
-  echo "ERROR: Only dev_clean_* snapshots are allowed."
-  echo "       Trade test requires no pre-existing requests/orders/trustlines."
-  echo "       Requested: ${SNAPSHOT}"
+# --- Safety: snapshots must be a clean baseline ----------------------------
+if [[ ! -f "${APP_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
   exit 1
 fi
 
-if [[ ! -f "${SNAPSHOT_PATH}" ]]; then
-  echo "ERROR: Snapshot not found: ${SNAPSHOT_PATH}"
+if [[ ! -f "${AUTH_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: Auth snapshot not found: ${AUTH_SNAPSHOT_PATH}"
+  echo "       Both halves are required so users.foaf_id and identities.foaf_id stay aligned."
   exit 1
 fi
 
@@ -61,36 +65,62 @@ fi
 # up with orders/trustlines/etc baked in, refuse rather than silently load it.
 TRANSACTIONAL_TABLES=(trustlines trustline_transactions orders item_requests request_contracts pending_payments)
 for tbl in "${TRANSACTIONAL_TABLES[@]}"; do
-  if grep -q "INSERT INTO \`${tbl}\`" "${SNAPSHOT_PATH}"; then
-    echo "REFUSED: ${SNAPSHOT_PATH} contains INSERT INTO \`${tbl}\`."
+  if grep -q "INSERT INTO \`${tbl}\`" "${APP_SNAPSHOT_PATH}"; then
+    echo "REFUSED: ${APP_SNAPSHOT_PATH} contains INSERT INTO \`${tbl}\`."
     echo "         Trade-test snapshots must have zero transactional rows."
     echo "         Strip the INSERTs from the dump and retry."
     exit 1
   fi
 done
 
-# --- Load app DB creds from .env.demo --------------------------------------
-ENV_FILE="$(dirname "$(realpath "$0")")/../.env.demo"
-if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "ERROR: .env.demo not found at ${ENV_FILE}"
+# --- Load app DB creds from railsbackend/.env.demo -------------------------
+APP_ENV_FILE="$(dirname "$(realpath "$0")")/../.env.demo"
+if [[ ! -f "${APP_ENV_FILE}" ]]; then
+  echo "ERROR: .env.demo not found at ${APP_ENV_FILE}"
   exit 1
 fi
 # shellcheck disable=SC1090
-set -a; source "${ENV_FILE}"; set +a
-: "${DATABASE_HOST:?DATABASE_HOST not in .env.demo}"
-: "${DATABASE_USERNAME:?DATABASE_USERNAME not in .env.demo}"
-: "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in .env.demo}"
-: "${DATABASE_NAME:?DATABASE_NAME not in .env.demo}"
+set -a; source "${APP_ENV_FILE}"; set +a
+: "${DATABASE_HOST:?DATABASE_HOST not in railsbackend/.env.demo}"
+: "${DATABASE_USERNAME:?DATABASE_USERNAME not in railsbackend/.env.demo}"
+: "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in railsbackend/.env.demo}"
+: "${DATABASE_NAME:?DATABASE_NAME not in railsbackend/.env.demo}"
+APP_DB_HOST="${DATABASE_HOST}"
+APP_DB_USER="${DATABASE_USERNAME}"
+APP_DB_PASS="${DATABASE_PASSWORD}"
+APP_DB_NAME="${DATABASE_NAME}"
 
-# --- Allowlist guard: DATABASE_NAME must be the demo DB -------------------
-if [[ "${DATABASE_NAME}" != "${EXPECTED_APP_DB}" ]]; then
-  echo "REFUSED: DATABASE_NAME in .env.demo is '${DATABASE_NAME}', not '${EXPECTED_APP_DB}'."
-  echo "         This script only wipes the demo database. Aborting."
+# --- Load auth DB creds from foaf-auth/service/.env.demo -------------------
+AUTH_ENV_FILE="$(dirname "$(realpath "$0")")/../../foaf-auth/service/.env.demo"
+if [[ ! -f "${AUTH_ENV_FILE}" ]]; then
+  echo "ERROR: auth .env.demo not found at ${AUTH_ENV_FILE}"
+  exit 1
+fi
+# shellcheck disable=SC1090
+set -a; source "${AUTH_ENV_FILE}"; set +a
+: "${DATABASE_HOST:?DATABASE_HOST not in foaf-auth/service/.env.demo}"
+: "${DATABASE_USERNAME:?DATABASE_USERNAME not in foaf-auth/service/.env.demo}"
+: "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in foaf-auth/service/.env.demo}"
+: "${DATABASE_NAME:?DATABASE_NAME not in foaf-auth/service/.env.demo}"
+AUTH_DB_HOST="${DATABASE_HOST}"
+AUTH_DB_USER="${DATABASE_USERNAME}"
+AUTH_DB_PASS="${DATABASE_PASSWORD}"
+AUTH_DB_NAME="${DATABASE_NAME}"
+
+# --- Allowlist guards: both DBs must be the demo ones ---------------------
+if [[ "${APP_DB_NAME}" != "${EXPECTED_APP_DB}" ]]; then
+  echo "REFUSED: app DATABASE_NAME is '${APP_DB_NAME}', not '${EXPECTED_APP_DB}'."
+  echo "         This script only wipes the demo app database. Aborting."
+  exit 1
+fi
+if [[ "${AUTH_DB_NAME}" != "${EXPECTED_AUTH_DB}" ]]; then
+  echo "REFUSED: auth DATABASE_NAME is '${AUTH_DB_NAME}', not '${EXPECTED_AUTH_DB}'."
+  echo "         This script only wipes the dauth demo database. Aborting."
   exit 1
 fi
 
 # --- Sanity: required containers running -----------------------------------
-for c in "${BACKEND_CONTAINER}" "${FOAF_CONTAINER}"; do
+for c in "${BACKEND_CONTAINER}" "${AUTH_CONTAINER}" "${FOAF_CONTAINER}"; do
   if ! docker ps --format '{{.Names}}' | grep -qx "${c}"; then
     echo "ERROR: container ${c} not running. Can't proceed."
     exit 2
@@ -106,28 +136,57 @@ if [[ "${FOAF_NETWORK_ACTUAL}" != "${EXPECTED_FOAF_NETWORK}" ]]; then
 fi
 
 echo "=== FOAF Demo Reset ==="
-echo "  Snapshot: ${SNAPSHOT}"
-echo "  App DB:   ${DATABASE_NAME}  (@ ${DATABASE_HOST}, as ${DATABASE_USERNAME})"
-echo "  FOAF DB:  foaf_testnet  (via ${FOAF_CONTAINER})"
+echo "  Snapshot date: ${SNAPSHOT_DATE}"
+echo "  App snapshot:  ${APP_SNAPSHOT}"
+echo "  Auth snapshot: ${AUTH_SNAPSHOT}"
+echo "  App DB:   ${APP_DB_NAME}   (@ ${APP_DB_HOST}, as ${APP_DB_USER})"
+echo "  Auth DB:  ${AUTH_DB_NAME}  (@ ${AUTH_DB_HOST}, as ${AUTH_DB_USER})"
+echo "  FOAF DB:  foaf_testnet     (via ${FOAF_CONTAINER})"
 echo
 
 # --- Step 1: load snapshot into app DB -------------------------------------
 # Snapshot has DROP TABLE IF EXISTS per table, so this cleanly replaces state.
 # We pipe the dump through foaf-testnet's mysql client (the rails-box host
 # doesn't have one installed, but the foaf-testnet image does).
-echo "[1/3] Loading ${SNAPSHOT} into ${DATABASE_NAME}..."
+echo "[1/5] Loading ${APP_SNAPSHOT} into ${APP_DB_NAME}..."
 # --skip-ssl: MySQL 8's self-signed cert fails MariaDB client's TLS handshake,
 # but the connection is over private VPC so TLS is not needed for security.
 # (foaf-testnet's mysql client is MariaDB 11.8 from Debian default-mysql-client;
 # its SSL-disable flag is --skip-ssl, not --ssl-mode=DISABLED like upstream MySQL.)
 docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql --skip-ssl -h ${DATABASE_HOST} -u ${DATABASE_USERNAME} -p'${DATABASE_PASSWORD}' ${DATABASE_NAME}" \
-  < "${SNAPSHOT_PATH}" \
+  sh -c "mysql --skip-ssl -h ${APP_DB_HOST} -u ${APP_DB_USER} -p'${APP_DB_PASS}' ${APP_DB_NAME}" \
+  < "${APP_SNAPSHOT_PATH}" \
   2>&1 | { grep -v "Using a password" || true; }
 echo "  OK"
 
-# --- Step 2: clear foaf-testnet data ---------------------------------------
-echo "[2/4] Clearing foaf_testnet tables..."
+# --- Step 2: restore auth identities + clear transactional auth state ------
+# users.foaf_id (from step 1) must equal identities.foaf_id (auth side) or
+# token verification silently fails at User.find_by(foaf_id: sub). The paired
+# snapshot guarantees this — both halves were dumped from the same source.
+# auth_signing_keys, service_tokens, and reserved_handles are env-specific
+# infrastructure and intentionally left alone.
+echo "[2/5] Loading ${AUTH_SNAPSHOT} into ${AUTH_DB_NAME} + clearing transactional auth state..."
+docker exec -i "${FOAF_CONTAINER}" \
+  sh -c "mysql --skip-ssl -h ${AUTH_DB_HOST} -u ${AUTH_DB_USER} -p'${AUTH_DB_PASS}' ${AUTH_DB_NAME}" \
+  <<SQL 2>&1 | { grep -v "Using a password" || true; }
+SET FOREIGN_KEY_CHECKS=0;
+TRUNCATE login_lockouts;
+TRUNCATE recovery_phrases;
+TRUNCATE recovery_attempts;
+TRUNCATE revoked_jtis;
+TRUNCATE invitations;
+TRUNCATE contact_edges;
+TRUNCATE audit_logs;
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+docker exec -i "${FOAF_CONTAINER}" \
+  sh -c "mysql --skip-ssl -h ${AUTH_DB_HOST} -u ${AUTH_DB_USER} -p'${AUTH_DB_PASS}' ${AUTH_DB_NAME}" \
+  < "${AUTH_SNAPSHOT_PATH}" \
+  2>&1 | { grep -v "Using a password" || true; }
+echo "  OK"
+
+# --- Step 3: clear foaf-testnet data ---------------------------------------
+echo "[3/5] Clearing foaf_testnet tables..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
 models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
           Operation, PendingTransfer, CurrencyNetwork]
@@ -136,11 +195,11 @@ puts "  Cleared: #{models.map(&:name).join(", ")}"
 ' 2>&1 | { grep -v "warning:" || true; }
 echo "  OK"
 
-# --- Step 3: deploy the FOAF currency network -----------------------------
+# --- Step 4: deploy the FOAF currency network -----------------------------
 # Shadow mirroring needs a network to attach trustlines to. Without one,
 # every shadow call fails with "No network found on FOAF" and FOAF stays
 # empty even though the app is generating activity.
-echo "[3/4] Deploying FOAF currency network..."
+echo "[4/5] Deploying FOAF currency network..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
 network = NetworkService.deploy(
   name: "Growoperative Gardens (CAD)",
@@ -152,21 +211,25 @@ puts "  Network: #{network.address}"
 ' 2>&1 | { grep -v "warning:" || true; }
 echo "  OK"
 
-# --- Step 4: enable debug API + restart backend-demo ----------------------
+# --- Step 5: enable debug API + restart auth + backend-demo ---------------
 # The trade test uses /v1/debug/invariants which is gated by the
 # debug_api_enabled GlobalSetting. The dev_clean_* snapshot has no row
 # for it, so production-mode demo backend defaults to 403.
-echo "[4/4] Enabling debug API + restarting ${BACKEND_CONTAINER}..."
+# Restarting both auth and backend-demo flushes any cached state: rails'
+# 5-min revocation-snapshot cache and auth's in-memory caches.
+echo "[5/5] Enabling debug API + restarting ${AUTH_CONTAINER} and ${BACKEND_CONTAINER}..."
 docker exec "${BACKEND_CONTAINER}" bundle exec rails runner '
 GlobalSetting.find_or_create_by(setting: "debug_api_enabled").update!(value: 1)
 puts "  debug_api_enabled = 1"
 ' 2>&1 | { grep -v -E "warning:|Spring" || true; }
+docker restart "${AUTH_CONTAINER}" > /dev/null
 docker restart "${BACKEND_CONTAINER}" > /dev/null
-echo "  OK (allow ~15s for Rails to boot)"
+echo "  OK (allow ~15s for both to boot)"
 
 echo
 echo "=== Reset Complete ==="
-echo "  Demo app DB restored from ${SNAPSHOT}."
+echo "  Demo app DB restored from ${APP_SNAPSHOT}."
+echo "  Demo auth DB identities restored from ${AUTH_SNAPSHOT}."
 echo "  foaf_testnet cleared."
 echo
 echo "Next:"
