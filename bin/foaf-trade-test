@@ -7,7 +7,7 @@
 # the first violation.
 #
 # Usage (from railsbackend/):
-#   ./bin/foaf-trade-test [snapshot_file]
+#   ./bin/foaf-trade-test [snapshot_date]
 #
 # Exit codes:
 #   0 — all scenarios passed
@@ -16,12 +16,12 @@
 
 set -e
 
-SNAPSHOT="${1:-dev_clean_2026-05-02.sql}"
+SNAPSHOT_DATE="${1:-2026-05-13}"
 
 echo "=== FOAF Trade Test ==="
 echo ""
-echo "[A] Reset ($SNAPSHOT)"
-./bin/foaf-reset "$SNAPSHOT" > /tmp/trade_test_reset.log 2>&1 || {
+echo "[A] Reset ($SNAPSHOT_DATE)"
+./bin/foaf-reset "$SNAPSHOT_DATE" > /tmp/trade_test_reset.log 2>&1 || {
   echo "  Reset failed. See /tmp/trade_test_reset.log"
   exit 2
 }
