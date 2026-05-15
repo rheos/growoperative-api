@@ -57,4 +57,33 @@ RSpec.describe UserAvatarUploader, type: :uploader do
       expect(first).not_to eq(second)
     end
   end
+
+  # Regression — versions used to be stored at `thumb500_<original>.png`
+  # while User#avatar_url resolved to `thumb500_<token>.png`, leaving the
+  # rendered thumb URL pointing at a non-existent S3 object. The fix makes
+  # version uploaders share the parent's token-based filename so both
+  # halves agree.
+  describe '#full_filename — version filename pairing' do
+    it 'prefixes version_name onto the parent token-based filename' do
+      uploader = upload_file('myface.png')
+      parent_filename = uploader.filename
+      thumb500_filename = uploader.thumb500.send(:full_filename,'myface.png')
+      thumbnail_filename = uploader.thumbnail.send(:full_filename,'myface.png')
+
+      expect(parent_filename).to match(/\A[0-9a-f-]{36}\.png\z/)
+      expect(thumb500_filename).to eq("thumb500_#{parent_filename}")
+      expect(thumbnail_filename).to eq("thumbnail_#{parent_filename}")
+    end
+
+    it 'falls back to for_file when filename is nil (recreate_versions! path)' do
+      # An uploader instance without an in-progress upload has no
+      # original_filename, so `filename` returns nil. recreate_versions!
+      # passes the stored parent identifier as `for_file`; we should use
+      # that, not lose it to nil.
+      uploader = described_class.new(user, :image)
+      expect(uploader.filename).to be_nil
+      expect(uploader.send(:full_filename,'stored-uuid.png')).to eq('stored-uuid.png')
+      expect(uploader.thumb500.send(:full_filename,'stored-uuid.png')).to eq('thumb500_stored-uuid.png')
+    end
+  end
 end

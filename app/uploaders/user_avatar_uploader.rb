@@ -8,9 +8,6 @@ class UserAvatarUploader < ImagesUploader
   #      fires when the new filename differs from the old).
   #   3. Avoids cross-user filename collisions if two users uploaded
   #      "avatar.jpg" with overlapping ids — the path is fully unique.
-  #
-  # Versions (thumb500_, thumbnail_) share the parent uploader's model, so
-  # they pick up the same secure_token and produce matching base filenames.
   def filename
     "#{secure_token}#{File.extname(original_filename).downcase}" if original_filename.present?
   end
