@@ -231,18 +231,61 @@ class User < ApplicationRecord
     subnet_memberships.primary.first&.subnet
   end
 
-  # Creates a primary SubnetMembership for the new user from the invitation's
-  # subnet. Nullable subnet_id on the invitation is intentional during the
-  # backfill window (see plan 17) — we silently no-op and leave the user
-  # without a membership until Phase 3 backfill runs.
+  # Creates a primary SubnetMembership for the new user.
+  #
+  # Two paths:
+  # 1. Seed invitation (`subnet_seed_config` present) — mints a brand-new
+  #    Subnet with this user as `seed_user`, writes the initial SubnetConfig
+  #    v1 from the metadata, and enrolls this user as primary. Used by
+  #    superuser-issued codes that intentionally fork a new community
+  #    rather than growing the inviter's.
+  # 2. Normal invitation (`subnet_id` set) — enrols this user in the
+  #    inviter's subnet.
+  #
+  # Nullable subnet_id on the invitation is intentional during the backfill
+  # window (see plan 17) — when neither path matches we silently no-op.
   def join_subnet_from_invitation
     find_invitation
-    return unless @invitation&.subnet_id
-    subnet_memberships.create!(
-      subnet_id: @invitation.subnet_id,
-      joined_via_invitation_id: @invitation.id,
-      is_primary: true
-    )
+    return unless @invitation
+
+    if @invitation.subnet_seed_config.present?
+      create_seeded_subnet!(@invitation)
+    elsif @invitation.subnet_id
+      subnet_memberships.create!(
+        subnet_id: @invitation.subnet_id,
+        joined_via_invitation_id: @invitation.id,
+        is_primary: true
+      )
+    end
+  end
+
+  # Mints a new Subnet from a seed invitation's metadata and enrols this user
+  # as the seed + primary member. Atomic — partial creates would leave the
+  # subnet without a config or membership.
+  def create_seeded_subnet!(invitation)
+    meta = invitation.subnet_seed_config || {}
+    meta = meta.with_indifferent_access
+    config_payload = (meta[:config] || {}).to_h.stringify_keys
+
+    ActiveRecord::Base.transaction do
+      subnet = Subnet.create!(
+        seed_user: self,
+        name: meta[:subnet_name].presence || "#{user_name}'s Network"
+      )
+
+      SubnetConfig.create!(
+        subnet: subnet,
+        version: 1,
+        config: config_payload,
+        changed_by_user_id: id
+      )
+
+      subnet_memberships.create!(
+        subnet: subnet,
+        joined_via_invitation_id: invitation.id,
+        is_primary: true
+      )
+    end
   end
   
   # === MUTUAL CREDIT SYSTEM METHODS ===

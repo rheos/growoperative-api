@@ -157,6 +157,10 @@ Rails.application.routes.draw do
       get 'admin/credit_loops'      => 'credit_loops#index'
       get 'admin/credit_loops/:id'  => 'credit_loops#show'
 
+      # Admin invitations — currently just the seed-code primitive that mints
+      # a new Subnet on redemption. Superuser-gated in the controller.
+      post 'admin/invitations/seed' => 'admin/invitations#create_seed'
+
       get 'site_config' => 'site_configs#show'
       resources :subnets, only: [:index] do
         member do
