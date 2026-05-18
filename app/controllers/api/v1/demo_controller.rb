@@ -24,7 +24,14 @@ class Api::V1::DemoController < Api::V1::ApiController
       { source_id: t.user_a_id, target_id: t.user_b_id, type: 'trustline', balance: t.current_balance.to_f }
     end
 
-    render json: { nodes: nodes, edges: rel_edges + trust_edges }
+    # The map uses multi_role to decide whether to show per-node role badges and
+    # the role-color legend. Reads from the seed demo user's primary subnet
+    # (Bob's Network); falls back to the SiteConfig default if unresolvable.
+    seed_user = demo_users.find { |u| u.user_name == 'bob' } || demo_users.first
+    subnet = seed_user&.primary_subnet
+    multi_role = SiteConfig.for(subnet)[:multi_role]
+
+    render json: { nodes: nodes, edges: rel_edges + trust_edges, multi_role: multi_role }
   end
 
   # POST /v1/demo/login
