@@ -31,6 +31,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.float "price"
     t.decimal "quantity_canonical", precision: 14, scale: 4
     t.integer "canonical_unit_type"
+    t.index ["user_id", "category_id"], name: "index_category_sizes_on_user_and_category"
   end
 
   create_table "category_units", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
@@ -75,6 +76,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "quantity_canonical", precision: 14, scale: 4, null: false
     t.integer "canonical_unit_type"
     t.index ["item_id"], name: "index_inventories_on_item_id"
+    t.index ["ref_id"], name: "index_inventories_on_ref_id"
+    t.index ["user_id", "status"], name: "index_inventories_on_user_id_and_status"
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
@@ -95,6 +98,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "app_onboarding_completed_at"
     t.json "subnet_seed_config"
     t.index ["app_onboarding_status", "user_id"], name: "index_invitations_on_app_onboarding_status_user"
+    t.index ["invitation_code"], name: "index_invitations_on_invitation_code"
     t.index ["subnet_id"], name: "index_invitations_on_subnet_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
@@ -133,6 +137,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "signed_at"
     t.integer "order_id"
     t.text "cancellation_reason"
+    t.index ["friend_id"], name: "index_item_requests_on_friend_id"
+    t.index ["order_id"], name: "index_item_requests_on_order_id"
     t.index ["request_contract_id"], name: "index_item_requests_on_request_contract_id"
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
@@ -220,6 +226,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "cash_amount", precision: 10, scale: 2
     t.integer "cash_paid_by"
     t.integer "cash_confirmed_by"
+    t.index ["friend_id"], name: "index_orders_on_friend_id"
+    t.index ["user_id", "friend_id", "order_status"], name: "index_orders_on_user_friend_status"
   end
 
   create_table "pending_payments", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
@@ -254,6 +262,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "friend_label"
     t.integer "actions_state", default: 0
     t.integer "friend_actions_state", default: 0
+    t.index ["friend_id"], name: "index_relationships_on_friend_id"
     t.index ["user_id"], name: "index_relationships_on_user_id"
   end
 
@@ -271,6 +280,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "deleted_by"
     t.boolean "archived", default: false
     t.string "unit"
+    t.index ["inventory_id"], name: "index_request_contracts_on_inventory_id"
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
@@ -398,6 +408,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.decimal "quantity_canonical", precision: 14, scale: 4
     t.integer "canonical_unit_type"
     t.string "label"
+    t.index ["inventory_id"], name: "index_unit_options_on_inventory_id"
   end
 
   create_table "user_category_prices", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|

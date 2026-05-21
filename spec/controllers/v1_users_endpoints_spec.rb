@@ -53,6 +53,16 @@ RSpec.describe 'v1 user endpoints', type: :request do
       expect(user.first_name).to eq('Updated')
     end
 
+    it 'updates email and returns it in the identity payload' do
+      patch '/v1/users/profile',
+        params: { user: { email: 'fresh_email@example.com' } },
+        env: auth_headers
+      expect(response).to have_http_status(:ok)
+      expect(parsed['identity']['email']).to eq('fresh_email@example.com')
+      user.reload
+      expect(user.email).to eq('fresh_email@example.com')
+    end
+
     it 'ignores fields outside the FoafIdentity allowlist (no role/admin escalation)' do
       patch '/v1/users/profile',
         params: { user: { display_name: 'Safe', invite_limit: 999_999, is_admin: true } },
