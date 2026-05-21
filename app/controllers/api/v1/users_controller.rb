@@ -504,10 +504,9 @@ module Api::V1
 
 	# PATCH /v1/users/profile
 	# Identity-shaped self-update. Accepts first_name, last_name,
-	# display_name today; email lands when auth.foaf.io owns email
-	# verification (Phase 3 / Job 17). Fields outside the FoafIdentity
-	# whitelist are ignored — profile-shaped updates (role, subnet,
-	# invite_limit) live elsewhere on purpose.
+	# display_name, and email. Fields outside the FoafIdentity whitelist are
+	# ignored — profile-shaped updates (role, subnet, invite_limit) live
+	# elsewhere on purpose.
 	def update_profile
 		patch = profile_update_params
 		if current_user.update(patch)
@@ -596,7 +595,7 @@ module Api::V1
 			# `invite_limit` and `is_admin` go through their own routes.
 			source = params[:user].present? ? params[:user] : params
 			source = ActionController::Parameters.new(source) unless source.is_a?(ActionController::Parameters)
-			source.permit(:first_name, :last_name, :display_name)
+			source.permit(:first_name, :last_name, :display_name, :email)
 		end
 
 
