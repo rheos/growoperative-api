@@ -301,7 +301,7 @@ module Api::V1
 
     # GET: /v1/items/reset
     def reset
-      unless current_user.is_admin?
+      unless current_user.is_superuser?
         render json: {
           message: "You are not authorised to access."
         }, status: 422
