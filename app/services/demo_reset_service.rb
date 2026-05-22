@@ -68,12 +68,23 @@ class DemoResetService
     RequestListRelationshipStatus.where(relationship_id: rel_ids).delete_all if rel_ids.any?
     UserRelationshipRequestPrice.where(user_id: user_ids).delete_all
     UserRelationshipPrice.where(user_id: user_ids).delete_all
+    # Also clear price rows that reference a deleted relationship but are owned
+    # by the counterparty (whose user_id isn't in user_ids) — otherwise the
+    # relationship delete below trips the relationship_id foreign key.
+    if rel_ids.any?
+      UserRelationshipRequestPrice.where(relationship_id: rel_ids).delete_all
+      UserRelationshipPrice.where(relationship_id: rel_ids).delete_all
+    end
     UserCategoryPrice.where(user_id: user_ids).delete_all
 
     # Trustlines
     trustline_ids = Trustline.where(user_a_id: user_ids).or(Trustline.where(user_b_id: user_ids)).pluck(:id)
-    TrustlineTransaction.where(trustline_id: trustline_ids).delete_all if trustline_ids.any?
-    Trustline.where(id: trustline_ids).delete_all if trustline_ids.any?
+    if trustline_ids.any?
+      TrustlineTransaction.where(trustline_id: trustline_ids).delete_all
+      # PendingPayment references trustlines; clear before deleting the parent.
+      PendingPayment.where(trustline_id: trustline_ids).delete_all
+      Trustline.where(id: trustline_ids).delete_all
+    end
 
     # Inventories and their dependents
     inventory_ids = Inventory.where(user_id: user_ids).pluck(:id)
