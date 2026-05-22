@@ -186,6 +186,7 @@ module Api::V1
 			relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
 
 			res = relationships.as_json(include: [{user: {include: [:user_groups], methods: [:avatar_url]} }, {friend: {include: [:user_groups], methods: [:avatar_url]} }, :user_relationship_prices])
+			hydrate_contact_identity_avatars!(res)
 			target_price = 0
 			if params[:target_inventory_id].present? && Inventory.find(params[:target_inventory_id]).item.user_id != current_user.id
 				res.each do |relation|
@@ -586,6 +587,34 @@ module Api::V1
 
 		def valid_handle_format?(handle)
 			HANDLE_FORMAT.match?(handle)
+		end
+
+		def hydrate_contact_identity_avatars!(relationships)
+			cache = {}
+			relationships.each do |relationship|
+				%w[user friend].each do |side|
+					user_payload = relationship[side]
+					next unless user_payload.is_a?(Hash)
+					next if user_payload['avatar_url'].present?
+
+					handle = user_payload['user_name'].to_s
+					next if handle.blank?
+
+					user_payload['avatar_url'] = identity_avatar_for_handle(handle, cache)
+				end
+			end
+		end
+
+		def identity_avatar_for_handle(handle, cache)
+			cache.fetch(handle) do
+				cache[handle] = begin
+					status, body = AuthFoafClient.identity_by_handle(handle: handle)
+					status == 200 && body.is_a?(Hash) ? body['avatar_url'] : nil
+				rescue StandardError => e
+					Rails.logger.warn("auth.foaf.io identity avatar lookup failed for #{handle}: #{e.class}: #{e.message}")
+					nil
+				end
+			end
 		end
 
 		def profile_update_params

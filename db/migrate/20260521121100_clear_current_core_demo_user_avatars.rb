@@ -13,7 +13,7 @@ class ClearCurrentCoreDemoUserAvatars < ActiveRecord::Migration[5.2]
       SET users.image = NULL
       WHERE user_groups.group_label = #{DEMO_GROUP_LABEL}
         AND users.user_name IN (#{names})
-        AND users.image IS NOT NULL
+        AND users.image = 'avatar.jpg'
     SQL
 
     execute <<~SQL.squish

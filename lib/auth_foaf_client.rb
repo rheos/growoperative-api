@@ -104,6 +104,11 @@ class AuthFoafClient
     }, bearer: bearer)
   end
 
+  def self.identity_by_handle(handle:)
+    encoded = URI.encode_www_form_component(handle.to_s)
+    new.get_public_json("/v1/users/by_handle/#{encoded}", base_url: public_base_url)
+  end
+
   def self.change_password(current_password:, new_password:, bearer:)
     new.put_json('/v1/users/password', {
       client_id: audience,
@@ -119,6 +124,10 @@ class AuthFoafClient
 
   def self.base_url
     ENV.fetch('FOAF_AUTH_BASE_URL') { raise 'FOAF_AUTH_BASE_URL not configured' }
+  end
+
+  def self.public_base_url
+    ENV.fetch('FOAF_AUTH_PUBLIC_BASE_URL', base_url)
   end
 
   def self.service_token
@@ -137,10 +146,14 @@ class AuthFoafClient
     request_json(:get, path, nil, service_token: false, bearer: bearer)
   end
 
+  def get_public_json(path, base_url: nil)
+    request_json(:get, path, nil, service_token: false, bearer: nil, base_url: base_url)
+  end
+
   private
 
-  def request_json(method, path, body, service_token:, bearer:)
-    uri = URI.join(self.class.base_url, path)
+  def request_json(method, path, body, service_token:, bearer:, base_url: nil)
+    uri = URI.join(base_url || self.class.base_url, path)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = (uri.scheme == 'https')
     http.read_timeout = DEFAULT_TIMEOUT
