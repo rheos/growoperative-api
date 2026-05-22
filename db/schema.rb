@@ -12,6 +12,19 @@
 
 ActiveRecord::Schema.define(version: 201811070122202) do
 
+  create_table "audit_logs", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", force: :cascade do |t|
+    t.string "action", null: false
+    t.string "status", default: "succeeded", null: false
+    t.string "source"
+    t.string "actor"
+    t.bigint "actor_user_id"
+    t.json "metadata"
+    t.datetime "created_at", null: false
+    t.index ["action"], name: "index_audit_logs_on_action"
+    t.index ["actor_user_id"], name: "index_audit_logs_on_actor_user_id"
+    t.index ["created_at"], name: "index_audit_logs_on_created_at"
+  end
+
   create_table "categories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "category_name"
     t.decimal "default_node_price", precision: 10, scale: 2

@@ -126,7 +126,11 @@ class Api::V1::DemoController < Api::V1::ApiController
     end
 
     snapshot_name = params[:snapshot_name] || 'default'
-    DemoResetService.new(snapshot_name: snapshot_name).call
+    DemoResetService.new(
+      snapshot_name: snapshot_name,
+      actor_user: current_user,
+      source: 'api',
+    ).call
     render json: { message: "Demo data reset to '#{snapshot_name}'" }
   rescue StandardError => e
     Rails.logger.error("Demo reset failed: #{e.message}")

@@ -27,7 +27,10 @@ namespace :demo do
   desc "Reset demo data from snapshot (deletes spawned users, restores core demo data)"
   task reset: :environment do
     require_relative '../../app/services/demo_reset_service'
-    DemoResetService.new.call
+    # ENV['AUDIT_ACTOR'] lets a wrapper (e.g. bin/foaf-reset-demo) attribute the
+    # reset to the operator who ran it; falls back to the OS user.
+    actor = ENV['AUDIT_ACTOR'].presence || "system:rake (#{ENV['USER'] || 'unknown'})"
+    DemoResetService.new(source: 'rake', actor: actor).call
     puts "Demo data reset complete"
   end
 end
