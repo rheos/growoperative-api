@@ -101,6 +101,31 @@ RSpec.describe 'v1 user endpoints', type: :request do
     end
   end
 
+  describe 'GET /v1/users/contact_list' do
+    it 'hydrates missing local avatar urls from the FOAF identity service' do
+      contact = User.create!(
+        user_name: 'bruce_contact',
+        email: 'bruce_contact@example.com',
+        password: password,
+        password_confirmation: password,
+      )
+      Relationship.create!(user: user, friend: contact, status: :accepted, action_user_id: user.id)
+      allow(AuthFoafClient).to receive(:identity_by_handle).with(handle: 'job10_user').and_return(
+        [200, { 'avatar_url' => nil }]
+      )
+      allow(AuthFoafClient).to receive(:identity_by_handle).with(handle: 'bruce_contact').and_return(
+        [200, { 'avatar_url' => 'https://dauth.foaf.io/uploads/bruce.png' }]
+      )
+
+      get '/v1/users/contact_list', env: auth_headers
+
+      expect(response).to have_http_status(:ok)
+      friend_payload = parsed['items'].first['friend']
+      expect(friend_payload['user_name']).to eq('bruce_contact')
+      expect(friend_payload['avatar_url']).to eq('https://dauth.foaf.io/uploads/bruce.png')
+    end
+  end
+
   describe 'GET /v1/users/by_handle/:handle' do
     it 'returns the four documented fields for a known handle' do
       get "/v1/users/by_handle/#{user.user_name}", env: { 'HTTPS' => 'on' }

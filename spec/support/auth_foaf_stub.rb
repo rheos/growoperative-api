@@ -90,5 +90,19 @@ RSpec.configure do |config|
         [401, { 'error' => 'invalid bearer' }]
       end
     end
+
+    allow(AuthFoafClient).to receive(:identity_by_handle) do |handle:|
+      user = User.find_by(user_name: handle.to_s.downcase)
+      if user
+        [200, {
+          'foaf_id' => user.foaf_id,
+          'user_name' => user.user_name,
+          'display_name' => user.display_name,
+          'avatar_url' => nil,
+        }]
+      else
+        [404, { 'error' => 'not_found' }]
+      end
+    end
   end
 end
