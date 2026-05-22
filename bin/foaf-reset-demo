@@ -222,6 +222,20 @@ docker exec "${BACKEND_CONTAINER}" bundle exec rails runner '
 GlobalSetting.find_or_create_by(setting: "debug_api_enabled").update!(value: 1)
 puts "  debug_api_enabled = 1"
 ' 2>&1 | { grep -v -E "warning:|Spring" || true; }
+
+# Record this reset in the audit log, attributed to the operator who ran the
+# script. This path bypasses DemoResetService, so it logs directly. Done before
+# the restart, while the backend container is still up.
+OPERATOR="${SUDO_USER:-$(whoami)}@$(hostname)"
+docker exec "${BACKEND_CONTAINER}" bundle exec rails runner "
+AuditLog.record(
+  action: 'demo.reset', status: 'succeeded', source: 'script',
+  actor: 'operator:${OPERATOR}',
+  metadata: { script: 'bin/foaf-reset-demo', app_snapshot: '${APP_SNAPSHOT}', auth_snapshot: '${AUTH_SNAPSHOT}' }
+)
+puts '  audit logged'
+" 2>&1 | { grep -v -E "warning:|Spring" || true; }
+
 docker restart "${AUTH_CONTAINER}" > /dev/null
 docker restart "${BACKEND_CONTAINER}" > /dev/null
 echo "  OK (allow ~15s for both to boot)"

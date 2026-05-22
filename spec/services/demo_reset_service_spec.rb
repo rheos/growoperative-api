@@ -1,9 +1,11 @@
 require 'rails_helper'
 
-# Job 14 acceptance: demo snapshot/reset must not leave previously-issued
-# tokens authenticating against reset identities. Phase 3 (Job 29) wires
-# the auth.foaf.io revocation snapshot for this; in Phase 2 we rotate
-# `foaf_id` on every core demo user so pre-reset tokens stop resolving.
+# foaf_id rotation (old Job 14 token-invalidation step) was removed once
+# auth.foaf.io became authoritative for demo login: it validates the requested
+# foaf_id against a static allowlist, so rotating to random UUIDs broke every
+# demo login. Core demo foaf_ids must now stay pinned. These specs assert the
+# current behavior (preservation, not rotation) and the audit logging added
+# after a 2026-05-22 reset wiped demo data with no record of who ran it.
 RSpec.describe DemoResetService do
   let!(:alice) do
     u = User.create!(
@@ -50,33 +52,57 @@ RSpec.describe DemoResetService do
     allow(DemoSnapshotService).to receive(:load).with('default').and_return(minimal_snapshot)
   end
 
-  it 'rotates foaf_id for every core demo user' do
+  it 'preserves foaf_id for every core demo user (rotation was removed)' do
     alice_before = alice.foaf_id
     bob_before = bob.foaf_id
 
     DemoResetService.new.call
 
-    expect(alice.reload.foaf_id).to be_present
-    expect(bob.reload.foaf_id).to be_present
-    expect(alice.foaf_id).not_to eq(alice_before)
-    expect(bob.foaf_id).not_to eq(bob_before)
+    expect(alice.reload.foaf_id).to eq(alice_before)
+    expect(bob.reload.foaf_id).to eq(bob_before)
   end
 
-  it 'invalidates tokens issued before reset' do
+  it 'keeps pre-reset tokens resolvable (foaf_id is pinned)' do
     pre_reset_token = JwtGenerationService.new(alice).token
 
     DemoResetService.new.call
 
     decoded = JwtDecodingService.new(pre_reset_token).decrypt!
-    expect(decoded['sub']).to be_present
-    # The pre-reset sub no longer resolves to any user — api_controller's
-    # resolve_user_from_jwt returns nil and the request is rejected.
-    expect(User.find_by(foaf_id: decoded['sub'])).to be_nil
+    expect(User.find_by(foaf_id: decoded['sub'])).to eq(alice.reload)
   end
 
   it 'preserves the user_name (so snapshot restore still locates the row)' do
     DemoResetService.new.call
     expect(User.exists?(user_name: 'reset_alice')).to be true
     expect(User.exists?(user_name: 'reset_bob')).to be true
+  end
+
+  describe 'audit logging' do
+    it 'records a started and a succeeded entry with the actor and source' do
+      DemoResetService.new(source: 'api', actor_user: bob).call
+
+      entries = AuditLog.where(action: 'demo.reset').order(:created_at)
+      expect(entries.map(&:status)).to eq(%w[started succeeded])
+      expect(entries.map(&:source).uniq).to eq(['api'])
+      expect(entries.map(&:actor).uniq).to eq([bob.user_name])
+      expect(entries.map(&:actor_user_id).uniq).to eq([bob.id])
+      expect(entries.last.metadata['snapshot_name']).to eq('default')
+      expect(entries.last.metadata['duration_ms']).to be_a(Integer)
+    end
+
+    it 'records a failed entry (and re-raises) when the reset blows up' do
+      allow_any_instance_of(DemoResetService)
+        .to receive(:restore_core_demo_data).and_raise(StandardError, 'boom')
+
+      expect { DemoResetService.new(source: 'rake', actor: 'system:rake').call }
+        .to raise_error(StandardError, 'boom')
+
+      entries = AuditLog.where(action: 'demo.reset').order(:created_at)
+      expect(entries.map(&:status)).to eq(%w[started failed])
+      # The 'started' entry survives the rolled-back transaction.
+      expect(entries.first.status).to eq('started')
+      expect(entries.last.metadata['error']).to eq('boom')
+      expect(entries.last.actor).to eq('system:rake')
+    end
   end
 end

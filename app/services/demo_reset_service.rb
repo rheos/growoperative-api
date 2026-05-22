@@ -1,9 +1,24 @@
 class DemoResetService
-  def initialize(snapshot_name: 'default')
+  # actor/actor_user/source identify who triggered the reset, for the audit log.
+  # source is one of: 'api' (superuser via controller), 'rake', 'script'.
+  def initialize(snapshot_name: 'default', actor: nil, actor_user: nil, source: 'rake')
     @snapshot_name = snapshot_name
+    @actor = actor
+    @actor_user = actor_user
+    @source = source
   end
 
   def call
+    started_at = Time.current
+    # Logged BEFORE the transaction so the record survives even if the reset
+    # crashes mid-restore and the transaction rolls back (exactly what happened
+    # on 2026-05-22 — a reset wiped demo data with no trace of who ran it).
+    AuditLog.record(
+      action: 'demo.reset', status: 'started',
+      actor: @actor, actor_user: @actor_user, source: @source,
+      metadata: { snapshot_name: @snapshot_name },
+    )
+
     @snapshot = DemoSnapshotService.load(@snapshot_name)
     @core_usernames = @snapshot['core_usernames']
 
@@ -21,6 +36,20 @@ class DemoResetService
       # lived (≈1h) so stale sessions simply see refreshed data meanwhile.
       restore_core_demo_data
     end
+
+    AuditLog.record(
+      action: 'demo.reset', status: 'succeeded',
+      actor: @actor, actor_user: @actor_user, source: @source,
+      metadata: { snapshot_name: @snapshot_name, duration_ms: ((Time.current - started_at) * 1000).round },
+    )
+  rescue StandardError => e
+    # Transaction has already rolled back here, so this record commits on its own.
+    AuditLog.record(
+      action: 'demo.reset', status: 'failed',
+      actor: @actor, actor_user: @actor_user, source: @source,
+      metadata: { snapshot_name: @snapshot_name, error: e.message },
+    )
+    raise
   end
 
   private
