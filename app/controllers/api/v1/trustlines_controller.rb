@@ -212,6 +212,22 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
     end
 
+    # The Rails commit doesn't enforce the limit (force_capacity below), but the
+    # FOAF mirror does — an over-limit debt transfer is rejected by FOAF and the
+    # balance silently reverts on the next FOAF-sourced read. When the user has
+    # explicitly consented to raising their own limit to cover the debt, bump
+    # the current user's credit-limit side and mirror it to FOAF *first* so the
+    # subsequent debt transfer fits within the (now larger) creditline.
+    raise_to = params[:raise_limit_to].to_f
+    if raise_to > @trustline.credit_limit_for(current_user).to_f
+      if current_user.id == @trustline.user_a_id
+        @trustline.update!(credit_limit_a_to_b: raise_to)
+      else
+        @trustline.update!(credit_limit_b_to_a: raise_to)
+      end
+      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
+    end
+
     # No credit-limit check: voluntary self-adverse declaration. The user is
     # accepting the obligation themselves, so the limit doesn't apply.
     begin
