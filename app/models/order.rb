@@ -15,14 +15,28 @@ class Order < ApplicationRecord
   # since those are effectively "done" even if the order-level status
   # hasn't caught up. Used by ItemRequest#accept_request, #sign (chain
   # cascading), and ItemRequestsController#reserve.
+  #
+  # CONCURRENCY: two requests accepted at the same instant (e.g. the "accept
+  # all" button firing parallel accepts) both ran find-then-create and each
+  # created an order, producing duplicate pending orders for one pair. We
+  # serialize per seller with a FOR UPDATE row lock. A row lock (unlike a MySQL
+  # named lock) is held until the surrounding transaction commits, so the order
+  # is durable before the next caller proceeds. The candidates query is then a
+  # LOCKING read (.lock) so that next caller sees the just-committed order — a
+  # plain read would use its REPEATABLE READ snapshot (taken before the first
+  # committed) and miss it, recreating the bug.
   def self.find_or_create_pending(buyer_id, seller_id)
-    candidates = Order.where(user_id: buyer_id, friend_id: seller_id, order_status: 0)
-    order = candidates.find { |o| !o.item_requests.exists?(status: [:completed]) }
-    unless order
-      order = Order.create!(user_id: buyer_id, friend_id: seller_id, order_status: :pending)
-      order.update!(order_label: 'Order ' + order.id.to_s)
+    transaction do
+      # Lock a stable row both concurrent callers contend on; released on commit.
+      User.where(id: seller_id).lock(true).first
+      candidates = Order.where(user_id: buyer_id, friend_id: seller_id, order_status: 0).lock(true)
+      order = candidates.to_a.find { |o| !o.item_requests.exists?(status: [:completed]) }
+      unless order
+        order = Order.create!(user_id: buyer_id, friend_id: seller_id, order_status: :pending)
+        order.update!(order_label: 'Order ' + order.id.to_s)
+      end
+      order
     end
-    order
   end
 
   def remove_request (id)
