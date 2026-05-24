@@ -16,7 +16,7 @@
 
 set -e
 
-SNAPSHOT_DATE="${1:-2026-05-13}"
+SNAPSHOT_DATE="${1:-2026-05-23}"
 
 echo "=== FOAF Trade Test ==="
 echo ""

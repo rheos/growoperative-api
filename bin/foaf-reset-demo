@@ -32,7 +32,7 @@
 
 set -euo pipefail
 
-SNAPSHOT_DATE="${1:-2026-05-13}"
+SNAPSHOT_DATE="${1:-2026-05-23}"
 APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
 AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
 APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
