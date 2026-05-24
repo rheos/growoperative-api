@@ -14,6 +14,7 @@ class InvariantsService
     chain_sign_ordering
     order_atomicity
     order_membership
+    order_consolidation
     contract_current_step
     orphan_requests
     chain_pricing
@@ -120,6 +121,35 @@ class InvariantsService
           context: { request_id: ir.id, order_id: o.id },
         }
       end
+    end
+  end
+
+  # A buyer-seller pair must have AT MOST ONE order still open for new items:
+  # pending (order_status 0) with no completed (shipped) item_requests. That is
+  # exactly the set Order.find_or_create_pending treats as reusable, so two such
+  # orders for the same pair means an accepted request created a fresh order
+  # instead of landing on the existing pending one — the consolidation bug.
+  #
+  # Historical orders (shipped/signed) and pending orders that already contain a
+  # completed request are correctly excluded: those are closed to new items by
+  # the atomic-order rule, so a new pending order alongside them is expected.
+  def self.check_order_consolidation(violations)
+    open_orders = Order.where(order_status: 0).includes(:item_requests).select do |o|
+      o.item_requests.none?(&:completed?)
+    end
+    open_orders.group_by { |o| [o.user_id, o.friend_id] }.each do |(buyer, seller), orders|
+      next if orders.size < 2
+      violations << {
+        name: :order_consolidation,
+        message: "buyer=#{buyer} seller=#{seller} has #{orders.size} open pending orders " \
+                 "(accepted requests should consolidate onto one): #{orders.map(&:id).join(', ')}",
+        context: {
+          buyer_id: buyer,
+          seller_id: seller,
+          order_ids: orders.map(&:id),
+          orders: orders.map { |o| { id: o.id, request_count: o.item_requests.size } },
+        },
+      }
     end
   end
 

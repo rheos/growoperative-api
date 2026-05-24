@@ -12,7 +12,7 @@
 
 ActiveRecord::Schema.define(version: 201811070122202) do
 
-  create_table "audit_logs", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", force: :cascade do |t|
+  create_table "audit_logs", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "action", null: false
     t.string "status", default: "succeeded", null: false
     t.string "source"
