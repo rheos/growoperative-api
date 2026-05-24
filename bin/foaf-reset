@@ -5,7 +5,7 @@
 # Usage (from railsbackend/):
 #   ./bin/foaf-reset [snapshot_date]
 #
-# Default snapshot date: 2026-05-13. The script loads two paired files:
+# Default snapshot date: 2026-05-23. The script loads two paired files:
 #   db/snapshots/dev_clean_<date>.sql   → growoperative_development
 #   db/snapshots/auth_clean_<date>.sql  → foaf_auth_development.identities
 # Pairing matters because users.foaf_id (app side) must equal
@@ -16,7 +16,7 @@
 
 set -e
 
-SNAPSHOT_DATE="${1:-2026-05-13}"
+SNAPSHOT_DATE="${1:-2026-05-23}"
 APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
 AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
 APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"

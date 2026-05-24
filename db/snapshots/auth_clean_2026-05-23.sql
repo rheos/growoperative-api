@@ -1,0 +1,81 @@
+/*M!999999\- enable the sandbox mode */ 
+-- MariaDB dump 10.19  Distrib 10.5.29-MariaDB, for debian-linux-gnu (x86_64)
+--
+-- Host: 172.26.13.168    Database: foaf_auth_demo
+-- ------------------------------------------------------
+-- Server version	8.0.45-0ubuntu0.22.04.1
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `identities`
+--
+
+DROP TABLE IF EXISTS `identities`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `identities` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `foaf_id` varchar(255) NOT NULL,
+  `user_name` varchar(255) NOT NULL,
+  `display_name` varchar(255) DEFAULT NULL,
+  `first_name` varchar(255) DEFAULT NULL,
+  `last_name` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `email_verified_at` datetime DEFAULT NULL,
+  `pending_email` varchar(255) DEFAULT NULL,
+  `pending_email_requested_at` datetime DEFAULT NULL,
+  `pending_email_expires_at` datetime DEFAULT NULL,
+  `avatar_url` varchar(255) DEFAULT NULL,
+  `external_identity_providers` json DEFAULT NULL,
+  `password_digest` varchar(255) NOT NULL,
+  `tokens_invalid_before` datetime DEFAULT NULL,
+  `failed_login_count` int NOT NULL DEFAULT '0',
+  `locked_until` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `password_hash_algorithm` varchar(255) NOT NULL DEFAULT 'argon2id',
+  `password_hash_migrated_at` datetime DEFAULT NULL,
+  `password_changed_at` datetime DEFAULT NULL,
+  `avatar_object_key` varchar(255) DEFAULT NULL,
+  `avatar_content_type` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `index_identities_on_foaf_id` (`foaf_id`),
+  UNIQUE KEY `index_identities_on_user_name` (`user_name`),
+  UNIQUE KEY `index_identities_on_email` (`email`),
+  KEY `index_identities_on_deleted_at` (`deleted_at`),
+  KEY `index_identities_on_password_hash_algorithm` (`password_hash_algorithm`),
+  KEY `index_identities_on_avatar_object_key` (`avatar_object_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=latin1;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `identities`
+--
+
+LOCK TABLES `identities` WRITE;
+/*!40000 ALTER TABLE `identities` DISABLE KEYS */;
+INSERT INTO `identities` VALUES (1,'a756b047-d7b1-490f-8f52-62265dd34119','smoke',NULL,NULL,NULL,'smoke@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$2a$12$XcuITpyJaCNpne8Xw5jjZutAddsYXsD2TrHq69IafUetMEq31Rmhi',NULL,0,NULL,NULL,'2026-05-05 01:31:51','2026-05-05 01:31:51','argon2id',NULL,NULL,NULL,NULL),(2,'695c6397-dbdb-44b4-84cb-29c9fb78fa6c','pwsmoke',NULL,NULL,NULL,'pwsmoke@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$LVDLnafHaFCs+YCsbw/l1g$k953G6uW3SpCnwpH3s8zFd8MjLWLWrbeq2SnXjAK35I','2026-05-05 02:44:08',0,NULL,NULL,'2026-05-05 02:44:07','2026-05-05 02:44:08','argon2id',NULL,'2026-05-05 02:44:08',NULL,NULL),(3,'a94d2269-beea-4475-9b5d-435ef67409ad','smoke20',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$q3x+9VsqLQ+B7JCNVkG4AQ$YrSeAf8E3wI0Kz1nwRBKE7L7TB24Rxw5Xof0LFeFFGg','2026-05-05 03:11:00',0,NULL,NULL,'2026-05-05 03:11:00','2026-05-05 03:11:01','argon2id',NULL,'2026-05-05 03:11:01',NULL,NULL),(4,'74e39c34-cc66-4134-8f2b-7b6636f2e1e1','j21new',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$2Vq3+pzZu5hLqBOeQkMTLg$JHZdPvhEUP61ODDbHMQOtPXDbtmmvSmbAoNYnBtmEaA','2026-05-05 03:33:16',0,NULL,'2026-05-05 03:33:16','2026-05-05 03:33:16','2026-05-05 03:33:16','argon2id',NULL,'2026-05-05 03:33:16',NULL,NULL),(5,'ccf5be2f-6fcf-4f38-89e0-d5d07a5fde07','j23alpha',NULL,NULL,NULL,'j23alpha@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$f81zdLeN6mVPxtgJvcOmTg$0u3m9XeFJrLsZ3+RgAG2N2gfWyvgEitL1WhGAtSTMhA',NULL,0,NULL,NULL,'2026-05-05 04:42:56','2026-05-05 04:42:56','argon2id',NULL,'2026-05-05 04:42:56',NULL,NULL),(6,'8a535a5d-ce9a-45de-94ab-42d41215acdb','j23beta',NULL,NULL,NULL,'j23beta@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$b2FRmng5GrhV/7QTtpKNWw$vAyQkl4Z/UaadmpGp/L5byGc7azy7abGVkNXu8rrS98',NULL,0,NULL,NULL,'2026-05-05 04:42:56','2026-05-05 04:42:56','argon2id',NULL,'2026-05-05 04:42:56',NULL,NULL),(7,'dfa2cf7b-d951-4846-ab4b-58d5fa51b6f6','j24alpha',NULL,NULL,NULL,'j24alpha@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$gWG3dZiRM9nycg6SiWKE6A$u6KAMgK6YFITWQfmdG1GOB+LvRKGfWlXXXcwgvaqJ3k',NULL,0,NULL,NULL,'2026-05-05 05:06:18','2026-05-05 05:06:18','argon2id',NULL,'2026-05-05 05:06:18',NULL,NULL),(8,'e2a4c822-1e2f-4757-86e0-928e9e26d6aa','j25alpha',NULL,NULL,NULL,'j25alpha@example.test',NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$C0ufCLMgXmpOUbbOLk4d3w$tv21T+0tF+f9KMPhHdM/uw18FjcxFUu79RE0DZQIXJQ',NULL,0,NULL,NULL,'2026-05-05 05:28:50','2026-05-05 05:28:50','argon2id',NULL,'2026-05-05 05:28:50',NULL,NULL),(9,'b77accaf-5b9e-4ac8-b9a0-17f7691ad2bd','arthur','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$HKtxADkSmPBaTC4zrK2dJeTAc1gpgKPNBcb/PQ.1ik6R0wpIdmmpS',NULL,0,NULL,NULL,'2025-06-18 01:07:47','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(10,'61a4d296-2f36-409e-8c85-d3abf7a8d5ac','barry','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$4CymLEbq.hkRBypwTjQifOQ1I7UOoIBLpCEtcjQSAGmlSAPQN5aRG',NULL,0,NULL,NULL,'2025-06-18 01:07:48','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(11,'494b091e-07a9-4dfe-aa67-8ef76b1ff55a','bob','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'http://localhost:3013/avatars/494b091e-07a9-4dfe-aa67-8ef76b1ff55a/1b0299214ef74b97da4359fe.jpg',NULL,'$argon2id$v=19$m=65536,t=3,p=1$czY8bichce1cKtk9vrll0A$9DM058AO+JBG+eh+5pbpWUyUClfJaOBMpY6/uW6KUcU',NULL,0,NULL,NULL,'2025-06-18 01:07:44','2026-05-06 22:26:32','argon2id','2026-05-06 13:48:49',NULL,'494b091e-07a9-4dfe-aa67-8ef76b1ff55a/1b0299214ef74b97da4359fe.jpg','image/jpeg'),(12,'384009c6-f7a8-4ed6-9928-0a98276751f2','bruce','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$x4aqRV5qmu2HcXWVtKHtoA$3TYcnO1Z061zwadSJnlTjjY78aq8nvhZ0YNeo+lI0LM',NULL,0,NULL,NULL,'2025-06-18 01:07:46','2026-05-06 20:26:29','argon2id','2026-05-06 20:26:28',NULL,NULL,NULL),(13,'9a9a9a26-7b73-4699-a09b-22f4835758ed','clark','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$fSYusSBihmL3Z9ksjTE.Ce4OaaBFYE1YmgHG0AOn616baHRldK3y2',NULL,0,NULL,NULL,'2025-06-18 01:07:48','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(14,'63baf502-c730-4df5-b8f0-596aa24bebe1','dianna','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$Dy0fJl6zSlR9Ta31lWzEX.Ti1U4xPP1U249CO8zazZ33WVe5dwIwy',NULL,0,NULL,NULL,'2025-06-18 01:07:44','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(15,'bd0d9ac0-032f-44d4-9214-e943337ceffe','john','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$yYCvydy.w6s0w3f2MGSxF.svWWbPGQZwA1Ys5xvVCETy.mzynf9/q',NULL,0,NULL,NULL,'2025-06-18 01:07:49','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(16,'48ed793f-a268-43bf-85e0-3af230596e9b','mark','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$.ii/6sDsJvghPXP8zYVJ8ONu2kD6zCAmWlr5oVPC9nHeIXgo6wJT2',NULL,0,NULL,NULL,'2025-06-18 01:07:47','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(17,'a59cce29-3888-4cae-a28b-5db8c892e33d','mary','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$Hl9BzD4z3W3QKlvBT+1RAQ$3j+MHdbxWIyQWj7mvkVqRbIp1kzLBIF2VE3fpMwkmxw','2026-05-06 15:36:02',0,NULL,NULL,'2025-06-18 01:07:46','2026-05-06 15:36:02','argon2id','2026-05-06 15:19:10','2026-05-06 15:36:02',NULL,NULL),(18,'bede8a94-dca6-4440-8e2e-33bfa73dd5bf','oliver','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$UQigDwidGR5pg2NvQHCDSO6n4xWodxlW.oCBSu1LSepMOG.PjB.xy',NULL,0,NULL,NULL,'2025-06-18 01:07:48','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(19,'e80d1379-cce0-436e-8ab9-42ce07512a2c','paul','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$0/gjhS8E0zn4.SlS3VBaP.rEbKpCCzRFE.pzd633MpP6d64UULXui',NULL,0,NULL,NULL,'2025-06-18 01:07:45','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(20,'05517ff5-ee0b-4577-953a-3eef1d38b89a','peter','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$2a$11$Yga6dIGVTWDvyASc0x9zg.RlwziEGW2TAkWQE7MhnzHaexgAMMtPG',NULL,0,NULL,NULL,'2025-06-18 01:07:44','2026-05-05 15:29:19','bcrypt',NULL,NULL,NULL,NULL),(21,'7430bd40-394f-46f0-ad9c-394a70237e9e','sara','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$wkrvxJTLUSe8nQrV0NF+bw$lDLfCQOsZcQHKjl0S/PX4lRxCwER8t61XqIFAPKt2Zo',NULL,0,NULL,NULL,'2025-06-18 01:07:45','2026-05-06 20:26:30','argon2id','2026-05-06 20:26:30',NULL,NULL,NULL),(22,'a0b7c886-76c8-469f-a065-0310423d9949','robin','',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'$argon2id$v=19$m=65536,t=3,p=1$nd+CxqggBtwtOkuT9NhRcA$VRueUbkavw3KGpcpFeD13EFiRCtlqEiCvCIwJbwZrjA',NULL,0,NULL,NULL,'2026-04-10 17:05:56','2026-05-24 01:03:24','argon2id','2026-05-24 01:03:24',NULL,NULL,NULL);
+/*!40000 ALTER TABLE `identities` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-05-24  1:26:47
