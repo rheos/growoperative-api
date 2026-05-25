@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
 import time
 import warnings
 from dataclasses import dataclass, field
@@ -411,6 +412,87 @@ def scenario_accept_all(client: Client, nodes: dict[int, str]) -> None:
                 info(f"  accept failed for request {request_id}: {msg}")
 
 
+def scenario_concurrent_accept(client: Client, nodes: dict[int, str], edges: list[dict]) -> None:
+    """Order-consolidation race: a buyer makes two direct requests to one seller,
+    then the seller accepts both AT THE SAME TIME (parallel HTTP — what the
+    dashboard "accept all" / rapid clicks do). Before the find_or_create_pending
+    row lock, each accept created its own order, leaving two pending orders for
+    one buyer-seller pair. The order_consolidation invariant catches a regression.
+
+    Self-contained: it creates its own requests, so run it early on a clean graph.
+    Skips gracefully if no buyer has two directly-purchasable items from one seller."""
+    header("Scenario: concurrent accept (order-consolidation race)")
+
+    pick = None
+    for buyer_id, buyer_name in nodes.items():
+        client.login(buyer_name, buyer_id)
+        by_owner: dict[int, list[dict]] = {}
+        for t in find_targets(client, buyer_name, buyer_id, edges, hops=(1,), limit=50):
+            if t["quantity"] >= 1:
+                by_owner.setdefault(t["owner_id"], []).append(t)
+        for owner_id, its in by_owner.items():
+            if len(its) >= 2 and owner_id in nodes:
+                pick = (buyer_id, buyer_name, owner_id, nodes[owner_id], its[:2])
+                break
+        if pick:
+            break
+
+    if not pick:
+        info("  no buyer with 2 direct items from one seller — skipping")
+        return
+    buyer_id, buyer_name, seller_id, seller_name, targets = pick
+    info(f"  {buyer_name} requests 2 items from {seller_name}; {seller_name} accepts both at once")
+
+    client.login(buyer_name, buyer_id)
+    for t in targets:
+        try:
+            client.use(buyer_name).post(
+                f"/v1/items/{t['inventory_id']}/requests",
+                {"request": {"quantity": min(t["quantity"], 1.0)}},
+            )
+        except ApiError as e:
+            client.api_errors.append({"action": f"{buyer_name} request {t['item_name']}", "error": str(e)[:160]})
+            info(f"  request failed, skipping scenario: {str(e)[:120]}")
+            return
+
+    data = requests.get(f"{HOST}/v1/debug/requests",
+                        params={"user": seller_name, "status": "pending", "limit": 200}, timeout=10).json()
+    req_ids = [r["item_request_id"] for r in data.get("requests", [])
+               if str(r.get("friend")) == seller_name and str(r.get("user")) == buyer_name][:2]
+    if len(req_ids) < 2:
+        info(f"  expected 2 pending {buyer_name}->{seller_name} requests, got {len(req_ids)} — skipping")
+        return
+
+    # Accept BOTH concurrently. Use the seller's token directly (not client.use)
+    # since active_user is shared mutable state unsafe across threads.
+    token = client.login(seller_name, seller_id)
+    errors: list[str] = []
+
+    def _accept(req_id: int) -> None:
+        try:
+            r = requests.post(
+                f"{HOST}/v1/items/requests/{req_id}/accept",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                timeout=20,
+            )
+            if r.status_code >= 400:
+                errors.append(f"req {req_id} -> {r.status_code}: {r.text[:120]}")
+        except Exception as ex:  # noqa: BLE001 — record and keep going
+            errors.append(f"req {req_id}: {ex}")
+
+    threads = [threading.Thread(target=_accept, args=(rid,)) for rid in req_ids]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    for e in errors:
+        client.api_errors.append({"action": "concurrent accept", "error": e})
+        info(f"  accept error: {e}")
+
+    ok(f"{seller_name} accepted {len(req_ids)} requests in parallel")
+    check_invariants(client, f"{seller_name} concurrently accepted 2 from {buyer_name}")
+
+
 def _ship_pass(client: Client, nodes: dict[int, str]) -> int:
     """Ship every shippable order once. Returns how many shipped."""
     shipped_count = 0
@@ -749,6 +831,11 @@ def main() -> int:
         ok("baseline invariants pass")
         check_foaf_shadow_health()
         nodes, edges = fetch_demo_graph()
+
+        # Concurrency regression check first, on the clean graph (needs a buyer
+        # with 2 directly-purchasable items from one seller). Guards the
+        # order-consolidation race fixed in Order.find_or_create_pending.
+        scenario_concurrent_accept(client, nodes, edges)
 
         # Pass 1: the main stress flow.
         scenario_bilateral_pairs(client, nodes)
