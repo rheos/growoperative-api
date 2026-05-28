@@ -187,12 +187,13 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
   - `.github/workflows/deploy-prod.yml` — manual `workflow_dispatch`, requires typing `deploy-prod` to confirm. Optional SHA input for rolling back. Deploys `backend`.
 - **No tests in CI pipeline** — soak-time on demo is the safety net.
 - **Production Docker:** `docker-compose.prod.yml` (no MySQL — connects to Lightsail DB at `172.26.13.168`)
-- **Nginx:** reverse proxy with Certbot SSL.
+- **Nginx:** reverse proxy with Certbot SSL. Box is API-only for GrowOperative since the 2026-05-27 frontend migration to Cloudflare Pages.
   - `api.growoperative.app` → `backend` (prod API)
-  - `growoperative.app` → static frontend at `/var/www/prod` (manually-promoted soaked build)
-  - `demo.growoperative.app` + `beta.growoperative.app` → static frontend at `/var/www/demo` (auto-deploy on push to `growoperative-app` `main`); `/v1/` proxies to `backend-demo`
-- **Frontend dist mounts (host paths):** `/home/ubuntu/growoperative-app/dist-prod` and `/home/ubuntu/growoperative-app/dist-demo`. Both must exist before nginx starts.
-- **URLs:** prod API `https://api.growoperative.app`, demo/beta API `https://demo.growoperative.app/v1/`
+  - `dpi.growoperative.app` → `backend-demo` (demo API; added during the Cloudflare migration so the CF demo/beta frontends have a demo backend host separate from their own host)
+  - Other hosts on this nginx: `api.foaf.io`, `dpi.foaf.io`, `auth.foaf.io`, `dauth.foaf.io`.
+  - The old static-frontend server blocks for `growoperative.app` / `demo.growoperative.app` / `beta.growoperative.app` still exist in `nginx.conf` but are unused (DNS for all three points at Cloudflare Pages). Safe to remove for tidiness; harmless to leave.
+- **Frontend dist mounts:** previously `/home/ubuntu/growoperative-app/dist-prod` + `dist-demo` were bound to `/var/www/prod` + `/var/www/demo`. **Unused** after the migration — DNS no longer resolves there. The `growoperative-app` repo's `deploy-demo.yml` / `deploy-prod.yml` workflows that populated them have been deleted; Cloudflare Pages now builds and serves the frontends directly from `main` (web + demo) and `develop` (beta).
+- **URLs:** prod API `https://api.growoperative.app`; demo API `https://dpi.growoperative.app` (was `https://demo.growoperative.app/v1/` pre-migration — the app's `apiBase.ts` now points demo at `dpi`). Web frontends: `https://web.growoperative.app` (prod), `https://demo.growoperative.app` (demo), `https://beta.growoperative.app` (soak/develop); all Cloudflare Pages.
 
 ## Key Environment Variables
 
