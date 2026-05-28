@@ -36,3 +36,5 @@
 /config/database.yml
 /private/uploads
 cookies.txt
+# Local skill symlink into parent Growoperative/.claude/skills (not portable, do not commit)
+.claude/skills/
