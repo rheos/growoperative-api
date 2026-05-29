@@ -160,6 +160,7 @@ Rails.application.routes.draw do
       # Admin invitations — currently just the seed-code primitive that mints
       # a new Subnet on redemption. Superuser-gated in the controller.
       post 'admin/invitations/seed' => 'admin/invitations#create_seed'
+      get  'admin/invitations/seed' => 'admin/invitations#list_seed'
 
       get 'site_config' => 'site_configs#show'
       resources :subnets, only: [:index] do

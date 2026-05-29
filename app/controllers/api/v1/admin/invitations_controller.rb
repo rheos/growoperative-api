@@ -9,6 +9,18 @@ module Api::V1
     class InvitationsController < ApiController
       before_action :require_superuser!
 
+      # GET /v1/admin/invitations/seed
+      # Returns the current admin's seed invitations (those with a
+      # subnet_seed_config), newest first. Read-only inventory for the
+      # "what have I already created?" view in the admin tool.
+      def list_seed
+        invitations = current_user.invitations
+          .where.not(subnet_seed_config: nil)
+          .order(created_at: :desc)
+
+        render json: invitations.map { |inv| serialize(inv) }, status: 200
+      end
+
       # POST /v1/admin/invitations/seed
       # Body:
       #   subnet_name:        "Kaslo Network"        (required)
@@ -124,7 +136,11 @@ module Api::V1
           user_type: invitation.user_type,
           status: invitation.status,
           subnet_seed_config: invitation.subnet_seed_config,
-          inviter_user_name: invitation.user&.user_name
+          inviter_user_name: invitation.user&.user_name,
+          label: invitation.label,
+          created_at: invitation.created_at&.iso8601,
+          accepted_id: invitation.accepted_id,
+          accepted_user_name: invitation.accepted_id ? User.find_by(id: invitation.accepted_id)&.user_name : nil
         }
       end
     end
