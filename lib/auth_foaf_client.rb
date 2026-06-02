@@ -90,6 +90,26 @@ class AuthFoafClient
     new.post_json('/v1/internal/invitations', body, service_token: true)
   end
 
+  def self.search_users(query:, limit: 20, include_deleted: false)
+    params = { q: query, limit: limit }
+    params[:include_deleted] = '1' if include_deleted
+    new.get_service_json("/v1/internal/users?#{URI.encode_www_form(params)}")
+  end
+
+  def self.get_user(foaf_id:)
+    encoded = URI.encode_www_form_component(foaf_id.to_s)
+    new.get_service_json("/v1/internal/users/#{encoded}")
+  end
+
+  def self.admin_reset_password(foaf_id:, new_password:)
+    encoded = URI.encode_www_form_component(foaf_id.to_s)
+    new.post_json(
+      "/v1/internal/users/#{encoded}/reset_password",
+      { new_password: new_password },
+      service_token: true
+    )
+  end
+
   # Mirror an avatar upload to auth.foaf.io. Bytes are base64'd into the
   # JSON body so we don't need multipart-post wrangling. The user's
   # bearer authorizes the call (auth.foaf.io issued it via railsbackend's
@@ -148,6 +168,10 @@ class AuthFoafClient
 
   def get_public_json(path, base_url: nil)
     request_json(:get, path, nil, service_token: false, bearer: nil, base_url: base_url)
+  end
+
+  def get_service_json(path)
+    request_json(:get, path, nil, service_token: true, bearer: nil)
   end
 
   private

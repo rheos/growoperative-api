@@ -124,7 +124,7 @@ Rake tasks: `demo:mark_users`, `demo:snapshot`, `demo:reset`, `user:update_passw
 
 - `before_action :authenticate!` on all actions by default
 - Skipped on: sessions#create, registrations#create, home#index/verify, demo#login, debug#*, resources#*
-- No self-service password reset — `ChangePasswordsController` is admin-only
+- Password change is self-service via `UsersController#update_password`; superuser password reset lives at `/v1/admin/users/:foaf_id/reset_password` and proxies to auth.foaf.io
 
 ## Key Controllers (Non-Obvious Patterns)
 
