@@ -162,6 +162,12 @@ Rails.application.routes.draw do
       post 'admin/invitations/seed' => 'admin/invitations#create_seed'
       get  'admin/invitations/seed' => 'admin/invitations#list_seed'
 
+      # Superuser-only user administration. Rails is the policy/audit
+      # boundary; auth.foaf.io owns identity search and password mutation.
+      get  'admin/users'                         => 'admin/users#index'
+      get  'admin/users/:foaf_id'                => 'admin/users#show'
+      post 'admin/users/:foaf_id/reset_password' => 'admin/users#reset_password'
+
       get 'site_config' => 'site_configs#show'
       resources :subnets, only: [:index] do
         member do
@@ -186,7 +192,6 @@ Rails.application.routes.draw do
       get 'current_user_types' => 'users#current_user_types'
       get 'private/*file_path' => 'resources#index'
       resources :item_units, only: [:index]
-      resources :change_passwords, only: [:update]
     end
   end
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html
