@@ -42,8 +42,8 @@ module Api::V1
       def reset_password
         foaf_id = params[:foaf_id].to_s
         new_password = params[:new_password].to_s
-        if new_password.length < 8
-          return render json: { error: 'password must be at least 8 characters' }, status: :unprocessable_entity
+        if new_password.empty?
+          return render json: { error: 'password is required' }, status: :unprocessable_entity
         end
 
         target_identity = identity_for_audit(foaf_id)

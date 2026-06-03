@@ -168,14 +168,29 @@ RSpec.describe 'Admin users API', type: :request, skip_hooks: true do
       expect(audit.metadata.to_json).not_to include('new password 123')
     end
 
-    it 'rejects too-short passwords before calling auth.foaf.io' do
+    it 'rejects empty passwords before calling auth.foaf.io' do
       expect(AuthFoafClient).not_to receive(:admin_reset_password)
 
       post '/v1/admin/users/someone/reset_password',
-           params: { new_password: 'short' }.to_json,
+           params: { new_password: '' }.to_json,
            headers: super_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it 'forwards short admin-set passwords without enforcing the user-facing 8-char minimum' do
+      allow(AuthFoafClient).to receive(:get_user)
+        .with(foaf_id: 'someone')
+        .and_return([200, { 'identity' => { 'foaf_id' => 'someone', 'user_name' => 'someone' } }])
+      expect(AuthFoafClient).to receive(:admin_reset_password)
+        .with(foaf_id: 'someone', new_password: '12345')
+        .and_return([200, { 'foaf_id' => 'someone', 'tokens_invalid_before' => '2026-06-01T12:00:00Z', 'sessions_invalidated' => true }])
+
+      post '/v1/admin/users/someone/reset_password',
+           params: { new_password: '12345' }.to_json,
+           headers: super_headers
+
+      expect(response).to have_http_status(:ok)
     end
 
     it 'allows a superuser to reset their own password through this path' do
