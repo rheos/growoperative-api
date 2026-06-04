@@ -21,6 +21,17 @@ Rails.application.routes.draw do
       resource :sessions, only: %i[show create destroy]
       get 'profile' => 'users#app_profile'
 
+      # Job 49 — OAuth provider login. Thin proxy to foaf-auth's
+      # /v1/oauth/* surface; the app talks only to railsbackend for
+      # everything, so foaf-auth's endpoints get mirrored here.
+      get  'oauth/providers',          to: 'o_auth_proxy#providers'
+      post 'oauth/:provider/start',    to: 'o_auth_proxy#start',    constraints: { provider: /[a-z]+/ }
+      post 'oauth/:provider/callback', to: 'o_auth_proxy#callback', constraints: { provider: /[a-z]+/ }
+      post 'oauth/apple/native',       to: 'o_auth_proxy#apple_native'
+      get  'oauth/links',              to: 'o_auth_proxy#links_index'
+      post 'oauth/links/complete',     to: 'o_auth_proxy#links_complete'
+      delete 'oauth/links/:provider',  to: 'o_auth_proxy#links_destroy', constraints: { provider: /[a-z]+/ }
+
       # Job 11: v1 onboarding contract (master plan §1 / §Atomic
       # accept/onboarding recovery). Idempotent on (invitation_code,
       # accepted user). Status endpoint is pollable for the saga's
