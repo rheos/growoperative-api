@@ -6,15 +6,35 @@ class Api::V1::OnboardingController < Api::V1::ApiController
   # Growoperative-side adapter.
 
   # POST /v1/onboarding
-  # Body: { invitation_code, user_type? }
+  # Body: { invitation_code?, user_type? }
   # Returns the v1 envelope ({ token, identity }) on success, with a
   # top-level `onboarding` block describing the terminal status.
+  #
+  # Two paths:
+  #   1. invitation_code present → full onboarding via OnboardingService:
+  #      creates the User row, consumes the invitation, sets up the
+  #      role + subnet + relationships. Canonical signup completion.
+  #   2. invitation_code absent → "User row ensure" mode (Job 49 / OAuth):
+  #      `ensure_local_user_for_current_identity!` (called above) creates
+  #      the User row from the JWT claims if it doesn't exist, then
+  #      returns the profile envelope without touching invitations. Used
+  #      by OAuth login flows where the JWT identifies an existing auth
+  #      identity that lacks a local User row, so the app doesn't
+  #      401-storm on its first dashboard call.
   def create
     ensure_local_user_for_current_identity!
 
     code = params[:invitation_code] || params[:invited_code] || params.dig(:onboarding, :invitation_code)
+
     if code.blank?
-      render json: { error: 'invitation_code is required' }, status: :bad_request
+      if current_user.nil?
+        render json: { error: 'unauthenticated' }, status: :unauthorized
+        return
+      end
+      render json: UserSerializer.new(current_user).serializable_hash.merge(
+        identity: identity_payload(current_user),
+        onboarding: nil,
+      ), status: :ok
       return
     end
 
