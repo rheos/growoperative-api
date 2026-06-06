@@ -183,7 +183,13 @@ module Api::V1
 		# contact list
 		# url : v1/users/contact_list?:target_inventory_id
 		def contact_list
-			relationships = Relationship.where("user_id = #{current_user.id} OR friend_id = #{current_user.id}")
+			# Skip relationships whose counterparty was deleted — a nil user/friend
+			# would nil out below and crash the serialization + price loop, taking
+			# out the whole contact book over one stale row (saw this with a leftover
+			# relationship pointing at a deleted demo user).
+			relationships = Relationship.where("user_id = :id OR friend_id = :id", id: current_user.id)
+				.includes(:user, :friend)
+				.select { |rel| rel.user.present? && rel.friend.present? }
 
 			res = relationships.as_json(include: [{user: {include: [:user_groups], methods: [:avatar_url]} }, {friend: {include: [:user_groups], methods: [:avatar_url]} }, :user_relationship_prices])
 			hydrate_contact_identity_avatars!(res)
