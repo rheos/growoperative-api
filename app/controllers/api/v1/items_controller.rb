@@ -16,7 +16,10 @@ module Api::V1
 
       if (!current_user.is_producer? && relationships.count > 0 && range_degree > 0) || (params[:dashboard_type] == 'consumer')
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
-  
+        # Drop ids whose user was deleted (stale relationships) so the User.find
+        # calls below can't raise RecordNotFound and 500 the whole dashboard.
+        users = User.where(id: users).pluck(:id)
+
         # include only retailer relations if user is a consumer
         if params[:dashboard_type] != 'consumer'
           users = users.select {|id| !User.find(id).only_consumer_retailer?}
