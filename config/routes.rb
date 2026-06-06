@@ -28,6 +28,7 @@ Rails.application.routes.draw do
       post 'oauth/:provider/start',    to: 'o_auth_proxy#start',    constraints: { provider: /[a-z]+/ }
       post 'oauth/:provider/callback', to: 'o_auth_proxy#callback', constraints: { provider: /[a-z]+/ }
       post 'oauth/apple/native',       to: 'o_auth_proxy#apple_native'
+      post 'oauth/google/native',      to: 'o_auth_proxy#google_native'
       get  'oauth/links',              to: 'o_auth_proxy#links_index'
       post 'oauth/links/complete',     to: 'o_auth_proxy#links_complete'
       delete 'oauth/links/:provider',  to: 'o_auth_proxy#links_destroy', constraints: { provider: /[a-z]+/ }

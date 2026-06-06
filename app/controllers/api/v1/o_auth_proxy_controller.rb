@@ -26,6 +26,10 @@ module Api::V1
       forward_post('/v1/oauth/apple/native', json_body)
     end
 
+    def google_native
+      forward_post('/v1/oauth/google/native', json_body)
+    end
+
     def links_index
       forward_get('/v1/oauth/links', bearer: bearer_token)
     end
