@@ -86,18 +86,27 @@ RSpec.describe 'v1 user endpoints', type: :request do
   end
 
   describe 'PATCH /v1/users/password (alias)' do
-    it 'proxies to auth.foaf.io and returns a refreshed token' do
-      # Job 42: password change is owned by auth.foaf.io. railsbackend
-      # forwards current_password + new password and surfaces the new
-      # bearer; the local users.encrypted_password row is not touched
-      # (and is irrelevant after Job 43's HS256 sunset).
+    it 'proxies session-authorized password set/update and returns a refreshed token' do
+      # Password set/update is owned by auth.foaf.io. railsbackend forwards
+      # only the replacement password and surfaces the new bearer; the local
+      # users.encrypted_password row is not touched.
       patch '/v1/users/password',
-        params: { user: { current_password: password, password: 'newpw1234!', password_confirmation: 'newpw1234!' } },
+        params: { user: { password: 'newpw1234!', password_confirmation: 'newpw1234!' } },
         env: auth_headers
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)['token']).to be_a(String).and(be_present)
+      expect(JSON.parse(response.body)['identity']['has_password']).to be true
       expect(AuthFoafClient).to have_received(:change_password)
-        .with(hash_including(current_password: password, new_password: 'newpw1234!'))
+        .with(hash_including(new_password: 'newpw1234!'))
+    end
+
+    it 'rejects mismatched confirmation before proxying' do
+      patch '/v1/users/password',
+        params: { user: { password: 'newpw1234!', password_confirmation: 'different' } },
+        env: auth_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(AuthFoafClient).not_to have_received(:change_password)
     end
   end
 

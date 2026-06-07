@@ -129,10 +129,9 @@ class AuthFoafClient
     new.get_public_json("/v1/users/by_handle/#{encoded}", base_url: public_base_url)
   end
 
-  def self.change_password(current_password:, new_password:, bearer:)
+  def self.change_password(new_password:, bearer:)
     new.put_json('/v1/users/password', {
       client_id: audience,
-      current_password: current_password,
       password: new_password,
       password_confirmation: new_password
     }, bearer: bearer)

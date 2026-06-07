@@ -309,30 +309,33 @@ module Api::V1
 		# URL : v1/users/update_password
 		# Method : PATCH
 		# Parameter : {"user": {"password": "hello124","password_confirmation": "hello124"}}
-		def update_password
-			# Job 42: proxy password change to auth.foaf.io (which owns the
-			# canonical hash). Returns the new RS256 token from the auth
-			# service so the client can refresh its bearer.
-			current_password = params.dig(:user, :current_password).to_s
-			new_password = params.dig(:user, :password).to_s
-			confirm = params.dig(:user, :password_confirmation).to_s
-			if current_password.blank? || new_password.blank? || new_password != confirm
-				return render json: { message: 'Invalid password params' }, status: 422
-			end
+			def update_password
+				# Proxy session-authorized password set/update to auth.foaf.io,
+				# which owns the canonical hash. Returns the new RS256 token
+				# and identity from the auth service so the client can refresh
+				# its bearer and account-type state.
+				new_password = params.dig(:user, :password).to_s
+				confirm = params.dig(:user, :password_confirmation).to_s
+				if new_password.blank? || new_password != confirm
+					return render json: { message: 'Invalid password params' }, status: 422
+				end
 
 			match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
-			bearer = match && match[1]
+				bearer = match && match[1]
 
-			status, body = AuthFoafClient.change_password(
-				current_password: current_password,
-				new_password: new_password,
-				bearer: bearer
-			)
-			if status == 200 && body['token']
-				render json: { message: 'Password changed successfully.', token: body['token'] }
-			elsif status == 422
-				render json: { message: body['error'] || 'current password is not valid' }, status: 422
-			else
+				status, body = AuthFoafClient.change_password(
+					new_password: new_password,
+					bearer: bearer
+				)
+				if status == 200 && body['token']
+					render json: UserSerializer.new(current_user).serializable_hash.merge(
+						message: 'Password saved successfully.',
+						token: body['token'],
+						identity: body['identity'] || identity_payload(current_user)
+					)
+				elsif status == 422
+					render json: { message: body['error'] || 'Invalid password' }, status: 422
+				else
 				Rails.logger.error("auth.foaf.io password change failed: status=#{status} body=#{body.inspect}")
 				render json: { message: 'Password change failed' }, status: :bad_gateway
 			end
