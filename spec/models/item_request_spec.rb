@@ -141,4 +141,34 @@ RSpec.describe ItemRequest, type: :model, skip_hooks: true do
     expect(reserved.item.pack_contains_quantity.to_f).to eq(24.0)
     expect(reserved.item.pack_contains_unit).to eq(bottle)
   end
+
+  it 'retries a deadlocked accept and still decrements inventory' do
+    pound = unit('lb', name: 'pounds', unit_type: :weight, equivalent: 453.592)
+    data = build_request(source_unit: pound, quantity: 10, request_quantity: 2)
+    request = data[:request]
+
+    calls = 0
+    allow(request).to receive(:perform_accept!).and_wrap_original do |original, *args|
+      calls += 1
+      raise ActiveRecord::Deadlocked, 'simulated deadlock' if calls == 1
+      original.call(*args)
+    end
+
+    expect(request.accept_request).to eq(true)
+    expect(calls).to eq(2)
+    expect(request.reload).to be_accepted
+    expect(data[:inventory].reload.quantity).to eq(8)
+  end
+
+  it 'gives up after the retry limit and re-raises the deadlock' do
+    pound = unit('lb', name: 'pounds', unit_type: :weight, equivalent: 453.592)
+    data = build_request(source_unit: pound, quantity: 10, request_quantity: 2)
+    request = data[:request]
+
+    allow(request).to receive(:perform_accept!).and_raise(ActiveRecord::Deadlocked.new('persistent deadlock'))
+
+    expect { request.accept_request }.to raise_error(ActiveRecord::Deadlocked)
+    expect(request).to have_received(:perform_accept!).exactly(ItemRequest::MAX_ACCEPT_ATTEMPTS).times
+    expect(data[:inventory].reload.quantity).to eq(10)
+  end
 end
