@@ -62,8 +62,25 @@ RSpec.configure do |config|
       }]
     end
 
-    allow(AuthFoafClient).to receive(:change_password) do |current_password:, new_password:, bearer:|
-      [200, { 'token' => 'test-rs256-refresh' }]
+    allow(AuthFoafClient).to receive(:change_password) do |new_password:, bearer:|
+      decoded = JwtDecodingService.new(bearer).decrypt! rescue nil
+      foaf_id = decoded && decoded['sub']
+      user = foaf_id && User.find_by(foaf_id: foaf_id)
+      [200, {
+        'token' => 'test-rs256-refresh',
+        'identity' => user ? {
+          'foaf_id' => user.foaf_id,
+          'user_name' => user.user_name,
+          'display_name' => user.display_name,
+          'first_name' => user.first_name,
+          'last_name' => user.last_name,
+          'email' => user.email,
+          'has_password' => true,
+          'avatar_url' => nil,
+          'created_at' => user.created_at&.iso8601,
+          'updated_at' => user.updated_at&.iso8601,
+        } : nil
+      }]
     end
 
     allow(AuthFoafClient).to receive(:refresh_session) do |bearer:|
