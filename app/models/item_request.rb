@@ -15,7 +15,36 @@ class ItemRequest < ApplicationRecord
 
   scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
 
+  # "Accept all" fires concurrent accepts that contend on the same source
+  # inventory row and the same seller User row (locked in find_or_create_pending),
+  # so MySQL can pick a deadlock victim and roll one back. Retry the victim a few
+  # times before surfacing it — see the 2026-06-07 demo 500.
+  MAX_ACCEPT_ATTEMPTS = 3
+  ACCEPT_RETRY_BACKOFF = 0.05 # seconds, multiplied by attempt number
+
   def accept_request
+    attempts = 0
+    begin
+      perform_accept!
+      true
+    rescue Inventory::UnitConversionError => e
+      {
+        message: "This item is sold by #{e.inventory_unit.unit_name}; you requested #{e.requested_unit.unit_name}. Please pick a matching unit.",
+        error: 'unit_conversion_mismatch'
+      }
+    rescue ActiveRecord::Deadlocked
+      attempts += 1
+      raise if attempts >= MAX_ACCEPT_ATTEMPTS
+      # The rolled-back transaction left self.status mutated to :accepted in memory;
+      # reload so the retry reads the true DB state (still :pending) and re-runs the
+      # inventory-decrement branch instead of skipping it.
+      reload
+      sleep(ACCEPT_RETRY_BACKOFF * attempts)
+      retry
+    end
+  end
+
+  def perform_accept!
     ActiveRecord::Base.transaction do
       prev_status = self.status
       self.update!(status: :accepted, accepted_at: DateTime.now)
@@ -67,12 +96,6 @@ class ItemRequest < ApplicationRecord
         end
       end
     end
-    true
-  rescue Inventory::UnitConversionError => e
-    {
-      message: "This item is sold by #{e.inventory_unit.unit_name}; you requested #{e.requested_unit.unit_name}. Please pick a matching unit.",
-      error: 'unit_conversion_mismatch'
-    }
   end
 
   def ship (multi = false)
