@@ -137,6 +137,27 @@ class AuthFoafClient
     }, bearer: bearer)
   end
 
+  # Unauthenticated password-reset-by-email proxy (no bearer). `email` is the
+  # user's raw handle-or-email input; auth.foaf.io disambiguates. `origin` is
+  # the app's web origin, which auth validates against its allowlist before
+  # building the reset link.
+  def self.password_reset_request(email:, origin:)
+    new.post_json('/v1/password_reset/request', {
+      client_id: audience,
+      email: email,
+      origin: origin
+    })
+  end
+
+  def self.password_reset_confirm(token:, password:)
+    new.post_json('/v1/password_reset/confirm', {
+      client_id: audience,
+      token: token,
+      password: password,
+      password_confirmation: password
+    })
+  end
+
   def self.audience
     ENV.fetch('FOAF_AUD', DEFAULT_AUDIENCE)
   end
