@@ -83,6 +83,37 @@ RSpec.configure do |config|
       }]
     end
 
+    allow(AuthFoafClient).to receive(:update_profile) do |patch:, bearer:|
+      decoded = JwtDecodingService.new(bearer).decrypt! rescue nil
+      foaf_id = decoded && decoded['sub']
+      user = foaf_id && User.find_by(foaf_id: foaf_id)
+      if user
+        p = patch.to_h.symbolize_keys
+        # Mirror foaf-auth's update_profile email semantics: a direct `email`
+        # write is dropped (verified-email changes flow through pending_email),
+        # so a sent `email` does NOT change the verified email here.
+        [200, {
+          'token' => JwtGenerationService.new(user).token,
+          'identity' => {
+            'foaf_id' => user.foaf_id,
+            'user_name' => user.user_name,
+            'display_name' => p.fetch(:display_name, user.display_name),
+            'first_name' => p.fetch(:first_name, user.first_name),
+            'last_name' => p.fetch(:last_name, user.last_name),
+            'email' => user.email,
+            'email_verified_at' => nil,
+            'pending_email' => p[:pending_email],
+            'has_password' => true,
+            'avatar_url' => nil,
+            'created_at' => user.created_at&.iso8601,
+            'updated_at' => user.updated_at&.iso8601,
+          }
+        }]
+      else
+        [401, { 'error' => 'invalid bearer' }]
+      end
+    end
+
     allow(AuthFoafClient).to receive(:refresh_session) do |bearer:|
       decoded = JwtDecodingService.new(bearer).decrypt! rescue nil
       foaf_id = decoded && decoded['sub']

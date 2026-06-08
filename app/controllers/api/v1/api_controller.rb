@@ -68,6 +68,12 @@ class Api::V1::ApiController < ApplicationController
       first_name: user.first_name,
       last_name: user.last_name,
       email: user.email,
+      # Identity-only email-verification fields. The local users table doesn't
+      # carry these columns (Job 50 out-of-scope), so they fall back to nil
+      # here; the authoritative values arrive in auth's `body['identity']` on
+      # profile update + session refresh.
+      email_verified_at: (user.respond_to?(:email_verified_at) ? user.email_verified_at&.iso8601 : nil),
+      pending_email: (user.respond_to?(:pending_email) ? user.pending_email : nil),
       avatar_url: user.avatar_url,
       created_at: user.created_at&.iso8601,
       updated_at: user.updated_at&.iso8601,
