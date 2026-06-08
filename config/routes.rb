@@ -38,6 +38,12 @@ Rails.application.routes.draw do
       post 'password_resets'         => 'password_resets#create'
       post 'password_resets/confirm' => 'password_resets#confirm'
 
+      # Email verification. Thin proxy to foaf-auth's /v1/email_verification/*.
+      # `create` is authenticated (targets the caller's pending/unverified
+      # email via Bearer); `confirm` skips authenticate! (works from the link).
+      post 'email_verifications'         => 'email_verifications#create'
+      post 'email_verifications/confirm' => 'email_verifications#confirm'
+
       # Job 11: v1 onboarding contract (master plan §1 / §Atomic
       # accept/onboarding recovery). Idempotent on (invitation_code,
       # accepted user). Status endpoint is pollable for the saga's

@@ -137,6 +137,35 @@ class AuthFoafClient
     }, bearer: bearer)
   end
 
+  # Identity-shaped profile update proxied to auth.foaf.io, which owns the
+  # canonical identity. `patch` is the whitelisted FoafIdentity field hash
+  # (first_name/last_name/display_name/pending_email/email). Auth handles the
+  # email semantics: a verified-email change flows through `pending_email`,
+  # `email: ''` clears it (gated on an acknowledged recovery phrase), and a
+  # direct `email` write is dropped. Returns auth's `{ token, identity }`.
+  def self.update_profile(patch:, bearer:)
+    new.patch_json('/v1/users/profile', { client_id: audience }.merge(patch.to_h.symbolize_keys), bearer: bearer)
+  end
+
+  # Authenticated email-verification request. Auth mints a single-use token for
+  # the calling identity's pending/unverified email and emails a verify link.
+  # `origin` is the app web origin auth validates against its allowlist.
+  def self.email_verification_request(bearer:, origin:)
+    new.post_json('/v1/email_verification/request', {
+      client_id: audience,
+      origin: origin
+    }, bearer: bearer)
+  end
+
+  # Unauthenticated email-verification confirm (no bearer — works from the
+  # email link). Promotes the snapshotted address to the verified email.
+  def self.email_verification_confirm(token:)
+    new.post_json('/v1/email_verification/confirm', {
+      client_id: audience,
+      token: token
+    })
+  end
+
   # Unauthenticated password-reset-by-email proxy (no bearer). `email` is the
   # user's raw handle-or-email input; auth.foaf.io disambiguates. `origin` is
   # the app's web origin, which auth validates against its allowlist before
@@ -182,6 +211,10 @@ class AuthFoafClient
     request_json(:put, path, body, service_token: service_token, bearer: bearer)
   end
 
+  def patch_json(path, body, service_token: false, bearer: nil)
+    request_json(:patch, path, body, service_token: service_token, bearer: bearer)
+  end
+
   def get_json(path, bearer:)
     request_json(:get, path, nil, service_token: false, bearer: bearer)
   end
@@ -206,6 +239,7 @@ class AuthFoafClient
     req_class =
       case method
       when :put then Net::HTTP::Put
+      when :patch then Net::HTTP::Patch
       when :get then Net::HTTP::Get
       else Net::HTTP::Post
       end

@@ -53,14 +53,18 @@ RSpec.describe 'v1 user endpoints', type: :request do
       expect(user.first_name).to eq('Updated')
     end
 
-    it 'updates email and returns it in the identity payload' do
+    it 'stages an email change as pending_email — never a direct verified-email write (Job 50)' do
+      # Email changes now flow through pending_email + a verification step.
+      # auth.foaf.io drops a direct `email` write; the verified email is only
+      # promoted on confirm. The local users.email row is left untouched.
       patch '/v1/users/profile',
-        params: { user: { email: 'fresh_email@example.com' } },
+        params: { user: { pending_email: 'fresh_email@example.com' } },
         env: auth_headers
       expect(response).to have_http_status(:ok)
-      expect(parsed['identity']['email']).to eq('fresh_email@example.com')
+      expect(parsed['identity']['pending_email']).to eq('fresh_email@example.com')
+      expect(parsed['identity']['email']).to eq('job10_user@example.com') # verified email untouched
       user.reload
-      expect(user.email).to eq('fresh_email@example.com')
+      expect(user.email).to eq('job10_user@example.com')
     end
 
     it 'ignores fields outside the FoafIdentity allowlist (no role/admin escalation)' do

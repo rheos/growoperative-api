@@ -513,18 +513,34 @@ module Api::V1
 	end
 
 	# PATCH /v1/users/profile
-	# Identity-shaped self-update. Accepts first_name, last_name,
-	# display_name, and email. Fields outside the FoafIdentity whitelist are
-	# ignored — profile-shaped updates (role, subnet, invite_limit) live
-	# elsewhere on purpose.
+	# Identity-shaped self-update. Proxies to auth.foaf.io, which owns the
+	# canonical identity (mirrors update_password). Accepts first_name,
+	# last_name, display_name, pending_email, and email. Auth handles the email
+	# semantics: a verified-email change flows through `pending_email` + a
+	# verification step; `email: ''` clears it (gated on a recovery phrase); a
+	# direct `email` write is dropped. The app reads email/email_verified_at/
+	# pending_email from auth's identity block. We still mirror the app-owned
+	# name fields onto the local users row so contact_list / serializers stay
+	# consistent without a round-trip to auth.
 	def update_profile
 		patch = profile_update_params
-		if current_user.update(patch)
+
+		match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
+		bearer = match && match[1]
+
+		status, body = AuthFoafClient.update_profile(patch: patch.to_h, bearer: bearer)
+
+		if status == 200
+			local_mirror = patch.slice(:first_name, :last_name, :display_name)
+			current_user.update(local_mirror) if local_mirror.present?
 			render json: UserSerializer.new(current_user).serializable_hash.merge(
-				identity: identity_payload(current_user),
+				identity: body['identity'] || identity_payload(current_user),
 			), status: 200
+		elsif status == 422
+			render json: { errors: [body['error']].compact, code: body['code'] }.compact, status: 422
 		else
-			render json: { errors: current_user.errors.full_messages }, status: 422
+			Rails.logger.error("auth.foaf.io profile update failed: status=#{status} body=#{body.inspect}")
+			render json: { message: 'Profile update failed' }, status: :bad_gateway
 		end
 	end
 
@@ -633,7 +649,7 @@ module Api::V1
 			# `invite_limit` and `is_admin` go through their own routes.
 			source = params[:user].present? ? params[:user] : params
 			source = ActionController::Parameters.new(source) unless source.is_a?(ActionController::Parameters)
-			source.permit(:first_name, :last_name, :display_name, :email)
+			source.permit(:first_name, :last_name, :display_name, :email, :pending_email)
 		end
 
 
