@@ -33,6 +33,11 @@ Rails.application.routes.draw do
       post 'oauth/links/complete',     to: 'o_auth_proxy#links_complete'
       delete 'oauth/links/:provider',  to: 'o_auth_proxy#links_destroy', constraints: { provider: /[a-z]+/ }
 
+      # Password reset by email. Thin (unauthenticated) proxy to foaf-auth's
+      # /v1/password_reset/* surface; PasswordResetsController skips authenticate!.
+      post 'password_resets'         => 'password_resets#create'
+      post 'password_resets/confirm' => 'password_resets#confirm'
+
       # Job 11: v1 onboarding contract (master plan §1 / §Atomic
       # accept/onboarding recovery). Idempotent on (invitation_code,
       # accepted user). Status endpoint is pollable for the saga's
