@@ -80,6 +80,12 @@ module Api::V1
 					@invitation.user_price = params[:user_price]
 				end
 				@invitation.status = 0
+				# Multi-use codes can be redeemed by many people and switched
+				# on/off by the creator. Defaults to single-use when the param
+				# is absent. (auth.foaf.io still mints a single code — signup
+				# passes the inviter's foaf_id, not the code, so multi-use is
+				# transparent to the auth side.)
+				@invitation.multi_use = ActiveModel::Type::Boolean.new.cast(params[:multi_use]) || false
 				# Default the invitation's subnet to the inviter's primary. Nullable
 				# during the backfill window — once Phase 3 runs, every existing user
 				# has a primary membership and this will always be set.

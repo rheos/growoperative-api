@@ -76,6 +76,19 @@ class OnboardingService
     # Inviter / accepter sanity — same checks as legacy accept_invitation.
     return reject('role_policy_violation', invitation, 'You can not accept your own invitation.') if invitation.user_id == @user.id
     return reject('role_policy_violation', invitation, 'Demo/non-demo crossover not allowed.') if invitation.user.demo? != @user.demo?
+
+    # Multi-use codes never go terminal (status stays pending, accepted_id
+    # stays nil), so the single-use accepted_id/status gates below can never
+    # be satisfied. Idempotency keys on whether THIS user already has a
+    # redemption row; otherwise apply effects (which records the redemption).
+    # The self-redeem / demo-crossover guards above still run first.
+    if invitation.multi_use?
+      if invitation.invitation_redemptions.exists?(user_id: @user.id)
+        return Result.new(status: 'completed', invitation: invitation, user: @user)
+      end
+      return apply_effects!(invitation)
+    end
+
     # User#after_create callbacks (set_relationship → @invitation.update(status: :accepted, accepted_id: ...))
     # flip legacy `status` to accepted as a side effect of signup. That happens
     # BEFORE the app calls /v1/onboarding, so by the time we get here the
@@ -114,13 +127,22 @@ class OnboardingService
       # doesn't carry one.
       ensure_subnet_membership!(invitation)
 
-      invitation.update!(
-        status: :accepted,
-        accepted_id: @user.id,
-        app_onboarding_status: 'completed',
-        app_onboarding_completed_at: Time.current,
-        app_onboarding_rejection_code: nil,
-      )
+      if invitation.multi_use?
+        # Multi-use codes stay pending forever; just record this redeemer.
+        # find_or_create_by! against the unique index converges with the
+        # User after_create callback's write on the same row.
+        invitation.invitation_redemptions.find_or_create_by!(user_id: @user.id) do |r|
+          r.redeemed_at = Time.current
+        end
+      else
+        invitation.update!(
+          status: :accepted,
+          accepted_id: @user.id,
+          app_onboarding_status: 'completed',
+          app_onboarding_completed_at: Time.current,
+          app_onboarding_rejection_code: nil,
+        )
+      end
     end
 
     Result.new(status: 'completed', invitation: invitation.reload, user: @user.reload)

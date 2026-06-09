@@ -35,7 +35,7 @@ RSpec.configure do |config|
       end
     end
 
-    allow(AuthFoafClient).to receive(:signup) do |user_name:, password:, email: nil, first_name: nil, last_name: nil, display_name: nil, recovery_phrase_acknowledged: false|
+    allow(AuthFoafClient).to receive(:signup) do |user_name:, password:, email: nil, first_name: nil, last_name: nil, display_name: nil, recovery_phrase_acknowledged: false, **_extra|
       foaf_id = SecureRandom.uuid
       [201, {
         'token' => 'test-rs256-token',

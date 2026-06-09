@@ -94,6 +94,16 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
+  create_table "invitation_redemptions", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
+    t.bigint "invitation_id"
+    t.bigint "user_id"
+    t.datetime "redeemed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["invitation_id", "user_id"], name: "index_invitation_redemptions_on_invitation_and_user", unique: true
+    t.index ["user_id"], name: "index_invitation_redemptions_on_user_id"
+  end
+
   create_table "invitations", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "invitation_code"
     t.bigint "user_id"
@@ -110,6 +120,8 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "app_onboarding_rejection_code"
     t.datetime "app_onboarding_completed_at"
     t.json "subnet_seed_config"
+    t.boolean "multi_use", default: false, null: false
+    t.datetime "disabled_at"
     t.index ["app_onboarding_status", "user_id"], name: "index_invitations_on_app_onboarding_status_user"
     t.index ["invitation_code"], name: "index_invitations_on_invitation_code"
     t.index ["subnet_id"], name: "index_invitations_on_subnet_id"

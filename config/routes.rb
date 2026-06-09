@@ -87,6 +87,7 @@ Rails.application.routes.draw do
       resources :invitations, only: [:index, :update] do
         put "set_user_type"
         put 'set_note_label'
+        put 'set_active'
         collection do
           patch 'user_info'
         end
