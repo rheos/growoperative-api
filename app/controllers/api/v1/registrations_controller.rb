@@ -97,6 +97,16 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       return render json: { message: "Invitation code is wrong" }, status: 422
     end
 
+    # Multi-use codes are unlimited until the creator turns them off. They
+    # never go "already used" and are exempt from the pending-slot limit —
+    # the only failure is being switched off (disabled_at set).
+    if invitation.multi_use?
+      unless invitation.active?
+        render json: { message: "This invitation code is no longer active" }, status: 422
+      end
+      return
+    end
+
     if invitation.pending?
       unless invitation.user&.ramaining_invitation_limit.to_i >= 0
         render json: { message: "Invitation limit over" }, status: 422

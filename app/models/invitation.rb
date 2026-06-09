@@ -4,6 +4,8 @@ class Invitation < ApplicationRecord
   enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
   belongs_to :user
   belongs_to :subnet, optional: true
+  has_many :invitation_redemptions, dependent: :destroy
+  has_many :redeemers, through: :invitation_redemptions, source: :user
 
   # Callbacks
   before_validation :canonicalize_invitation_code
@@ -32,6 +34,13 @@ class Invitation < ApplicationRecord
   def canonicalize_invitation_code
     return if invitation_code.blank?
     self.invitation_code = self.class.canonicalize_code(invitation_code)
+  end
+
+  # A multi-use code can be redeemed by many people and never goes terminal
+  # (status stays pending). `active?` is the on/off switch — null disabled_at
+  # means the creator hasn't turned it off.
+  def active?
+    disabled_at.nil?
   end
 
   # Random-code fallback for cases where the controller doesn't pre-fill

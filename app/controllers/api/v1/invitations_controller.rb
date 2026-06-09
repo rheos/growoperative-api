@@ -7,7 +7,7 @@ module Api::V1
 		# method : GET
 		def index
 			@invitations = current_user.invitations.joins('LEFT JOIN users ON users.id = invitations.accepted_id').select("invitations.*, COALESCE(users.nickname, users.user_name) AS accepted_user_name").to_a
-			
+
 			@invitations.each do |invitation|
 				if invitation.accepted_id
 					relation = Relationship.where("user_id IN (?) AND friend_id IN (?)", [current_user.id, invitation.accepted_id], [current_user.id, invitation.accepted_id])
@@ -25,8 +25,37 @@ module Api::V1
 				end
 			end
 
+			# Multi-use enrichment. Two batched queries total (no N+1): one
+			# grouped COUNT for redemptions_count, one joined pluck for the
+			# redeemer names. Single-use rows keep the existing accepted_id /
+			# accepted_user_name shape untouched.
+			multi_use_invitations = @invitations.select(&:multi_use?)
+			multi_ids = multi_use_invitations.map(&:id)
+			serialized = @invitations.map(&:as_json)
+
+			unless multi_ids.empty?
+				counts = InvitationRedemption.where(invitation_id: multi_ids).group(:invitation_id).count
+				redeemer_rows = InvitationRedemption
+					.where(invitation_id: multi_ids)
+					.joins(:user)
+					.pluck(:invitation_id, Arel.sql('COALESCE(users.nickname, users.user_name)'), :user_id)
+				redeemers_by_invitation = Hash.new { |h, k| h[k] = [] }
+				redeemer_rows.each do |invitation_id, name, user_id|
+					redeemers_by_invitation[invitation_id] << { user_id: user_id, name: name }
+				end
+
+				multi_index = multi_use_invitations.each_with_object({}) { |inv, h| h[inv.id] = true }
+				serialized.each do |row|
+					next unless multi_index[row['id']]
+					row['multi_use'] = true
+					row['active'] = row['disabled_at'].nil?
+					row['redemptions_count'] = counts[row['id']] || 0
+					row['redeemers'] = redeemers_by_invitation[row['id']]
+				end
+			end
+
 			render json: {
-				data: @invitations
+				data: serialized
 			}
 		end
 
@@ -99,7 +128,36 @@ module Api::V1
 			end
 		end
 
-		# This method will return user info if code is used 
+		# This api will turn a multi-use code on or off
+		# url : /v1/invitations/:invitation_id/set_active
+		# method : PUT
+		# parameter : {"active": false}  (true = on / disabled_at nil, false = off)
+		def set_active
+			@invitation = current_user.invitations.find_by(id: params[:invitation_id])
+			unless @invitation
+				render json: {
+					message: "You are not authorised to access."
+				}, status: 422
+				return
+			end
+			unless @invitation.multi_use?
+				render json: {
+					message: "Only multi-use codes can be switched on or off."
+				}, status: 422
+				return
+			end
+			active = ActiveModel::Type::Boolean.new.cast(params[:active])
+			if @invitation.update(disabled_at: active ? nil : Time.current)
+				render json: {
+					message: active ? "Invitation activated." : "Invitation deactivated.",
+					data: { id: @invitation.id, active: @invitation.active? }
+				}, status: 200
+			else
+				render json: @invitation.errors, status: 422
+			end
+		end
+
+		# This method will return user info if code is used
 		# url : /v1/invitations/user_info
 		# method : Patch
 		# parametet: {code: "code"}

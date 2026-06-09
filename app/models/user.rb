@@ -189,7 +189,16 @@ class User < ApplicationRecord
     find_invitation
     user = @invitation.try(:user)
     if user
-      @invitation.update(status: 1, accepted_id:self.id)
+      if @invitation.multi_use?
+        # Multi-use codes never go terminal: record this redeemer in the
+        # join table instead of flipping status/accepted_id. find_or_create_by!
+        # against the unique index keeps this idempotent with the onboarding path.
+        @invitation.invitation_redemptions.find_or_create_by!(user_id: self.id) do |r|
+          r.redeemed_at = Time.current
+        end
+      else
+        @invitation.update(status: 1, accepted_id:self.id)
+      end
       # This will generate user_group for register user
       self.user_groups.create(group_label: @invitation.user_type)
       # self.update user_type: @invitation.user_type
