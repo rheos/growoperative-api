@@ -191,9 +191,13 @@ RSpec.describe 'v1 onboarding', type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it 'rejects without invitation_code' do
+    it 'without invitation_code, returns 200 (Job 49 OAuth ensure-user-row mode)' do
+      # POST /v1/onboarding with no invitation_code is NOT a rejection: since
+      # Job 49 it is the "ensure the local user row exists" call used after
+      # OAuth login, and it returns the profile envelope (200) without touching
+      # invitations. (See OnboardingController#create.)
       post '/v1/onboarding', params: '{}', env: auth_headers
-      expect(response).to have_http_status(:bad_request)
+      expect(response).to have_http_status(:ok)
     end
   end
 end

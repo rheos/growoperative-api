@@ -27,7 +27,13 @@ module Api::V1
 
     # PATCH /v1/notifications/:id/read
     def read
-      notification = current_user.notifications.find(params[:id])
+      # Scoped to current_user.notifications, so another user's notification
+      # resolves to nil → an explicit 404 (rather than relying on the implicit
+      # ActiveRecord::RecordNotFound→404 rescue, which is not active in the
+      # test env where show_exceptions is off).
+      notification = current_user.notifications.find_by(id: params[:id])
+      return head :not_found unless notification
+
       notification.mark_read!
       head :ok
     end
