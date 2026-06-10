@@ -122,7 +122,11 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.json "subnet_seed_config"
     t.boolean "multi_use", default: false, null: false
     t.datetime "disabled_at"
+    t.string "auth_invitation_id"
+    t.string "code_strategy"
+    t.string "foaf_invitation_state"
     t.index ["app_onboarding_status", "user_id"], name: "index_invitations_on_app_onboarding_status_user"
+    t.index ["auth_invitation_id"], name: "index_invitations_on_auth_invitation_id"
     t.index ["invitation_code"], name: "index_invitations_on_invitation_code"
     t.index ["subnet_id"], name: "index_invitations_on_subnet_id"
     t.index ["user_id"], name: "index_invitations_on_user_id"

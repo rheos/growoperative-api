@@ -1,4 +1,15 @@
 class Invitation < ApplicationRecord
+  # Reconciliation states for `foaf_invitation_state`. This column tracks how a
+  # local invitation row relates to its authoritative FOAF (auth.foaf.io)
+  # counterpart during the issuance-authority migration. Writers (the dual-write
+  # controller in Step 07, redemption/reconciliation in Step 08) set these via
+  # the constants rather than magic strings. Internal infrastructure — no
+  # validation.
+  FOAF_STATE_UNSYNCED   = 'unsynced'.freeze   # local row created, not yet pushed to FOAF
+  FOAF_STATE_SYNCED     = 'synced'.freeze      # FOAF accepted the write; auth_invitation_id set
+  FOAF_STATE_FAILED     = 'failed'.freeze      # FOAF write attempted and failed; needs retry/reconcile
+  FOAF_STATE_RECONCILED = 'reconciled'.freeze  # divergence resolved by a later reconciliation pass
+
   # It handle status value as enum
   enum status: [ :pending, :accepted ]
   enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
@@ -49,11 +60,11 @@ class Invitation < ApplicationRecord
   def generate_invitation_code
     return if invitation_code.present?
     size = 8
-    charset = ([*('A'..'Z'),*('0'..'9')]-["O"]).sample(size).join
-     begin
-      random_string = charset
-      self.invitation_code = random_string
-    end while self.class.exists?(:invitation_code => random_string)
+    begin
+      charset = ([*('A'..'Z'), *('0'..'9')] - ['O'])
+      random_string = charset.sample(size).join
+    end while Invitation.exists?(invitation_code: random_string)
+    self.invitation_code = random_string
   end
 
 
