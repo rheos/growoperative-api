@@ -42,6 +42,27 @@ class Invitation < ApplicationRecord
     find_by(invitation_code: canonical)
   end
 
+  # Redemption-DECISION lookup (Job 51, W4). Same canonicalization as
+  # `find_by_code`, but prefers the ACTIVE row for a canonical string:
+  # not disabled, not accepted (terminal), newest-first. A freed-then-
+  # reissued code string can have several rows sharing the same canonical;
+  # at the redemption decision points we must resolve the live one.
+  #
+  # The `find_by_code` fallback is load-bearing: when no active row exists
+  # (the only row for the canonical is terminal/accepted), it resolves the
+  # terminal row so callers that branch on `accepted?`/`pending?` still see
+  # the "already used" single-use state. Historical/display lookups keep
+  # using `find_by_code` directly (they want the terminal row).
+  def self.find_active_by_code(raw)
+    canonical = canonicalize_code(raw)
+    return nil if canonical.blank?
+    where(disabled_at: nil)
+      .where.not(status: :accepted)
+      .order(created_at: :desc, id: :desc)
+      .find_by(invitation_code: canonical) ||
+      find_by_code(raw)
+  end
+
   def canonicalize_invitation_code
     return if invitation_code.blank?
     self.invitation_code = self.class.canonicalize_code(invitation_code)

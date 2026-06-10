@@ -282,7 +282,7 @@ module Api::V1
 				return
 			end
 
-			invitation = Invitation.find_by_code(params[:invited_code])
+			invitation = Invitation.find_active_by_code(params[:invited_code])
 			if invitation.nil?
 				render json: {
 					message: "Invalid invitation code."

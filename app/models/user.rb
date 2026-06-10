@@ -224,7 +224,7 @@ class User < ApplicationRecord
     end
   end
   def find_invitation
-    @invitation = Invitation.find_by_code(self.invited_code)
+    @invitation = Invitation.find_active_by_code(self.invited_code)
   end
 
   # If the inviting user is a demo user, the new user inherits the demo group

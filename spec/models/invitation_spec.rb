@@ -78,6 +78,76 @@ RSpec.describe Invitation, type: :model, skip_hooks: true do
     end
   end
 
+  describe '.find_active_by_code (Job 51 W4)' do
+    # A freed-then-reissued string can leave several rows sharing the same
+    # canonical: an older terminal/accepted row and a newer active one. The
+    # redemption-decision lookup must resolve the ACTIVE row.
+    it 'returns the active row when a newer active row shares the canonical with an older terminal row' do
+      terminal = creator.invitations.create!(
+        user_type: 'consumer', status: 1, accepted_id: creator.id, invitation_code: 'SHARED01'
+      )
+      active = creator.invitations.create!(
+        user_type: 'consumer', status: 0, invitation_code: 'SHARED01'
+      )
+
+      # Both canonicalize identically; the active (pending, not disabled) row wins.
+      expect(Invitation.find_active_by_code('shared01')).to eq(active)
+      expect(Invitation.find_active_by_code('SHARED01')).not_to eq(terminal)
+    end
+
+    it 'prefers the newest active row when more than one active row shares the canonical' do
+      older_active = creator.invitations.create!(
+        user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'SHARED02'
+      )
+      newer_active = creator.invitations.create!(
+        user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'SHARED02'
+      )
+
+      expect(Invitation.find_active_by_code('SHARED02')).to eq(newer_active)
+      expect(older_active.id).not_to eq(newer_active.id)
+    end
+
+    it 'skips a disabled row and returns nil-fallback to the terminal row only' do
+      # Disabled (active? == false) row must not be returned as the active one.
+      disabled = creator.invitations.create!(
+        user_type: 'consumer', status: 0, multi_use: true,
+        invitation_code: 'SHARED03', disabled_at: Time.current
+      )
+      # No active row exists -> falls through to find_by_code, which resolves
+      # the only row (the disabled one) by canonical. This keeps the lookup
+      # from returning nil for a code that physically exists.
+      expect(Invitation.find_active_by_code('SHARED03')).to eq(disabled)
+    end
+
+    it 'returns the terminal row via the find_by_code fallback when no active row exists (so accepted? still works)' do
+      terminal = creator.invitations.create!(
+        user_type: 'consumer', status: 1, accepted_id: creator.id, invitation_code: 'USEDONLY1'
+      )
+
+      found = Invitation.find_active_by_code('usedonly1')
+      expect(found).to eq(terminal)
+      # The single-use "already used" branch depends on this resolving the
+      # accepted row so accepted? returns true.
+      expect(found.accepted?).to eq(true)
+    end
+
+    it 'canonicalizes input exactly like find_by_code (separators + casing)' do
+      active = creator.invitations.create!(
+        user_type: 'consumer', status: 0, invitation_code: 'MAVOLENI'
+      )
+
+      expect(Invitation.find_active_by_code('mavo-leni')).to eq(active)
+      expect(Invitation.find_active_by_code('MAVO LENI')).to eq(active)
+      expect(Invitation.find_active_by_code('MaVoLeNi')).to eq(active)
+    end
+
+    it 'returns nil for a blank or unknown code' do
+      expect(Invitation.find_active_by_code(nil)).to be_nil
+      expect(Invitation.find_active_by_code('')).to be_nil
+      expect(Invitation.find_active_by_code('NOSUCHCODE')).to be_nil
+    end
+  end
+
   describe 'redemption associations' do
     let(:invitation) { creator.invitations.create!(user_type: 'consumer', status: 0, multi_use: true) }
     let(:redeemer) { User.create!(user_name: 'inv_redeemer', password: password) }

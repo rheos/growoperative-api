@@ -53,7 +53,7 @@ class OnboardingService
   end
 
   def call
-    invitation = Invitation.find_by_code(@invitation_code)
+    invitation = Invitation.find_active_by_code(@invitation_code)
     return Result.new(status: 'failed', error_message: 'Invitation not found') unless invitation
 
     # Idempotency: invitation_id + accepted_id (foaf_id stand-in for
