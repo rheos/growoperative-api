@@ -101,6 +101,20 @@ module Api::V1
 					return
 				end
 
+				# Issuance availability pre-check SEAM (Job 51 read cutover).
+				# When FOAF_AUTH_INVITE_READ_AUTHORITY == 'foaf', the advisory
+				# availability source is FOAF — fail fast on a definitive
+				# "taken" so the picker gets the same `code_taken` 409 without a
+				# wasted mint round-trip. When read authority is local (the
+				# default), this returns nil (no opinion) and we fall straight
+				# through to the FOAF-first mint, whose composite unique index +
+				# 409 stays the correctness gate either way. The flag only
+				# switches the pre-check SOURCE; it never changes which row wins.
+				if issuance_code_available?(custom_code) == false
+					render json: { error: 'code_taken' }, status: :conflict
+					return
+				end
+
 				begin
 					auth_status, auth_body = AuthFoafClient.create_invitation(
 						inviter_foaf_id: current_user.foaf_id,
@@ -672,6 +686,52 @@ module Api::V1
 			HANDLE_FORMAT.match?(handle)
 		end
 
+		# Job 51 — issuance READ-authority flag (`local` | `foaf`, default
+		# `local`). Decoupled from the dual-write bridge
+		# (`FOAF_AUTH_INVITE_BRIDGE_ENABLED`) on purpose so issuance and read
+		# cutover flip/roll-back independently (plan §Phase 3). When `'foaf'`,
+		# FOAF is authoritative for the issuance availability/uniqueness
+		# pre-check; when `'local'`, the local DB is the pre-check source.
+		#
+		# What this flag actually switches in the CURRENT code: issuance
+		# already has NO standalone local availability pre-check. For custom
+		# codes the path is FOAF-first — FOAF's composite unique index +
+		# `code_taken` (409) is the availability/uniqueness gate; for auto
+		# generators FOAF's internal retry is. So with the dual-write bridge
+		# on, FOAF is ALREADY the issuance-availability authority. This flag is
+		# the explicit, decoupled governor of that: `read_authority_foaf?`
+		# gates the FOAF-first custom availability pre-check, and the standalone
+		# `AuthFoafClient.invitation_code_available?` advisory path is reachable
+		# only when it is set. Setting it to `'foaf'` is a DEPLOY step (demo
+		# first, then prod) — the code only READS the flag here.
+		INVITE_READ_AUTHORITY_FOAF = 'foaf'.freeze
+
+		def invite_read_authority
+			ENV.fetch('FOAF_AUTH_INVITE_READ_AUTHORITY', 'local').to_s.downcase
+		end
+
+		# True when FOAF is the issuance availability/uniqueness authority for
+		# the pre-check. The dual-write bridge still has to be on for there to
+		# be a FOAF row to consult — read authority without a write bridge has
+		# nothing to read, so both gate the FOAF-first custom path.
+		def read_authority_foaf?
+			invite_read_authority == INVITE_READ_AUTHORITY_FOAF
+		end
+
+		# Standalone issuance-availability check against FOAF for a candidate
+		# code. Advisory — FOAF's composite unique index is the real arbiter;
+		# this lets a caller (e.g. a picker availability probe) fail fast. Gated
+		# by the read-authority flag: when read authority is local, this returns
+		# nil (no opinion) so callers fall through to FOAF's 409 at mint time.
+		# Returns true/false from FOAF, or nil when not consulted / on error.
+		def issuance_code_available?(code)
+			return nil unless read_authority_foaf?
+			AuthFoafClient.invitation_code_available?(code: code, target_app: 'growoperative')
+		rescue StandardError => e
+			Rails.logger.warn("generate_invitation: FOAF availability pre-check failed (#{e.class}: #{e.message}); deferring to mint-time gate")
+			nil
+		end
+
 		# Build the local invitation row with the shared issuance fields
 		# (user_type/user_price + subnet default + role-policy clamp + multi_use).
 		# Code assignment (FOAF mirror or local fallback) is the caller's job.
@@ -711,6 +771,14 @@ module Api::V1
 			if @invitation.save
 				payload = @invitation.as_json
 				payload['display_code'] = display_code.presence || derive_display_code(@invitation.invitation_code)
+				# Stale-link id-first resolution (Job 51 step 2): expose the
+				# durable FOAF authority id as `invitation_id` so the app can
+				# embed it in invite links (`/signup?invite_code=...&invitation_id=...`).
+				# Sourced from the local row's `auth_invitation_id` (set on a
+				# synced FOAF mint; nil for unsynced/local-only rows, which have
+				# no FOAF authority id to embed). `as_json` already emits
+				# `auth_invitation_id`; this is the explicit, app-facing alias.
+				payload['invitation_id'] = @invitation.auth_invitation_id
 				render json: payload, status: 200
 			else
 				render json: @invitation.errors, status: 422

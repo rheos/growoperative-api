@@ -31,6 +31,15 @@ RSpec.describe 'UsersController#generate_invitation dual-write', type: :request,
     ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED'] = prior
   end
 
+  # Job 51 read cutover — issuance read-authority flag (`local` | `foaf`).
+  def with_read_authority(value)
+    prior = ENV['FOAF_AUTH_INVITE_READ_AUTHORITY']
+    ENV['FOAF_AUTH_INVITE_READ_AUTHORITY'] = value
+    yield
+  ensure
+    ENV['FOAF_AUTH_INVITE_READ_AUTHORITY'] = prior
+  end
+
   describe 'bridge OFF (default — pure local, no FOAF)' do
     it 'creates a local row and never calls FOAF' do
       with_bridge(false) do
@@ -277,6 +286,117 @@ RSpec.describe 'UsersController#generate_invitation dual-write', type: :request,
           }.not_to change(Invitation, :count)
           expect(response).to have_http_status(503)
           expect(parsed['error']).to eq('foaf_unavailable_for_custom')
+        end
+      end
+    end
+  end
+
+  # Job 51 step 2 — stale-link id-first resolution. The response envelope
+  # must expose `invitation_id` (sourced from the local row's
+  # `auth_invitation_id`) so the app embeds the durable FOAF authority id in
+  # invite links. Synced rows carry the id; unsynced/local-only rows have no
+  # FOAF authority id, so it is null (still present as a key).
+  describe 'invitation_id in the response envelope' do
+    it 'includes invitation_id == auth_invitation_id on a synced FOAF mint' do
+      with_bridge(true) do
+        allow(AuthFoafClient).to receive(:create_invitation).and_return(
+          [201, {
+            'invitation_id' => 'foaf-inv-id-1',
+            'code' => 'abcd1234',
+            'display_code' => 'abcd 1234',
+            'code_strategy' => 'hexstring'
+          }]
+        )
+
+        get '/v1/users/generate_invitation', params: { user_type: 'consumer' }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+
+      inv = Invitation.order(created_at: :desc).first
+      expect(parsed).to have_key('invitation_id')
+      expect(parsed['invitation_id']).to eq('foaf-inv-id-1')
+      expect(parsed['invitation_id']).to eq(inv.auth_invitation_id)
+    end
+
+    it 'returns a null invitation_id (key present) for an unsynced local-only row' do
+      with_bridge(false) do
+        get '/v1/users/generate_invitation', params: { user_type: 'consumer' }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+
+      expect(parsed).to have_key('invitation_id')
+      expect(parsed['invitation_id']).to be_nil
+    end
+  end
+
+  # Job 51 read cutover — FOAF_AUTH_INVITE_READ_AUTHORITY governs the issuance
+  # availability pre-check SOURCE on the custom path. The composite unique
+  # index + FOAF's mint-time 409 stays the correctness gate at both values.
+  describe 'read-authority flag — issuance availability pre-check (custom path)' do
+    let(:custom_params) { { user_type: 'consumer', generator: 'custom', custom_code: 'friends1', multi_use: 'true' } }
+
+    context "when FOAF_AUTH_INVITE_READ_AUTHORITY == 'local' (default)" do
+      it 'does NOT run a FOAF availability pre-check; mint-time 409 is the gate' do
+        with_read_authority('local') do
+          with_bridge(true) do
+            expect(AuthFoafClient).not_to receive(:invitation_code_available?)
+            allow(AuthFoafClient).to receive(:create_invitation).and_return(
+              [201, { 'invitation_id' => 'foaf-c-local', 'code' => 'friends1', 'display_code' => 'friends1', 'code_strategy' => 'custom' }]
+            )
+
+            get '/v1/users/generate_invitation', params: custom_params, headers: auth_headers
+            expect(response).to have_http_status(200)
+          end
+        end
+      end
+    end
+
+    context "when FOAF_AUTH_INVITE_READ_AUTHORITY == 'foaf'" do
+      it 'consults FOAF availability and short-circuits 409 code_taken when unavailable, never minting' do
+        with_read_authority('foaf') do
+          with_bridge(true) do
+            expect(AuthFoafClient).to receive(:invitation_code_available?).with(
+              code: 'friends1', target_app: 'growoperative'
+            ).and_return(false)
+            expect(AuthFoafClient).not_to receive(:create_invitation)
+
+            expect {
+              get '/v1/users/generate_invitation', params: custom_params, headers: auth_headers
+            }.not_to change(Invitation, :count)
+            expect(response).to have_http_status(409)
+            expect(parsed['error']).to eq('code_taken')
+          end
+        end
+      end
+
+      it 'proceeds to mint when FOAF availability says available' do
+        with_read_authority('foaf') do
+          with_bridge(true) do
+            expect(AuthFoafClient).to receive(:invitation_code_available?).with(
+              code: 'friends1', target_app: 'growoperative'
+            ).and_return(true)
+            allow(AuthFoafClient).to receive(:create_invitation).and_return(
+              [201, { 'invitation_id' => 'foaf-c-avail', 'code' => 'friends1', 'display_code' => 'friends1', 'code_strategy' => 'custom' }]
+            )
+
+            get '/v1/users/generate_invitation', params: custom_params, headers: auth_headers
+            expect(response).to have_http_status(200)
+            expect(parsed['invitation_id']).to eq('foaf-c-avail')
+          end
+        end
+      end
+
+      it 'defers to the mint-time gate when the availability pre-check raises (no false 409)' do
+        with_read_authority('foaf') do
+          with_bridge(true) do
+            allow(AuthFoafClient).to receive(:invitation_code_available?).and_raise(StandardError, 'boom')
+            allow(AuthFoafClient).to receive(:create_invitation).and_return(
+              [201, { 'invitation_id' => 'foaf-c-raise', 'code' => 'friends1', 'display_code' => 'friends1', 'code_strategy' => 'custom' }]
+            )
+
+            get '/v1/users/generate_invitation', params: custom_params, headers: auth_headers
+            expect(response).to have_http_status(200)
+          end
         end
       end
     end
