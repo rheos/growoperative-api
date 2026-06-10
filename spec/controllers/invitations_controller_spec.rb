@@ -110,4 +110,74 @@ RSpec.describe 'Invitations controller — multi-use', type: :request, skip_hook
       expect(invitation.reload.disabled_at).to be_nil
     end
   end
+
+  # Job 51 — set_active signals the issuance lifecycle into FOAF when the
+  # bridge is on and the row has a FOAF authority id. Best-effort: a FOAF
+  # failure degrades to liveness only and never raises to the caller.
+  describe 'PUT /v1/invitations/:id/set_active — FOAF signal (Job 51)' do
+    let!(:synced) do
+      owner.invitations.create!(
+        user_type: 'consumer', status: 0, multi_use: true,
+        invitation_code: 'ICFOAF1', auth_invitation_id: 'foaf-inv-1'
+      )
+    end
+
+    def with_bridge(on)
+      prior = ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED']
+      ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED'] = on ? 'true' : nil
+      yield
+    ensure
+      ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED'] = prior
+    end
+
+    it 'calls AuthFoafClient.disable_invitation with the stored auth_invitation_id on disable' do
+      with_bridge(true) do
+        expect(AuthFoafClient).to receive(:disable_invitation).with(invitation_id: 'foaf-inv-1').and_return({})
+
+        put "/v1/invitations/#{synced.id}/set_active", params: { active: false }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+      expect(synced.reload.disabled_at).to be_present
+    end
+
+    it 'calls AuthFoafClient.enable_invitation on re-enable' do
+      synced.update!(disabled_at: Time.current)
+      with_bridge(true) do
+        expect(AuthFoafClient).to receive(:enable_invitation).with(hash_including(invitation_id: 'foaf-inv-1')).and_return({})
+
+        put "/v1/invitations/#{synced.id}/set_active", params: { active: true }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+      expect(synced.reload.disabled_at).to be_nil
+    end
+
+    it 'does not raise to the caller when the FOAF disable signal fails' do
+      with_bridge(true) do
+        allow(AuthFoafClient).to receive(:disable_invitation).and_raise(AuthFoafClient::Error.new(status: 500, body: {}))
+
+        put "/v1/invitations/#{synced.id}/set_active", params: { active: false }, headers: auth_headers
+        expect(response).to have_http_status(200)
+        expect(parsed['data']['active']).to eq(false)
+      end
+      # The local toggle still succeeded — liveness degraded, not correctness.
+      expect(synced.reload.disabled_at).to be_present
+    end
+
+    it 'does not signal FOAF when the bridge is off' do
+      with_bridge(false) do
+        expect(AuthFoafClient).not_to receive(:disable_invitation)
+        put "/v1/invitations/#{synced.id}/set_active", params: { active: false }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+    end
+
+    it 'does not signal FOAF when the row has no auth_invitation_id' do
+      local_only = owner.invitations.create!(user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'ICNOAUTH')
+      with_bridge(true) do
+        expect(AuthFoafClient).not_to receive(:disable_invitation)
+        put "/v1/invitations/#{local_only.id}/set_active", params: { active: false }, headers: auth_headers
+        expect(response).to have_http_status(200)
+      end
+    end
+  end
 end

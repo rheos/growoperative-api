@@ -46,73 +46,125 @@ module Api::V1
 			render json: user_groups
 		end
 		#Get
-		#URL : v1/users/generate_invitation?user_type=consumer
+		#URL : v1/users/generate_invitation?user_type=consumer&generator=hexstring&multi_use=true&custom_code=...
+		#
+		# Job 51 — dual-write issuance. Gated by FOAF_AUTH_INVITE_BRIDGE_ENABLED:
+		#
+		#   * bridge OFF (default): pure-local, no FOAF call. Behaves exactly as
+		#     before the bridge — the local row + local random fallback code.
+		#   * bridge ON, auto-generator (hexstring/pronounceable): best-effort
+		#     FOAF mint with a local fallback. On 201 we MIRROR FOAF's code into
+		#     the local invitation_code (the single-code invariant — the displayed
+		#     code IS the redeemable code), store auth_invitation_id/code_strategy
+		#     and mark synced; on any FOAF error we keep the local fallback code
+		#     and mark unsynced so the inviter UX never breaks.
+		#   * bridge ON, custom generator: FOAF-FIRST, no local row until FOAF
+		#     confirms. 201 -> create the local row mirroring FOAF's code; 409
+		#     code_taken -> forward, no row; FOAF down -> 503, no row (a custom
+		#     string with no namespace reservation is a correctness hazard).
+		#
+		# THE SINGLE-CODE MIRROR INVARIANT: there is exactly ONE code per
+		# invitation. The local invitation_code is the redemption key (redemption
+		# stays local this job). When FOAF mints, local invitation_code == FOAF's
+		# returned code, and display_code is that same code. We NEVER display
+		# FOAF's code while storing a different local code.
 		def generate_invitation
-			if current_user.ramaining_invitation_limit > 0
-				@invitation = current_user.invitations.new()
-
-				# Pull a pronounceable code from auth.foaf.io's invitation
-				# primitive (Job 23, CVCV-CVCV "mavo-leni") instead of the
-				# legacy random alphanumeric. canonicalize_invitation_code
-				# strips the hyphen and uppercases on save. On FOAF failure
-				# we fall through to the local random-code generator so a
-				# transient auth.foaf.io blip doesn't kill the inviter UX.
-				if current_user.foaf_id.present?
-					begin
-						auth_status, auth_body = AuthFoafClient.create_invitation(
-							inviter_foaf_id: current_user.foaf_id,
-							target_app: 'growoperative'
-						)
-						if auth_status == 201 && auth_body['code'].present?
-							@invitation.invitation_code = auth_body['code']
-						else
-							Rails.logger.warn("auth.foaf.io invite mint returned status=#{auth_status}; falling back to local random code")
-						end
-					rescue StandardError => e
-						Rails.logger.warn("auth.foaf.io invite mint failed (#{e.class}: #{e.message}); falling back to local random code")
-					end
-				end
-
-				if params[:user_type] != ''
-					@invitation.user_type = params[:user_type]
-				end
-				if params[:user_price].present?
-					@invitation.user_price = params[:user_price]
-				end
-				@invitation.status = 0
-				# Multi-use codes can be redeemed by many people and switched
-				# on/off by the creator. Defaults to single-use when the param
-				# is absent. (auth.foaf.io still mints a single code — signup
-				# passes the inviter's foaf_id, not the code, so multi-use is
-				# transparent to the auth side.)
-				@invitation.multi_use = ActiveModel::Type::Boolean.new.cast(params[:multi_use]) || false
-				# Default the invitation's subnet to the inviter's primary. Nullable
-				# during the backfill window — once Phase 3 runs, every existing user
-				# has a primary membership and this will always be set.
-				subnet = current_user.primary_subnet
-				@invitation.subnet_id = subnet&.id
-				# Subnet role policy: when the inviter's subnet has multi_role=false,
-				# clamp the invitation's user_type to the first allowed role. Backend
-				# is authoritative — downstream user_groups can never accrue roles
-				# outside visible_roles for locked-role subnets, regardless of what
-				# the client sends.
-				if subnet
-					flags = SiteConfig.for(subnet)
-					unless flags[:multi_role]
-						allowed = flags[:visible_roles].first
-						@invitation.user_type = allowed if allowed.present?
-					end
-				end
-				if @invitation.save!
-				render json: @invitation, status: 200
-				else
-					render json: @invitation.errors, status: 422
-				end
-			else
-				render json: {
-					message: "Invitation limit over"
-				}, status: 422
+			unless current_user.ramaining_invitation_limit > 0
+				render json: { message: "Invitation limit over" }, status: 422
+				return
 			end
+
+			bridge_on = ActiveModel::Type::Boolean.new.cast(ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED'])
+			generator = params[:generator].presence || 'hexstring'
+			custom_code = params[:custom_code].presence
+			multi_use = ActiveModel::Type::Boolean.new.cast(params[:multi_use]) || false
+
+			# custom is only valid for multi-use codes — enforced at this layer
+			# (FOAF enforces it too; failing here avoids a wasted round-trip).
+			# Applies first: a custom + !multi_use request is 422 regardless of
+			# bridge state.
+			if generator == 'custom' && !multi_use
+				render json: { error: 'custom_requires_multi_use' }, status: 422
+				return
+			end
+
+			# --- Custom generator: FOAF-FIRST. No local row until FOAF confirms. ---
+			# Custom issuance reserves a namespace string in FOAF, so it is only
+			# possible WITH the bridge. When the bridge is OFF (or the inviter has
+			# no FOAF identity to mint against), fail loudly with the same
+			# foaf_unavailable_for_custom 503 we return when FOAF is down — never
+			# silently downgrade to a random auto-generated code the inviter
+			# didn't ask for, and create NO local row.
+			if generator == 'custom'
+				unless bridge_on && current_user.foaf_id.present?
+					render json: { error: 'foaf_unavailable_for_custom' }, status: :service_unavailable
+					return
+				end
+
+				begin
+					auth_status, auth_body = AuthFoafClient.create_invitation(
+						inviter_foaf_id: current_user.foaf_id,
+						target_app: 'growoperative',
+						generator: 'custom',
+						custom_code: custom_code,
+						multi_use: multi_use
+					)
+				rescue StandardError => e
+					# FOAF unreachable for a custom code: fail loudly. Issuing an
+					# unbacked local row would collide when FOAF returns.
+					Rails.logger.warn("generate_invitation: FOAF custom mint failed (#{e.class}: #{e.message}); refusing unbacked local custom code")
+					render json: { error: 'foaf_unavailable_for_custom' }, status: :service_unavailable
+					return
+				end
+
+				if auth_status == 201 && auth_body['code'].present?
+					@invitation = build_invitation(multi_use)
+					@invitation.invitation_code = auth_body['code']
+					@invitation.auth_invitation_id = auth_body['invitation_id']
+					@invitation.code_strategy = auth_body['code_strategy'] || 'custom'
+					@invitation.foaf_invitation_state = Invitation::FOAF_STATE_SYNCED
+					return render_generated_invitation(auth_body['display_code'])
+				elsif auth_status == 409
+					render json: { error: 'code_taken' }, status: :conflict
+					return
+				else
+					Rails.logger.warn("generate_invitation: FOAF custom mint returned status=#{auth_status}; refusing unbacked local custom code")
+					render json: { error: 'foaf_unavailable_for_custom' }, status: :service_unavailable
+					return
+				end
+			end
+
+			# --- Auto-generators (hexstring/pronounceable): local row always
+			#     persisted; FOAF mint is best-effort with a local fallback. ---
+			@invitation = build_invitation(multi_use)
+			display_code = nil
+
+			if bridge_on && current_user.foaf_id.present?
+				begin
+					auth_status, auth_body = AuthFoafClient.create_invitation(
+						inviter_foaf_id: current_user.foaf_id,
+						target_app: 'growoperative',
+						generator: generator,
+						multi_use: multi_use
+					)
+					if auth_status == 201 && auth_body['code'].present?
+						# Mirror FOAF's code into the local redemption key.
+						@invitation.invitation_code = auth_body['code']
+						@invitation.auth_invitation_id = auth_body['invitation_id']
+						@invitation.code_strategy = auth_body['code_strategy']
+						@invitation.foaf_invitation_state = Invitation::FOAF_STATE_SYNCED
+						display_code = auth_body['display_code']
+					else
+						Rails.logger.warn("generate_invitation: FOAF mint returned status=#{auth_status}; falling back to local random code")
+						@invitation.foaf_invitation_state = Invitation::FOAF_STATE_UNSYNCED
+					end
+				rescue StandardError => e
+					Rails.logger.warn("generate_invitation: FOAF mint failed (#{e.class}: #{e.message}); falling back to local random code")
+					@invitation.foaf_invitation_state = Invitation::FOAF_STATE_UNSYNCED
+				end
+			end
+
+			render_generated_invitation(display_code)
 		end
 
 		# Get Invitation Limit
@@ -618,6 +670,61 @@ module Api::V1
 
 		def valid_handle_format?(handle)
 			HANDLE_FORMAT.match?(handle)
+		end
+
+		# Build the local invitation row with the shared issuance fields
+		# (user_type/user_price + subnet default + role-policy clamp + multi_use).
+		# Code assignment (FOAF mirror or local fallback) is the caller's job.
+		def build_invitation(multi_use)
+			invitation = current_user.invitations.new
+			invitation.user_type = params[:user_type] if params[:user_type] != ''
+			invitation.user_price = params[:user_price] if params[:user_price].present?
+			invitation.status = 0
+			# Multi-use codes can be redeemed by many people and switched on/off by
+			# the creator. Defaults to single-use when the param is absent.
+			invitation.multi_use = multi_use
+			# Default the invitation's subnet to the inviter's primary. Nullable
+			# during the backfill window — once Phase 3 runs, every existing user
+			# has a primary membership and this will always be set.
+			subnet = current_user.primary_subnet
+			invitation.subnet_id = subnet&.id
+			# Subnet role policy: when the inviter's subnet has multi_role=false,
+			# clamp the invitation's user_type to the first allowed role. Backend
+			# is authoritative — downstream user_groups can never accrue roles
+			# outside visible_roles for locked-role subnets, regardless of what
+			# the client sends.
+			if subnet
+				flags = SiteConfig.for(subnet)
+				unless flags[:multi_role]
+					allowed = flags[:visible_roles].first
+					invitation.user_type = allowed if allowed.present?
+				end
+			end
+			invitation
+		end
+
+		# Save @invitation and render it with display_code. `display_code` is
+		# FOAF's returned form when synced (the SAME code as the stored
+		# invitation_code), or the local-derived "XXXX XXXX" form of the local
+		# fallback code when unsynced — always the redeemable code.
+		def render_generated_invitation(display_code)
+			if @invitation.save
+				payload = @invitation.as_json
+				payload['display_code'] = display_code.presence || derive_display_code(@invitation.invitation_code)
+				render json: payload, status: 200
+			else
+				render json: @invitation.errors, status: 422
+			end
+		end
+
+		# Local fallback display form for an 8-char canonical code: a single
+		# space in the middle ("ABCD1234" -> "ABCD 1234"). Short codes render
+		# unspaced. Only used when FOAF didn't supply a display_code (unsynced).
+		def derive_display_code(code)
+			code = code.to_s
+			return code if code.length <= 4
+			mid = code.length / 2
+			"#{code[0...mid]} #{code[mid..]}"
 		end
 
 		def hydrate_contact_identity_avatars!(relationships)

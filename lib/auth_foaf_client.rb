@@ -77,17 +77,66 @@ class AuthFoafClient
     }, service_token: true)
   end
 
-  # Mint a pronounceable invite code via auth.foaf.io's invitation
-  # primitive (Job 23, CVCV-CVCV like "mavo-leni"). Returns the code
-  # plaintext exactly once — railsbackend stores the canonical form.
+  # Mint an invite code via auth.foaf.io's invitation primitive (Job 23).
+  # `generator` picks the strategy FOAF mints with — `'hexstring'` (Job 51
+  # default, length 8), `'pronounceable'` (CVCV-CVCV like "mavo-leni"), or
+  # `'custom'` (caller supplies the literal string in `custom_code`).
+  # `multi_use` records the issuance flag (FR6); FOAF still mints one row
+  # per call. Returns the code plaintext exactly once — railsbackend stores
+  # the canonical form. The 201 body carries `invitation_id`, `code`,
+  # `display_code`, and `code_strategy`; the caller mirrors `code` into the
+  # local `invitation_code` so the displayed code is the redeemable code.
   # `target_app` is the app label (defaults to the audience).
-  def self.create_invitation(inviter_foaf_id:, target_app: nil, expires_in_seconds: nil)
+  def self.create_invitation(inviter_foaf_id:, target_app: nil, expires_in_seconds: nil,
+                             generator: 'hexstring', custom_code: nil, multi_use: false)
     body = {
       inviter_foaf_id: inviter_foaf_id,
-      target_app: target_app || audience
+      target_app: target_app || audience,
+      generator: generator,
+      multi_use: multi_use
     }
+    body[:custom_code] = custom_code if custom_code
     body[:expires_in_seconds] = expires_in_seconds if expires_in_seconds
     new.post_json('/v1/internal/invitations', body, service_token: true)
+  end
+
+  # Issuance-availability pre-check for a candidate code in a target app's
+  # namespace. Advisory only — FOAF's composite unique index on
+  # `(target_app, reuse_key)` is the real arbiter; the custom picker uses
+  # this to fail fast and the backfill lookup uses it to find an existing
+  # FOAF row. Returns true/false from the `available` field on a 200;
+  # raises AuthFoafClient::Error on any non-200 so callers can treat an
+  # error distinctly from a definitive false.
+  def self.invitation_code_available?(code:, target_app: nil)
+    params = { target_app: target_app || audience, code: code }
+    status, body = new.get_service_json("/v1/internal/invitations/availability?#{URI.encode_www_form(params)}")
+    raise Error.new(status: status, body: body) unless status == 200
+    body.is_a?(Hash) ? !!body['available'] : false
+  end
+
+  # Disable an issued FOAF invitation by its authority id. Transitions the
+  # FOAF row to reserved-through-grace (its `reuse_key` stays held, so the
+  # string is not reusable). Service-token call mirroring the disable signal
+  # railsbackend sends when a multi-use code is switched off (Decision 12 /
+  # Edge Case 3). Returns the parsed body on 200; raises on failure.
+  def self.disable_invitation(invitation_id:)
+    encoded = URI.encode_www_form_component(invitation_id.to_s)
+    status, body = new.post_json("/v1/internal/invitations/#{encoded}/disable", {}, service_token: true)
+    raise Error.new(status: status, body: body) unless status == 200
+    body
+  end
+
+  # Re-enable a previously-disabled FOAF invitation by its authority id.
+  # Goes through FOAF's enable transition on the SAME row (no re-mint, so no
+  # code_taken-against-itself), holding `reuse_key`. Expiry is enforced
+  # FOAF-side: enable! preserves the row's own expiry (W7) and FOAF's enable
+  # endpoint ignores any expires_at in the body, so we send none. Returns the
+  # parsed body on 200; raises on failure.
+  def self.enable_invitation(invitation_id:)
+    encoded = URI.encode_www_form_component(invitation_id.to_s)
+    status, parsed = new.post_json("/v1/internal/invitations/#{encoded}/enable", {}, service_token: true)
+    raise Error.new(status: status, body: parsed) unless status == 200
+    parsed
   end
 
   def self.search_users(query:, limit: 20, include_deleted: false)

@@ -148,6 +148,13 @@ module Api::V1
 			end
 			active = ActiveModel::Type::Boolean.new.cast(params[:active])
 			if @invitation.update(disabled_at: active ? nil : Time.current)
+				# Job 51 — signal the issuance lifecycle into FOAF so its
+				# availability stays consistent with the local on/off state.
+				# Best-effort (mirrors add_contact_edge): a failed signal
+				# degrades to LIVENESS only — the FOAF string stays reserved
+				# longer than intended — never correctness. Never raise to the
+				# caller; the local toggle already succeeded.
+				signal_foaf_set_active(@invitation, active)
 				render json: {
 					message: active ? "Invitation activated." : "Invitation deactivated.",
 					data: { id: @invitation.id, active: @invitation.active? }
@@ -185,6 +192,28 @@ module Api::V1
 		end
 
 		private
+
+		# Job 51 — best-effort FOAF disable/enable signal for a multi-use code's
+		# on/off toggle. Only fires when the bridge is on and the row has a FOAF
+		# authority id. Re-enable preserves expiry FOAF-side (enable! keeps the
+		# row's own expiry, W7); railsbackend has no local expiry column to pass
+		# and FOAF's enable endpoint ignores one anyway. NEVER raises: a failed
+		# signal is liveness-only, not correctness.
+		def signal_foaf_set_active(invitation, active)
+			return unless ActiveModel::Type::Boolean.new.cast(ENV['FOAF_AUTH_INVITE_BRIDGE_ENABLED'])
+			return unless invitation.auth_invitation_id.present?
+
+			begin
+				if active
+					AuthFoafClient.enable_invitation(invitation_id: invitation.auth_invitation_id)
+				else
+					AuthFoafClient.disable_invitation(invitation_id: invitation.auth_invitation_id)
+				end
+			rescue StandardError => e
+				Rails.logger.warn("set_active: FOAF #{active ? 'enable' : 'disable'} signal failed — liveness degraded, not correctness (#{e.class}: #{e.message})")
+			end
+		end
+
 		def invitation_params
 			params.require(:invitation).permit(:label, :user_price)
 		end
