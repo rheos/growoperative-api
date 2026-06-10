@@ -8,15 +8,29 @@
 # issuance authority is consistent (spec Decision 11: a local-only fallback row
 # is reconciled forward, never a competing truth).
 #
-# Per-row outcome (mirrors the dual-write contract):
+# SAME-CODE SEEDING (Step 2.5 hardening): an `unsynced` fallback row already
+# holds a LIVE local `invitation_code` (the redemption key). The reconciler
+# registers THAT EXACT string in FOAF via `generator: 'custom',
+# custom_code: <existing code>.downcase, multi_use: true` — it never mints a
+# fresh/competing code. This closes the prompt-08 competing-truth hole: FOAF's
+# reserved string == the live local redeemable string. `multi_use: true` is the
+# confirmed migration exception — it's an ISSUANCE-only flag in FOAF
+# (reuse_key/availability namespace), not a redemption flag; redemption stays
+# LOCAL this whole job and the local row keeps its own `multi_use`, so
+# single-use codes stay single-redeemable.
+#
+# Per-row outcome (mirrors the backfill contract):
 #   * 201 -> store `auth_invitation_id`, set state `reconciled`.
-#   * 409 code_taken (the string is active in FOAF under a different row)
-#     -> set state `failed`, log the conflict.
+#   * 409 code_taken -> the string may already be held in FOAF (a prior
+#     backfill/dual-write row). Re-check availability: if FOAF already holds it
+#     -> treat as already-present, set state `reconciled`; otherwise set
+#     `failed`, log the conflict.
 #   * any other non-201 / FOAF error -> leave `unsynced` for the next run.
 #
 # Redemption stays LOCAL this phase: the local `invitation_code` is the
 # redemption key and is intentionally NOT overwritten. The FOAF row created
-# here is the issuance-authority record, not the redeemable code.
+# here is the issuance-authority record (the matching reservation), not the
+# redeemable code.
 #
 # Idempotent: only `unsynced` rows with a nil `auth_invitation_id` are
 # candidates. `synced` / `reconciled` / `failed` rows are no-ops, so a re-run
@@ -75,11 +89,18 @@ class InvitationIssuanceReconciler
       return
     end
 
+    # SAME-CODE SEEDING: register the EXISTING live local string in FOAF, never
+    # a fresh/competing code. `custom_code` is the row's own redeemable code
+    # (downcased to FOAF's canonical form); `multi_use: true` is the issuance-
+    # only migration exception that lets a custom string be seeded. The local
+    # `invitation_code` is NOT rewritten — only FOAF gains the matching
+    # reservation.
     status, body = AuthFoafClient.create_invitation(
       inviter_foaf_id: inviter_foaf_id,
       target_app: 'growoperative',
-      generator: invitation.code_strategy.presence || 'pronounceable',
-      multi_use: invitation.multi_use,
+      generator: 'custom',
+      custom_code: invitation.invitation_code.to_s.downcase,
+      multi_use: true,
       expires_in_seconds: @expires_in_seconds
     )
 
@@ -93,12 +114,20 @@ class InvitationIssuanceReconciler
       )
       summary[:reconciled] += 1
     elsif status == 409
-      # The string is active in FOAF under a different row — a hard conflict
-      # the sweep can't resolve. Mark failed so it stops being retried and
-      # surfaces for operator review.
-      @logger.warn("InvitationIssuanceReconciler: invitation=#{invitation.id} code_taken in FOAF (status=409 body=#{body.inspect}); marking failed")
-      invitation.update!(foaf_invitation_state: Invitation::FOAF_STATE_FAILED)
-      summary[:failed] += 1
+      # code_taken: the string may already be reserved in FOAF (a prior backfill
+      # or dual-write row holds it). Re-check availability — if FOAF already
+      # holds our exact string, that IS the reconciled end-state, so adopt it.
+      # Only a string FOAF reports as still available but refuses to mint is a
+      # true conflict worth surfacing for operator review.
+      if foaf_already_holds?(invitation)
+        @logger.info("InvitationIssuanceReconciler: invitation=#{invitation.id} code already reserved in FOAF (409 + availability=false); marking reconciled")
+        invitation.update!(foaf_invitation_state: Invitation::FOAF_STATE_RECONCILED)
+        summary[:reconciled] += 1
+      else
+        @logger.warn("InvitationIssuanceReconciler: invitation=#{invitation.id} code_taken in FOAF (status=409 body=#{body.inspect}); marking failed")
+        invitation.update!(foaf_invitation_state: Invitation::FOAF_STATE_FAILED)
+        summary[:failed] += 1
+      end
     else
       # Non-201 / non-409 (e.g. FOAF 5xx): leave unsynced for the next run.
       @logger.warn("InvitationIssuanceReconciler: invitation=#{invitation.id} FOAF mint returned status=#{status}; leaving unsynced")
@@ -109,6 +138,21 @@ class InvitationIssuanceReconciler
     # one bad row doesn't abort the whole pass.
     @logger.warn("InvitationIssuanceReconciler: invitation=#{invitation.id} FOAF mint failed (#{e.class}: #{e.message}); leaving unsynced")
     summary[:errored] += 1
+  end
+
+  # On a 409 from the same-code seed, ask FOAF whether it already holds the
+  # exact string. `available: false` means the composite unique index is
+  # already claimed — in a reconcile context that means FOAF has OUR string, so
+  # the row is effectively reconciled. Any lookup error is treated as "not
+  # confirmed present" so we don't reconcile on a guess.
+  def foaf_already_holds?(invitation)
+    !AuthFoafClient.invitation_code_available?(
+      code: invitation.invitation_code.to_s.downcase,
+      target_app: 'growoperative'
+    )
+  rescue StandardError => e
+    @logger.warn("InvitationIssuanceReconciler: invitation=#{invitation.id} availability re-check failed (#{e.class}: #{e.message}); not treating as present")
+    false
   end
 
   def bridge_on?

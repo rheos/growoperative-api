@@ -41,11 +41,19 @@ RSpec.describe InvitationIssuanceReconciler, type: :service, skip_hooks: true do
   end
 
   describe 'bridge on' do
-    it 'stores auth_invitation_id and marks reconciled on a 201' do
-      row = unsynced_row
-      allow(AuthFoafClient).to receive(:create_invitation).and_return(
-        [201, { 'invitation_id' => 'foaf-abc', 'code' => 'mavoleni', 'code_strategy' => 'pronounceable' }]
-      )
+    it 'seeds the EXISTING local string via a same-code custom mint (not a generator)' do
+      # Step 2.5 hardening: the reconciler must register the row's own live
+      # local code in FOAF, never mint a fresh/competing code. custom_code is
+      # the existing string (downcased) and multi_use is forced true.
+      row = unsynced_row(code: 'UNSYNC01')
+      expect(AuthFoafClient).to receive(:create_invitation).with(
+        inviter_foaf_id: inviter.foaf_id,
+        target_app: 'growoperative',
+        generator: 'custom',
+        custom_code: 'unsync01',
+        multi_use: true,
+        expires_in_seconds: kind_of(Integer)
+      ).and_return([201, { 'invitation_id' => 'foaf-abc', 'code_strategy' => 'custom' }])
 
       with_bridge(true) do
         summary = described_class.run
@@ -59,9 +67,11 @@ RSpec.describe InvitationIssuanceReconciler, type: :service, skip_hooks: true do
       expect(row.invitation_code).to eq('UNSYNC01')
     end
 
-    it 'marks the row failed on a 409 code_taken' do
+    it 'marks the row failed on a 409 when FOAF reports the string still available' do
+      # 409 + availability=true => a true conflict the sweep can't resolve.
       row = unsynced_row
       allow(AuthFoafClient).to receive(:create_invitation).and_return([409, { 'error' => 'code_taken' }])
+      allow(AuthFoafClient).to receive(:invitation_code_available?).and_return(true)
 
       with_bridge(true) do
         summary = described_class.run
@@ -71,6 +81,24 @@ RSpec.describe InvitationIssuanceReconciler, type: :service, skip_hooks: true do
       row.reload
       expect(row.foaf_invitation_state).to eq(Invitation::FOAF_STATE_FAILED)
       expect(row.auth_invitation_id).to be_nil
+    end
+
+    it 'reconciles on a 409 when FOAF already holds the exact string (availability false)' do
+      # The string is already reserved in FOAF (a prior backfill/dual-write row
+      # holds it). That IS the reconciled end-state — adopt it, do not fail.
+      row = unsynced_row(code: 'UNSYNC01')
+      allow(AuthFoafClient).to receive(:create_invitation).and_return([409, { 'error' => 'code_taken' }])
+      expect(AuthFoafClient).to receive(:invitation_code_available?).with(
+        code: 'unsync01', target_app: 'growoperative'
+      ).and_return(false)
+
+      with_bridge(true) do
+        summary = described_class.run
+        expect(summary[:reconciled]).to eq(1)
+        expect(summary[:failed]).to eq(0)
+      end
+
+      expect(row.reload.foaf_invitation_state).to eq(Invitation::FOAF_STATE_RECONCILED)
     end
 
     it 'leaves the row unsynced on a non-201/non-409 FOAF response' do
@@ -139,21 +167,27 @@ RSpec.describe InvitationIssuanceReconciler, type: :service, skip_hooks: true do
       expect(failed.reload.foaf_invitation_state).to eq(Invitation::FOAF_STATE_FAILED)
     end
 
-    it 'passes the row strategy and multi_use flag through to FOAF' do
+    it 'seeds the same custom code regardless of the row multi_use flag' do
+      # Even a single-use local row is seeded with multi_use: true — the
+      # issuance-only migration exception. The custom_code is always the row's
+      # own existing string, never a generator-minted one.
       row = inviter.invitations.create!(
-        user_type: 'consumer', status: 0, invitation_code: 'MULTI01', multi_use: true,
+        user_type: 'consumer', status: 0, invitation_code: 'SINGLE01', multi_use: false,
         foaf_invitation_state: Invitation::FOAF_STATE_UNSYNCED
       )
       expect(AuthFoafClient).to receive(:create_invitation).with(
         inviter_foaf_id: inviter.foaf_id,
         target_app: 'growoperative',
-        generator: 'pronounceable',
+        generator: 'custom',
+        custom_code: 'single01',
         multi_use: true,
         expires_in_seconds: kind_of(Integer)
-      ).and_return([201, { 'invitation_id' => 'foaf-multi', 'code_strategy' => 'pronounceable' }])
+      ).and_return([201, { 'invitation_id' => 'foaf-single', 'code_strategy' => 'custom' }])
 
       with_bridge(true) { described_class.run }
       expect(row.reload.foaf_invitation_state).to eq(Invitation::FOAF_STATE_RECONCILED)
+      # The live single-use local row is never flipped to multi_use.
+      expect(row.multi_use).to eq(false)
     end
   end
 end
