@@ -25,6 +25,53 @@ RSpec.describe Invitation, type: :model, skip_hooks: true do
     end
   end
 
+  describe '.find_by_code' do
+    it 'prefers the active row when a retired code has been reused' do
+      old = creator.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'FOOD24',
+        disabled_at: Time.current,
+      )
+      active = creator.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'food-24',
+      )
+
+      expect(Invitation.find_by_code('food 24')).to eq(active)
+      expect(old.reload.invitation_code).to eq('FOOD24')
+    end
+
+    it 'allows an inactive code to be reused while rejecting an active duplicate' do
+      creator.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'LOCAL1',
+        disabled_at: Time.current,
+      )
+      reused = creator.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'local-1',
+      )
+      duplicate = creator.invitations.build(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'LOCAL1',
+      )
+
+      expect(reused.invitation_code).to eq('LOCAL1')
+      expect(duplicate).not_to be_valid
+      expect(duplicate.errors[:invitation_code]).to include('is already active')
+    end
+  end
+
   describe 'redemption associations' do
     let(:invitation) { creator.invitations.create!(user_type: 'consumer', status: 0, multi_use: true) }
     let(:redeemer) { User.create!(user_name: 'inv_redeemer', password: password) }

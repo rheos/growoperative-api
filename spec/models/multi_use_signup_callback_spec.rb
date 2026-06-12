@@ -73,4 +73,16 @@ RSpec.describe 'Multi-use invitation signup callback', type: :model, skip_hooks:
     expect(invitation.accepted_id).to eq(redeemer.id)
     expect(invitation.invitation_redemptions.count).to eq(0)
   end
+
+  it 'keeps invited_by_name tied to the redeemed multi-use invitation after code reuse' do
+    old_inviter = creator
+    old_invitation = make_multi_use(code: 'REUSEME')
+    redeemer = User.create!(user_name: 'muc_reuse_redeemer', password: password, invited_code: old_invitation.invitation_code)
+    old_invitation.update!(disabled_at: Time.current)
+
+    new_inviter = User.create!(user_name: 'muc_new_inviter', password: password)
+    new_inviter.invitations.create!(user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'REUSEME')
+
+    expect(redeemer.invited_by_name).to eq(old_inviter.user_name)
+  end
 end

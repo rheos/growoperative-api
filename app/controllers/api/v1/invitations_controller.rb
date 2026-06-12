@@ -142,11 +142,17 @@ module Api::V1
 			end
 			unless @invitation.multi_use?
 				render json: {
-					message: "Only multi-use codes can be switched on or off."
+					message: "Only Multi-pass codes can be switched on or off."
 				}, status: 422
 				return
 			end
 			active = ActiveModel::Type::Boolean.new.cast(params[:active])
+			if active && Invitation.active_code_taken?(@invitation.invitation_code, except_id: @invitation.id)
+				render json: {
+					message: "Invitation code is already active"
+				}, status: 422
+				return
+			end
 			if @invitation.update(disabled_at: active ? nil : Time.current)
 				render json: {
 					message: active ? "Invitation activated." : "Invitation deactivated.",

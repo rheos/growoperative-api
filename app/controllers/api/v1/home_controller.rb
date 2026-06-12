@@ -22,7 +22,14 @@ class Api::V1::HomeController < Api::V1::ApiController
 		code = params[:invitation_code] || params[:invitation_token]
 		@invitation = Invitation.find_by_code(code)
 		if @invitation
-			if @invitation.pending?
+			# Multi-use codes are always pending, so a turned-off one would
+			# otherwise pass verify and only fail later at registration. Check
+			# active? first to give a clear pre-signup error.
+			if @invitation.multi_use? && !@invitation.active?
+				render json: {
+					message: "This invitation code is no longer active"
+				}, status: 422
+			elsif @invitation.pending?
 				render json: {invitation_code: code, invitation_token: code}, status: 200
 			elsif @invitation.accepted?
 				render json: {

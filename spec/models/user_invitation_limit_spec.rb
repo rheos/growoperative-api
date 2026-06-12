@@ -23,4 +23,12 @@ RSpec.describe User, 'invitation limit counts only pending invitations', type: :
     user.invitations.create!(user_type: 'broker', status: 1, invitation_code: 'USED0002')
     expect(user.ramaining_invitation_limit).to eq(1) # 3 limit - 2 pending
   end
+
+  it 'does not count pending multi-use invitations against the normal slot limit' do
+    user.invitations.create!(user_type: 'broker', status: 0, invitation_code: 'PENDING1')
+    user.invitations.create!(user_type: 'broker', status: 0, multi_use: true, invitation_code: 'MULTIP1')
+    user.invitations.create!(user_type: 'broker', status: 0, multi_use: true, invitation_code: 'MULTIP2')
+
+    expect(user.ramaining_invitation_limit).to eq(2)
+  end
 end
