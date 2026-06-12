@@ -225,9 +225,15 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "read_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "subject_type"
+    t.bigint "subject_id"
+    t.datetime "resolved_at"
+    t.string "resolution_reason"
     t.index ["actor_id"], name: "fk_rails_06a39bb8cc"
     t.index ["recipient_id", "created_at"], name: "index_notifications_timeline"
     t.index ["recipient_id", "read", "created_at"], name: "index_notifications_inbox"
+    t.index ["recipient_id", "resolved_at"], name: "index_notifications_on_recipient_and_resolved"
+    t.index ["subject_type", "subject_id"], name: "index_notifications_on_subject"
   end
 
   create_table "orders", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|

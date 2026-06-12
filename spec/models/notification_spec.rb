@@ -78,6 +78,77 @@ RSpec.describe Notification, type: :model, skip_hooks: true do
     end
   end
 
+  describe 'resolution' do
+    let(:notification) do
+      Notification.create!(
+        recipient:         recipient,
+        notification_type: 'request_created',
+        message:           'alice requested tomatoes',
+        subject_type:      'ItemRequest',
+        subject_id:        7
+      )
+    end
+
+    describe '#resolve!' do
+      it 'sets resolved_at and resolution_reason on an unresolved notification' do
+        expect(notification.resolved_at).to be_nil
+
+        notification.resolve!(:accepted)
+        notification.reload
+
+        expect(notification.resolved_at).to be_present
+        expect(notification.resolution_reason).to eq('accepted')
+      end
+
+      it 'is idempotent — a second call with a different reason is a no-op' do
+        notification.resolve!(:accepted)
+        notification.reload
+        first_resolved_at = notification.resolved_at
+
+        notification.resolve!(:cancelled)
+        notification.reload
+
+        expect(notification.resolved_at).to eq(first_resolved_at)
+        expect(notification.resolution_reason).to eq('accepted')
+      end
+    end
+
+    describe '.unresolved' do
+      it 'returns only rows where resolved_at is nil' do
+        live     = notification
+        resolved = Notification.create!(recipient: recipient, notification_type: 'system', message: 'done')
+        resolved.resolve!(:paid)
+
+        expect(Notification.unresolved).to include(live)
+        expect(Notification.unresolved).not_to include(resolved)
+      end
+    end
+
+    describe '#as_inbox_json resolution fields' do
+      it 'serializes an unresolved notification as outstanding' do
+        json = notification.as_inbox_json
+
+        expect(json[:subject_type]).to eq('ItemRequest')
+        expect(json[:subject_id]).to eq(7)
+        expect(json[:resolved_at]).to be_nil
+        expect(json[:resolution_reason]).to be_nil
+        expect(json[:outstanding]).to eq(true)
+      end
+
+      it 'serializes a resolved notification with reason and ISO8601 timestamp' do
+        notification.resolve!(:confirmed)
+        json = notification.reload.as_inbox_json
+
+        expect(json[:subject_type]).to eq('ItemRequest')
+        expect(json[:subject_id]).to eq(7)
+        expect(json[:resolved_at]).to eq(notification.resolved_at.iso8601)
+        expect(json[:resolved_at]).to be_a(String)
+        expect(json[:resolution_reason]).to eq('confirmed')
+        expect(json[:outstanding]).to eq(false)
+      end
+    end
+  end
+
   describe 'scopes' do
     before do
       Notification.create!(recipient: recipient, notification_type: 'system', message: 'old', created_at: 1.hour.ago)
