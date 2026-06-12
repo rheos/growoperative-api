@@ -82,6 +82,68 @@ RSpec.describe 'Invitations controller — multi-use', type: :request, skip_hook
     end
   end
 
+  describe 'GET /v1/users/generate_invitation' do
+    it 'creates a multi-use invitation with a chosen easy code and label' do
+      get '/v1/users/generate_invitation',
+          params: { user_type: 'consumer', multi_use: true, invitation_code: 'food-24', label: 'Saturday market' },
+          headers: auth_headers
+
+      expect(response).to have_http_status(200)
+      expect(parsed['invitation_code']).to eq('FOOD24')
+      expect(parsed['multi_use']).to eq(true)
+      expect(parsed['label']).to eq('Saturday market')
+      expect(owner.invitations.find_by(invitation_code: 'FOOD24')).to be_present
+    end
+
+    it 'rejects a chosen code that is already active' do
+      owner.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'FOOD24',
+      )
+
+      get '/v1/users/generate_invitation',
+          params: { user_type: 'consumer', multi_use: true, invitation_code: 'food 24' },
+          headers: auth_headers
+
+      expect(response).to have_http_status(422)
+      expect(parsed['message']).to eq('Invitation code is already active')
+    end
+
+    it 'allows a chosen code to be reused after the old invitation is inactive' do
+      owner.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'FOOD24',
+        disabled_at: Time.current,
+      )
+
+      get '/v1/users/generate_invitation',
+          params: { user_type: 'consumer', multi_use: true, invitation_code: 'food 24' },
+          headers: auth_headers
+
+      expect(response).to have_http_status(200)
+      expect(parsed['invitation_code']).to eq('FOOD24')
+      expect(owner.invitations.where(invitation_code: 'FOOD24').count).to eq(2)
+    end
+
+    it 'allows multi-use generation even when normal pending slots are full' do
+      limited = User.create!(user_name: 'ic_limited', password: password, invite_limit: 1)
+      limited.invitations.create!(user_type: 'consumer', status: 0, invitation_code: 'FULLSLOT')
+      expect(limited.ramaining_invitation_limit).to eq(0)
+
+      get '/v1/users/generate_invitation',
+          params: { user_type: 'consumer', multi_use: true, invitation_code: 'wide-open' },
+          headers: auth_headers(limited)
+
+      expect(response).to have_http_status(200)
+      expect(parsed['invitation_code']).to eq('WIDEOPEN')
+      expect(parsed['multi_use']).to eq(true)
+    end
+  end
+
   describe 'PUT /v1/invitations/:id/set_active' do
     let!(:invitation) { owner.invitations.create!(user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'ICTOGGLE') }
 
@@ -108,6 +170,59 @@ RSpec.describe 'Invitations controller — multi-use', type: :request, skip_hook
       expect(response).to have_http_status(422)
       expect(parsed['message']).to eq('You are not authorised to access.')
       expect(invitation.reload.disabled_at).to be_nil
+    end
+
+    it 'refuses to reactivate when another active invitation reused the code' do
+      put "/v1/invitations/#{invitation.id}/set_active", params: { active: false }, headers: auth_headers
+      expect(response).to have_http_status(200)
+      owner.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: invitation.invitation_code,
+      )
+
+      put "/v1/invitations/#{invitation.id}/set_active", params: { active: true }, headers: auth_headers
+
+      expect(response).to have_http_status(422)
+      expect(parsed['message']).to eq('Invitation code is already active')
+      expect(invitation.reload.disabled_at).to be_present
+    end
+  end
+
+  describe 'POST /v1/users/accept_invitation' do
+    it 'records logged-in multi-use redemptions without consuming the code' do
+      invitation = owner.invitations.create!(user_type: 'consumer', status: 0, multi_use: true, invitation_code: 'ICACCEPT')
+      redeemer = User.create!(user_name: 'ic_logged_in', password: password)
+
+      post '/v1/users/accept_invitation',
+           params: { invited_code: invitation.invitation_code },
+           headers: auth_headers(redeemer)
+
+      expect(response).to have_http_status(200)
+      expect(invitation.reload.status).to eq('pending')
+      expect(invitation.accepted_id).to be_nil
+      expect(invitation.invitation_redemptions.where(user_id: redeemer.id).count).to eq(1)
+      expect(redeemer.user_groups.where(group_label: 'consumer').count).to eq(1)
+    end
+
+    it 'rejects logged-in acceptance when a multi-use code is off' do
+      invitation = owner.invitations.create!(
+        user_type: 'consumer',
+        status: 0,
+        multi_use: true,
+        invitation_code: 'ICOFFAC',
+        disabled_at: Time.current,
+      )
+      redeemer = User.create!(user_name: 'ic_logged_off', password: password)
+
+      post '/v1/users/accept_invitation',
+           params: { invited_code: invitation.invitation_code },
+           headers: auth_headers(redeemer)
+
+      expect(response).to have_http_status(422)
+      expect(parsed['message']).to eq('This invitation code is no longer active')
+      expect(invitation.reload.invitation_redemptions.count).to eq(0)
     end
   end
 end

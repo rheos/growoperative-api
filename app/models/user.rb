@@ -113,7 +113,12 @@ class User < ApplicationRecord
 
   def invited_by_name
     return nil if invited_code.blank?
-    invitation = Invitation.find_by_code(invited_code)
+    canonical = Invitation.canonicalize_code(invited_code)
+    redemption = InvitationRedemption.joins(:invitation)
+      .where(user_id: id, invitations: { invitation_code: canonical })
+      .order(created_at: :desc)
+      .first
+    invitation = redemption&.invitation || Invitation.find_by_code(invited_code)
     return nil unless invitation
     User.find_by(id: invitation.user_id)&.user_name
   end
@@ -190,6 +195,7 @@ class User < ApplicationRecord
     user = @invitation.try(:user)
     if user
       if @invitation.multi_use?
+        return unless @invitation.active?
         # Multi-use codes never go terminal: record this redeemer in the
         # join table instead of flipping status/accepted_id. find_or_create_by!
         # against the unique index keeps this idempotent with the onboarding path.
@@ -212,7 +218,7 @@ class User < ApplicationRecord
   # accepted ones, which meant a user who'd successfully onboarded N people
   # could never generate another code.
   def ramaining_invitation_limit
-    self.invite_limit - self.invitations.pending.count
+    self.invite_limit - self.invitations.pending.where(multi_use: false).count
   end
 
   # This method build relationship between user

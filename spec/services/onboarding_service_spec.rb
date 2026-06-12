@@ -96,4 +96,19 @@ RSpec.describe OnboardingService, type: :service, skip_hooks: true do
       expect(result.rejection_code).to eq('role_policy_violation')
     end
   end
+
+  describe 'active/off guard' do
+    it 'fails without recording redemption when a multi-use code is off' do
+      invitation = make_multi_use(code: 'OSMULTI6')
+      invitation.update!(disabled_at: Time.current)
+      accepter = User.create!(user_name: 'os_off', email: 'off@example.com', password: password)
+
+      result = OnboardingService.new(user: accepter, invitation_code: invitation.invitation_code).call
+
+      expect(result.failed?).to eq(true)
+      expect(result.error_message).to eq('This invitation code is no longer active')
+      expect(invitation.reload.invitation_redemptions.count).to eq(0)
+      expect(accepter.user_groups.where(group_label: 'consumer')).to be_empty
+    end
+  end
 end

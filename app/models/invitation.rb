@@ -1,4 +1,9 @@
 class Invitation < ApplicationRecord
+  EASY_CODE_MIN_LENGTH = 3
+  EASY_CODE_MAX_LENGTH = 16
+  EASY_CODE_PATTERN = /\A[A-Z0-9]{#{EASY_CODE_MIN_LENGTH},#{EASY_CODE_MAX_LENGTH}}\z/.freeze
+  EASY_CODE_CHARS = (('A'..'Z').to_a + ('2'..'9').to_a - %w[I O]).freeze
+
   # It handle status value as enum
   enum status: [ :pending, :accepted ]
   enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
@@ -9,8 +14,12 @@ class Invitation < ApplicationRecord
 
   # Callbacks
   before_validation :canonicalize_invitation_code
+  validate :invitation_code_has_easy_shape
+  validate :invitation_code_is_available_while_active
   before_create :generate_invitation_code
   after_create :set_user_type
+
+  scope :active_code_rows, -> { pending.where(disabled_at: nil) }
 
   # Strip separators + uppercase so codes from any source (legacy random,
   # auth.foaf.io pronounceable like "mavo-leni") and any user-typed form
@@ -22,13 +31,29 @@ class Invitation < ApplicationRecord
     raw.to_s.gsub(/[\s\-_\/]/, '').upcase
   end
 
+  def self.easy_code?(raw)
+    canonical = canonicalize_code(raw)
+    canonical.present? && canonical.match?(EASY_CODE_PATTERN)
+  end
+
+  def self.active_code_taken?(raw, except_id: nil)
+    canonical = canonicalize_code(raw)
+    return false if canonical.blank?
+
+    rows = active_code_rows.where(invitation_code: canonical)
+    rows = rows.where.not(id: except_id) if except_id.present?
+    rows.exists?
+  end
+
   # Lookup wrapper that canonicalizes the input. Use this everywhere in
   # place of `find_by(invitation_code: raw)` so user-typed casing /
-  # separators don't matter at the DB lookup boundary.
+  # separators don't matter at the DB lookup boundary. Active rows win
+  # when a retired code has later been reused.
   def self.find_by_code(raw)
     canonical = canonicalize_code(raw)
     return nil if canonical.blank?
-    find_by(invitation_code: canonical)
+    active_code_rows.where(invitation_code: canonical).order(created_at: :desc).first ||
+      where(invitation_code: canonical).order(created_at: :desc).first
   end
 
   def canonicalize_invitation_code
@@ -40,7 +65,7 @@ class Invitation < ApplicationRecord
   # (status stays pending). `active?` is the on/off switch — null disabled_at
   # means the creator hasn't turned it off.
   def active?
-    disabled_at.nil?
+    pending? && disabled_at.nil?
   end
 
   # Random-code fallback for cases where the controller doesn't pre-fill
@@ -48,12 +73,25 @@ class Invitation < ApplicationRecord
   # set (the canonical pronounceable-from-FOAF path).
   def generate_invitation_code
     return if invitation_code.present?
-    size = 8
-    charset = ([*('A'..'Z'),*('0'..'9')]-["O"]).sample(size).join
-     begin
-      random_string = charset
-      self.invitation_code = random_string
-    end while self.class.exists?(:invitation_code => random_string)
+    20.times do
+      random_string = Array.new(6) { EASY_CODE_CHARS.sample }.join
+      unless self.class.active_code_taken?(random_string)
+        self.invitation_code = random_string
+        return
+      end
+    end
+    self.invitation_code = Array.new(8) { EASY_CODE_CHARS.sample }.join
+  end
+
+  def invitation_code_has_easy_shape
+    return if invitation_code.blank? || self.class.easy_code?(invitation_code)
+    errors.add(:invitation_code, "must be #{EASY_CODE_MIN_LENGTH}-#{EASY_CODE_MAX_LENGTH} letters or numbers")
+  end
+
+  def invitation_code_is_available_while_active
+    return unless invitation_code.present? && active?
+    return unless self.class.active_code_taken?(invitation_code, except_id: id)
+    errors.add(:invitation_code, "is already active")
   end
 
 

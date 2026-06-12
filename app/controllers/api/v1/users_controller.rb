@@ -48,16 +48,39 @@ module Api::V1
 		#Get
 		#URL : v1/users/generate_invitation?user_type=consumer
 		def generate_invitation
-			if current_user.ramaining_invitation_limit > 0
+			multi_use = ActiveModel::Type::Boolean.new.cast(params[:multi_use]) || false
+			if multi_use || current_user.ramaining_invitation_limit > 0
 				@invitation = current_user.invitations.new()
+				custom_code = params[:invitation_code].presence || params[:custom_code].presence || params[:code].presence
+				@invitation.multi_use = multi_use
+
+				if custom_code.present?
+					unless Invitation.easy_code?(custom_code)
+						render json: {
+							message: "Invitation code must be #{Invitation::EASY_CODE_MIN_LENGTH}-#{Invitation::EASY_CODE_MAX_LENGTH} letters or numbers"
+						}, status: 422
+						return
+					end
+
+					if Invitation.active_code_taken?(custom_code)
+						render json: {
+							message: "Invitation code is already active"
+						}, status: 422
+						return
+					end
+
+					@invitation.invitation_code = custom_code
+				end
 
 				# Pull a pronounceable code from auth.foaf.io's invitation
 				# primitive (Job 23, CVCV-CVCV "mavo-leni") instead of the
 				# legacy random alphanumeric. canonicalize_invitation_code
 				# strips the hyphen and uppercases on save. On FOAF failure
 				# we fall through to the local random-code generator so a
-				# transient auth.foaf.io blip doesn't kill the inviter UX.
-				if current_user.foaf_id.present?
+				# transient auth.foaf.io blip doesn't kill the inviter UX. Custom
+				# and multi-use codes stay local because railsbackend owns their
+				# active/inactive lifecycle.
+				if @invitation.invitation_code.blank? && !multi_use && current_user.foaf_id.present?
 					begin
 						auth_status, auth_body = AuthFoafClient.create_invitation(
 							inviter_foaf_id: current_user.foaf_id,
@@ -79,13 +102,10 @@ module Api::V1
 				if params[:user_price].present?
 					@invitation.user_price = params[:user_price]
 				end
+				if params[:label].present?
+					@invitation.label = params[:label].to_s.strip
+				end
 				@invitation.status = 0
-				# Multi-use codes can be redeemed by many people and switched
-				# on/off by the creator. Defaults to single-use when the param
-				# is absent. (auth.foaf.io still mints a single code — signup
-				# passes the inviter's foaf_id, not the code, so multi-use is
-				# transparent to the auth side.)
-				@invitation.multi_use = ActiveModel::Type::Boolean.new.cast(params[:multi_use]) || false
 				# Default the invitation's subnet to the inviter's primary. Nullable
 				# during the backfill window — once Phase 3 runs, every existing user
 				# has a primary membership and this will always be set.
@@ -103,8 +123,8 @@ module Api::V1
 						@invitation.user_type = allowed if allowed.present?
 					end
 				end
-				if @invitation.save!
-				render json: @invitation, status: 200
+				if @invitation.save
+					render json: @invitation, status: 200
 				else
 					render json: @invitation.errors, status: 422
 				end
@@ -245,11 +265,20 @@ module Api::V1
 				return
 			end
 			
-			unless invitation.pending?
-				render json: {
-					message: "Invitation code is already used"
-				}, status: 422
-				return
+			if invitation.multi_use?
+				unless invitation.active?
+					render json: {
+						message: "This invitation code is no longer active"
+					}, status: 422
+					return
+				end
+			else
+				unless invitation.pending?
+					render json: {
+						message: "Invitation code is already used"
+					}, status: 422
+					return
+				end
 			end
 
 			# Prevent non-demo users from accepting demo invitations (and vice versa)
@@ -286,8 +315,14 @@ module Api::V1
 			# add the invitiation group if the user doesn't have it
 			current_user.user_groups.find_or_create_by(group_label: invitation.user_type)
 
-			# update status
-			invitation.update(status: :accepted, accepted_id: current_user.id)
+			if invitation.multi_use?
+				invitation.invitation_redemptions.find_or_create_by!(user_id: current_user.id) do |r|
+					r.redeemed_at = Time.current
+				end
+			else
+				# update status
+				invitation.update(status: :accepted, accepted_id: current_user.id)
+			end
 
 			# Record the connection in FOAF's contact_edges. Best-effort —
 			# don't fail the local accept if the FOAF call errors (the local

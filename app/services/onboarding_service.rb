@@ -83,6 +83,9 @@ class OnboardingService
     # redemption row; otherwise apply effects (which records the redemption).
     # The self-redeem / demo-crossover guards above still run first.
     if invitation.multi_use?
+      unless invitation.active?
+        return Result.new(status: 'failed', invitation: invitation, user: @user, error_message: 'This invitation code is no longer active')
+      end
       if invitation.invitation_redemptions.exists?(user_id: @user.id)
         return Result.new(status: 'completed', invitation: invitation, user: @user)
       end
