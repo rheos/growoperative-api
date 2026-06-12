@@ -102,5 +102,84 @@ RSpec.describe Notifications, type: :model, skip_hooks: true do
         )
       }.to raise_error(ArgumentError, /Unknown notification event/)
     end
+
+    it 'persists the subject link on each created row' do
+      Notifications.publish!(
+        event:      :request_created,
+        actor:      actor,
+        recipients: [recipient1],
+        resource:   item_request,
+        metadata:   {}
+      )
+
+      n = Notification.last
+      expect(n.subject_type).to eq('ItemRequest')
+      expect(n.subject_id).to eq(item_request.id)
+    end
+  end
+
+  describe '.resolve!' do
+    let(:trustline) do
+      Trustline.create!(
+        user_a: actor, user_b: recipient1,
+        credit_limit_a_to_b: 100, credit_limit_b_to_a: 100, current_balance: 0
+      )
+    end
+    let(:pending_payment) do
+      PendingPayment.create!(
+        from_user: actor, to_user: recipient1, trustline: trustline,
+        amount: 25.0, kind: :payment, status: :pending
+      )
+    end
+
+    def publish_pending_payment!
+      Notifications.publish!(
+        event:      :pending_payment_created,
+        actor:      actor,
+        recipients: [recipient1],
+        resource:   pending_payment,
+        metadata:   {}
+      )
+    end
+
+    it 'resolves the matching notification once the obligation completes' do
+      publish_pending_payment!
+      n = Notification.last
+      expect(n.resolved_at).to be_nil
+
+      pending_payment.update!(status: :confirmed)
+      Notifications.resolve!(pending_payment)
+
+      n.reload
+      expect(n.resolved_at).to be_present
+      expect(n.resolution_reason).to eq('confirmed')
+    end
+
+    it 'is a no-op when zero matching unresolved notifications exist' do
+      expect {
+        Notifications.resolve!(pending_payment)
+      }.not_to raise_error
+      expect(Notification.count).to eq(0)
+    end
+
+    it 'creates a born-resolved row when the obligation is already resolved at publish time' do
+      pending_payment.update!(status: :confirmed)
+
+      publish_pending_payment!
+
+      n = Notification.last
+      expect(n.resolved_at).to be_present
+      expect(n.resolution_reason).to eq('confirmed')
+    end
+
+    it 'leaves the row unresolved while resolved_when returns nil' do
+      publish_pending_payment!
+
+      Notifications.resolve!(pending_payment)
+
+      n = Notification.last.reload
+      expect(n.resolved_at).to be_nil
+      expect(n.resolution_reason).to be_nil
+    end
   end
 end

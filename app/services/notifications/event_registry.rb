@@ -9,6 +9,18 @@ module Notifications
   #   - actor    = the User who triggered the event
   #   - resource = the domain object (ItemRequest, Order, Trustline, etc.)
   #   - metadata = extra hash passed by the call site
+  #
+  # Obligation keys (actionable events):
+  #   - subject:       extracts the obligation object from the publish args; persisted on the
+  #                    notification row as subject_type/subject_id
+  #   - resolved_when: pure derivation from current domain state; returns a resolution reason
+  #                    symbol, or nil while the obligation is still outstanding
+  #
+  # Future informational/FYI events (e.g. request_accepted, payment_received) that require no
+  # action from the recipient should declare:
+  #   resolved_when: ->(**) { :informational }
+  # evaluated at publish time (the row is born resolved). No v1 decision is forced; this shape
+  # accommodates it.
   module EventRegistry
     EVENTS = {
       request_created: {
@@ -18,7 +30,16 @@ module Notifications
         },
         target_type:   'item',
         target_screen: 'item_detail',
-        target_id:     ->(resource:, **) { resource.request_contract.inventory_id }
+        target_id:     ->(resource:, **) { resource.request_contract.inventory_id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, **) {
+          return :orphaned   if subject.nil? || subject.destroyed?
+          return :accepted   if subject.accepted? || subject.completed?
+          return :cancelled  if subject.cancelled?
+          contract = subject.request_contract
+          return :cancelled  if contract.nil? || contract.cancelled?
+          nil
+        }
       },
 
       pending_payment_created: {
@@ -27,7 +48,15 @@ module Notifications
         },
         target_type:   'trustline',
         target_screen: 'trustlines',
-        target_id:     ->(resource:, **) { resource.trustline_id }
+        target_id:     ->(resource:, **) { resource.trustline_id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, **) {
+          return :orphaned   if subject.nil? || subject.destroyed?
+          return :confirmed  if subject.confirmed?
+          return :rejected   if subject.rejected?
+          return :cancelled  if subject.cancelled?
+          nil  # outstanding while pending?
+        }
       },
 
       payment_request_created: {
@@ -36,7 +65,15 @@ module Notifications
         },
         target_type:   'trustline',
         target_screen: 'trustlines',
-        target_id:     ->(resource:, **) { resource.trustline_id }
+        target_id:     ->(resource:, **) { resource.trustline_id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, **) {
+          return :orphaned   if subject.nil? || subject.destroyed?
+          return :paid       if subject.paid_pending_confirmation? || subject.confirmed?
+          return :rejected   if subject.rejected?
+          return :cancelled  if subject.cancelled?
+          nil  # outstanding while pending?
+        }
       },
 
       payment_request_paid: {
@@ -45,7 +82,15 @@ module Notifications
         },
         target_type:   'trustline',
         target_screen: 'trustlines',
-        target_id:     ->(resource:, **) { resource.trustline_id }
+        target_id:     ->(resource:, **) { resource.trustline_id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, **) {
+          return :orphaned   if subject.nil? || subject.destroyed?
+          return :confirmed  if subject.confirmed?
+          return :rejected   if subject.rejected?
+          return :cancelled  if subject.cancelled?
+          nil  # outstanding while paid_pending_confirmation?
+        }
       }
 
       # Future events follow the same shape:

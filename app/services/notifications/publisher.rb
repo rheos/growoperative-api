@@ -24,6 +24,7 @@ module Notifications
 
       message    = resolve(config[:message],    actor: actor, resource: resource, metadata: metadata)
       target_id  = resolve(config[:target_id],  actor: actor, resource: resource, metadata: metadata)
+      subject    = resolve(config[:subject],    actor: actor, resource: resource, metadata: metadata)
 
       actor_name       = actor.user_name
       actor_avatar_url = actor.avatar_url
@@ -47,9 +48,15 @@ module Notifications
           target_type:      config[:target_type],
           target_id:        target_id,
           target_screen:    config[:target_screen],
-          metadata:         metadata.presence
+          metadata:         metadata.presence,
+          subject_type:     subject&.class&.name,
+          subject_id:       subject&.id
         )
       end
+
+      # Close the publish-time race: if the obligation completed in the gap around
+      # publish, the freshly-created rows are born and immediately resolved here.
+      Notifications.resolve!(subject) if subject
 
       notifications
     end

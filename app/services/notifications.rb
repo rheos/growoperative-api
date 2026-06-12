@@ -12,4 +12,10 @@ module Notifications
       metadata:   metadata
     )
   end
+
+  # Re-derives resolution state for every unresolved notification whose subject is
+  # this record. Safe to call anywhere the obligation's state may have changed.
+  def self.resolve!(record)
+    Notifications::Resolver.call(record)
+  end
 end
