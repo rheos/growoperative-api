@@ -117,6 +117,14 @@ class DemoResetService
     ItemRelationship.where(relationship_id: rel_ids).delete_all if rel_ids.any?
     Review.where(user_id: user_ids).delete_all
 
+    # Notifications about these users' (now-deleted) domain objects — both sides:
+    # a counterparty's notification about a reset user's subject must not survive.
+    # The reset bypasses callbacks by design; deleting alongside the domain rows
+    # (not resolving) is the consistent behavior.
+    Notification.where(recipient_id: user_ids)
+                .or(Notification.where(actor_id: user_ids))
+                .delete_all
+
     # Requests and orders
     ItemRequest.where(user_id: user_ids).or(ItemRequest.where(friend_id: user_ids)).delete_all
     RequestContract.where(user_id: user_ids).delete_all

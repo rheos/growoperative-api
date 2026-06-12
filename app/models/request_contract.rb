@@ -8,6 +8,10 @@ class RequestContract < ApplicationRecord
 
   # callbacks
   after_update :update_callback
+  # update_callback fans hop statuses with update_all, which bypasses ItemRequest
+  # callbacks — this contract-level hook is what resolves hop notifications on
+  # chain cancellation and sign-completion, after the transaction commits.
+  after_commit :resolve_hop_notifications, on: :update
 
   def update_callback
     if self.completed? || self.cancelled?
@@ -23,5 +27,12 @@ class RequestContract < ApplicationRecord
     #   # remove reserved inventory
     #   self.inventory.destroy
     # end
+  end
+
+  private
+
+  def resolve_hop_notifications
+    return unless cancelled? || completed?
+    item_requests.find_each { |ir| Notifications.resolve!(ir) }
   end
 end
