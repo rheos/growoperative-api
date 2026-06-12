@@ -11,6 +11,12 @@ class PendingPayment < ApplicationRecord
 
   scope :for_user, ->(user) { where('from_user_id = ? OR to_user_id = ?', user.id, user.id) }
 
+  # UNCONDITIONAL — do NOT add `if: :saved_change_to_status?` or any other guard.
+  # Multi-save transactions (see ItemRequest#perform_accept!) reset saved-changes
+  # tracking and silently defeat such guards. The Resolver is idempotent and a
+  # create-time fire is a zero-row no-op, so firing on every commit is safe.
+  after_commit :resolve_notifications, on: [:create, :update]
+
   # Debtor (to_user on a request) marks that they've paid in cash. Moves the
   # record to paid_pending_confirmation; the creditor (from_user) must still
   # confirm receipt before the trustline updates.
@@ -97,6 +103,10 @@ class PendingPayment < ApplicationRecord
   end
 
   private
+
+  def resolve_notifications
+    Notifications.resolve!(self)
+  end
 
   def resolved?
     confirmed? || rejected? || cancelled?

@@ -51,7 +51,8 @@ RSpec.describe 'Notifications API', type: :request, skip_hooks: true do
       expect(n.keys).to contain_exactly(
         'id', 'type', 'message', 'actor_name', 'actor_avatar_url',
         'target_type', 'target_id', 'target_screen', 'metadata',
-        'read', 'read_at', 'created_at'
+        'read', 'read_at', 'created_at',
+        'subject_type', 'subject_id', 'resolved_at', 'resolution_reason', 'outstanding'
       )
       expect(n['type']).to eq('request_created')
       expect(n['read']).to eq(false)

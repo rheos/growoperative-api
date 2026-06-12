@@ -77,6 +77,36 @@ RSpec.describe DemoResetService do
     expect(User.exists?(user_name: 'reset_bob')).to be true
   end
 
+  describe 'notification wipe' do
+    let!(:outsider) do
+      User.create!(
+        user_name: 'reset_outsider',
+        email: 'reset_outsider@example.com',
+        password: 'bobsentme!',
+        password_confirmation: 'bobsentme!',
+      )
+    end
+
+    def make_notification(recipient:, actor:)
+      Notification.create!(
+        recipient: recipient, actor: actor,
+        notification_type: 'request_created', message: 'reset wipe test'
+      )
+    end
+
+    it 'deletes notifications where an affected user is the recipient OR the actor' do
+      as_recipient = make_notification(recipient: alice, actor: outsider)
+      as_actor     = make_notification(recipient: outsider, actor: alice)
+      unrelated    = make_notification(recipient: outsider, actor: outsider)
+
+      DemoResetService.new.call
+
+      expect(Notification.exists?(as_recipient.id)).to be false
+      expect(Notification.exists?(as_actor.id)).to be false
+      expect(Notification.exists?(unrelated.id)).to be true
+    end
+  end
+
   describe 'audit logging' do
     it 'records a started and a succeeded entry with the actor and source' do
       DemoResetService.new(source: 'api', actor_user: bob).call

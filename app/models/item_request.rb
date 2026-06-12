@@ -10,6 +10,19 @@ class ItemRequest < ApplicationRecord
 
   #callbacks
 
+  # UNCONDITIONAL — do NOT add `if: :saved_change_to_status?` or any other guard.
+  # perform_accept! saves this same row up to three times inside one transaction,
+  # which resets saved-changes tracking and silently defeats such guards. The
+  # Resolver is idempotent and a create-time fire is a zero-row no-op (nothing
+  # has been published yet), so firing on every commit is safe.
+  # :destroy covers hard-deleted hops (edge 5: deleted ItemRequest → :orphaned
+  # via resolved_when's subject.destroyed? branch), including the Order-destroy
+  # cascade. NOTE: this must stay ONE registration — a separate
+  # `after_destroy_commit :resolve_notifications` line registers the same filter
+  # on the same :commit chain, and ActiveSupport removes the earlier duplicate,
+  # silently killing the create/update hook.
+  after_commit :resolve_notifications, on: [:create, :update, :destroy]
+
   #attribs
   enum status: [ :pending, :accepted, :completed, :cancelled, :reserved ]
 
@@ -175,6 +188,10 @@ class ItemRequest < ApplicationRecord
   end
 
   private
+
+  def resolve_notifications
+    Notifications.resolve!(self)
+  end
 
   def requested_item_unit
     if request_contract.unit.present?
