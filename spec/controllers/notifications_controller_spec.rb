@@ -81,15 +81,71 @@ RSpec.describe 'Notifications API', type: :request, skip_hooks: true do
     end
   end
 
+  # API contract (Phase 3 frontend builds against this):
+  #   GET /v1/notifications/unread_count
+  #   Response: { "unread_count": N, "outstanding_count": N }
+  #     where N = count of notifications where resolved_at IS NULL for current_user
+  #     (same value for both keys in v1 — stale clients reading only unread_count
+  #     inherit the outstanding-count semantic)
   describe 'GET /v1/notifications/unread_count' do
-    it 'returns the count of unread notifications' do
-      create_notification(read: false)
-      create_notification(read: false)
-      create_notification(read: true, read_at: Time.current)
+    it 'returns the unresolved count as both unread_count and outstanding_count' do
+      create_notification
+      create_notification(read: true, read_at: Time.current) # read but still outstanding
+      create_notification(resolved_at: Time.current, resolution_reason: 'accepted')
+
+      get '/v1/notifications/unread_count', headers: auth_headers
+      body = JSON.parse(response.body)
+      expect(body).to eq('unread_count' => 2, 'outstanding_count' => 2)
+    end
+
+    it 'returns 0 when all notifications are resolved' do
+      create_notification(resolved_at: 1.hour.ago, resolution_reason: 'accepted')
+      create_notification(resolved_at: Time.current, resolution_reason: 'cancelled')
+
+      get '/v1/notifications/unread_count', headers: auth_headers
+      body = JSON.parse(response.body)
+      expect(body).to eq('unread_count' => 0, 'outstanding_count' => 0)
+    end
+
+    it 'does not change when a notification is marked read' do
+      n = create_notification
+      create_notification
+
+      patch "/v1/notifications/#{n.id}/read", headers: auth_headers
+      expect(response).to have_http_status(200)
 
       get '/v1/notifications/unread_count', headers: auth_headers
       body = JSON.parse(response.body)
       expect(body['unread_count']).to eq(2)
+      expect(body['outstanding_count']).to eq(2)
+    end
+
+    it 'does not change when read_all is called' do
+      create_notification
+      create_notification
+
+      patch '/v1/notifications/read_all', headers: auth_headers
+      expect(response).to have_http_status(200)
+
+      get '/v1/notifications/unread_count', headers: auth_headers
+      body = JSON.parse(response.body)
+      expect(body['unread_count']).to eq(2)
+      expect(body['outstanding_count']).to eq(2)
+    end
+
+    it 'falls when a notification is resolved' do
+      n = create_notification
+      create_notification
+
+      get '/v1/notifications/unread_count', headers: auth_headers
+      expect(JSON.parse(response.body)['outstanding_count']).to eq(2)
+
+      n.resolve!(:accepted)
+
+      get '/v1/notifications/unread_count', headers: auth_headers
+      body = JSON.parse(response.body)
+      expect(body['unread_count']).to eq(1)
+      expect(body['outstanding_count']).to eq(1)
     end
   end
 
