@@ -20,9 +20,19 @@ module Api::V1
     end
 
     # GET /v1/notifications/unread_count
+    #
+    # API contract (Phase 3 frontend builds against this):
+    #   Response: { "unread_count": N, "outstanding_count": N }
+    #   where N = count of notifications with resolved_at IS NULL for current_user
+    #   (same value for both keys in v1).
+    #
+    # The badge count derives from outstanding obligations (unresolved), NOT from
+    # read state. `unread_count` keeps the same value so stale clients that only
+    # read that key silently inherit the outstanding-count semantic. The
+    # read/read_all endpoints remain seen-state-only affordances.
     def unread_count
-      count = current_user.notifications.unread.count
-      render json: { unread_count: count }
+      count = current_user.notifications.unresolved.count
+      render json: { unread_count: count, outstanding_count: count }
     end
 
     # PATCH /v1/notifications/:id/read
