@@ -190,6 +190,28 @@ module Api::V1
 			end
 		end
 
+		# GET /v1/invitations/suggest_code
+		# Mints an easy, currently-available code so the create form's Custom
+		# code field starts populated. Same generator the model uses for its
+		# random fallback (house EASY_CODE_CHARS alphabet, no I/O).
+		def suggest_code
+			render json: { code: Invitation.generate_available_code }, status: 200
+		end
+
+		# GET /v1/invitations/code_available?code=...
+		# Live availability check for a custom Multi-pass code, mirroring
+		# users#handle_available. Returns available:false with reason
+		# 'invalid_format' for shapes the model would reject (not 3-16 A-Z0-9),
+		# otherwise available per the active-code uniqueness rule.
+		def code_available
+			raw = params[:code].to_s
+			unless Invitation.easy_code?(raw)
+				render json: { available: false, reason: 'invalid_format' }, status: 200
+				return
+			end
+			render json: { available: !Invitation.active_code_taken?(raw) }, status: 200
+		end
+
 		private
 		def invitation_params
 			params.require(:invitation).permit(:label, :user_price)

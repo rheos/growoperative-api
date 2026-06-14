@@ -71,16 +71,21 @@ class Invitation < ApplicationRecord
   # Random-code fallback for cases where the controller doesn't pre-fill
   # `invitation_code` from auth.foaf.io. Skipped when the code is already
   # set (the canonical pronounceable-from-FOAF path).
+  # Mint an easy, currently-available code from the house alphabet. Shared by
+  # the random-code fallback below and the create-form suggestion endpoint
+  # (InvitationsController#suggest_code), so suggestions follow the same
+  # EASY_CODE_CHARS alphabet (no I/O) and active-code uniqueness rule.
+  def self.generate_available_code
+    20.times do
+      candidate = Array.new(6) { EASY_CODE_CHARS.sample }.join
+      return candidate unless active_code_taken?(candidate)
+    end
+    Array.new(8) { EASY_CODE_CHARS.sample }.join
+  end
+
   def generate_invitation_code
     return if invitation_code.present?
-    20.times do
-      random_string = Array.new(6) { EASY_CODE_CHARS.sample }.join
-      unless self.class.active_code_taken?(random_string)
-        self.invitation_code = random_string
-        return
-      end
-    end
-    self.invitation_code = Array.new(8) { EASY_CODE_CHARS.sample }.join
+    self.invitation_code = self.class.generate_available_code
   end
 
   def invitation_code_has_easy_shape
