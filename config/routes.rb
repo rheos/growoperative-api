@@ -90,6 +90,10 @@ Rails.application.routes.draw do
         put 'set_active'
         collection do
           patch 'user_info'
+          # Create-form helpers: a server-minted suggestion to pre-fill the
+          # custom code field, and a live availability check as the user edits.
+          get 'suggest_code'
+          get 'code_available'
         end
       end
       resources :categories, only: [:index]
