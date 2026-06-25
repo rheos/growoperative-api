@@ -133,6 +133,9 @@ Rails.application.routes.draw do
         end
       end
 
+      # Push notification token registration / de-registration
+      resource :push_tokens, only: [:create, :destroy]
+
       # Mutual Credit / Trustlines System
       resources :trustlines do
         member do

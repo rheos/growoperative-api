@@ -58,6 +58,8 @@ module Notifications
       # publish, the freshly-created rows are born and immediately resolved here.
       Notifications.resolve!(subject) if subject
 
+      Notifications::PushDelivery.deliver(notifications.map(&:id))
+
       notifications
     end
 

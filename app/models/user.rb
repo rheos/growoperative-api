@@ -37,6 +37,7 @@ class User < ApplicationRecord
   has_many   :reviews, dependent: :destroy
   has_many   :category_sizes, dependent: :destroy
   has_many   :notifications, foreign_key: :recipient_id, dependent: :destroy
+  has_many   :push_tokens, dependent: :destroy
   has_many   :subnet_memberships, dependent: :destroy
   has_many   :subnets, through: :subnet_memberships
   # has_many   :relations, class_name: 'Relationship', :foreign_key => 'friend_id'

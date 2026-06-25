@@ -37,6 +37,27 @@ services:
     expose:
       - "8080"
 
+  # Beta backend — isolated on-demand env (own DB growoperative_beta, own auth
+  # via bauth.foaf.io). Gated behind the "beta" compose profile so a normal
+  # `up -d` never starts it, and restart:"no" so a reboot/daemon-restart won't
+  # resurrect it. Bring it up only when testing develop: `bin/beta-up`. nginx
+  # reaches it by name (backend-beta) via the docker resolver, so it is NOT in
+  # nginx's depends_on and nginx loads fine while beta is down.
+  backend-beta:
+    profiles: ["beta"]
+    build:
+      context: .
+      args:
+        RAILS_ENV: production
+    restart: "no"
+    env_file:
+      - .env.beta
+    environment:
+      RAILS_ENV: production
+      PORT: 8080
+    expose:
+      - "8080"
+
   nginx:
     image: nginx:alpine
     restart: always

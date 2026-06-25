@@ -33,8 +33,15 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # docs/claude/plans/todo/21-retire-rails-trustline-balances.md for the cutover.
   def index
     rows = Foaf::BalanceReader.fetch(current_user)
-    return render_foaf_unavailable if rows.nil?
-    render json: rows.map { |row| serialize_balance_row(row) }
+    return render json: rows.map { |row| serialize_balance_row(row) } unless rows.nil?
+
+    # FOAF is authoritative for balances, so a *production* FOAF outage must fail
+    # loud rather than silently serve possibly-diverged Rails balances. But local
+    # dev/test runs no FOAF service (docker-compose has no foaf container), so a
+    # nil here is normal there — fall back to Rails' own trustline data so the
+    # trustlines screen is usable instead of 503ing on every load.
+    return render_foaf_unavailable if Rails.env.production?
+    render json: current_user.trustlines.active.map { |tl| serialize_trustline(tl) }
   end
 
   # Shows details of a specific trustline

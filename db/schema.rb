@@ -282,6 +282,19 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["trustline_id"], name: "index_pending_payments_on_trustline_id"
   end
 
+  create_table "push_tokens", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "token", null: false
+    t.string "device_id", null: false
+    t.string "platform", null: false
+    t.datetime "last_seen_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token"], name: "index_push_tokens_on_token", unique: true
+    t.index ["user_id", "device_id"], name: "index_push_tokens_on_user_id_and_device_id", unique: true
+    t.index ["user_id"], name: "index_push_tokens_on_user_id"
+  end
+
   create_table "relationships", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.integer "friend_id"
     t.integer "status", default: 0
@@ -562,6 +575,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "pending_payments", "trustlines"
   add_foreign_key "pending_payments", "users", column: "from_user_id"
   add_foreign_key "pending_payments", "users", column: "to_user_id"
+  add_foreign_key "push_tokens", "users"
   add_foreign_key "relationships", "users"
   add_foreign_key "request_contracts", "items"
   add_foreign_key "request_contracts", "users"

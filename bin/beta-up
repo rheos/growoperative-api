@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# Bring the on-demand BETA backend UP.
+#
+# Starts the two beta containers that normally stay down:
+#   - auth-beta     (foaf-auth/service compose, "beta" profile)
+#   - backend-beta  (railsbackend compose,       "beta" profile)
+#
+# nginx already routes bpi.growoperative.app -> backend-beta and
+# bauth.foaf.io -> auth-beta via the docker resolver, so NO nginx reload is
+# needed — the moment these containers are up, the hosts go live (they serve
+# the maintenance page while down).
+#
+# Run ON THE BOX from ~/railsbackend:   ./bin/beta-up
+# From the laptop:
+#   ssh -i keys/Growoperative-Rails-2gb.pem ubuntu@35.163.185.37 \
+#       'cd ~/railsbackend && ./bin/beta-up'
+set -euo pipefail
+
+RB_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+AUTH_DIR="$(cd "${RB_DIR}/../foaf-auth" && pwd)"
+RB_COMPOSE="${RB_DIR}/docker-compose.prod.yml"
+AUTH_COMPOSE="${AUTH_DIR}/service/docker-compose.prod.yml"
+
+echo "[beta-up] starting auth-beta ..."
+sudo docker compose -f "${AUTH_COMPOSE}" --profile beta up -d auth-beta
+
+echo "[beta-up] starting backend-beta ..."
+sudo docker compose -f "${RB_COMPOSE}" --profile beta up -d backend-beta
+
+echo "[beta-up] waiting ~10s for boot ..."
+sleep 10
+
+# Smoke from inside the docker network (nginx can reach both by name).
+echo -n "[beta-up] auth-beta health: "
+sudo docker exec railsbackend-nginx-1 wget -qO- http://auth-beta:3000/v1/health 2>/dev/null \
+  && echo || echo "(not ready yet — check: sudo docker logs foaf-auth-auth-beta-1)"
+
+echo -n "[beta-up] backend-beta: "
+if sudo docker ps --format '{{.Names}}' | grep -qx 'railsbackend-backend-beta-1'; then
+  echo "running"
+else
+  echo "NOT running — check: sudo docker logs railsbackend-backend-beta-1"
+fi
+
+echo "[beta-up] done -> https://bpi.growoperative.app  |  https://bauth.foaf.io"
