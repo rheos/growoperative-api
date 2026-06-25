@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# Bring the on-demand BETA backend DOWN.
+#
+# Stops + removes backend-beta and auth-beta. nginx keeps the bpi/bauth server
+# blocks, so those hosts serve the maintenance page until the next ./bin/beta-up.
+# No nginx reload needed. The beta databases (growoperative_beta / foaf_auth_beta)
+# are untouched — only the running containers go away.
+#
+# Run ON THE BOX from ~/railsbackend:   ./bin/beta-down
+set -euo pipefail
+
+RB_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+AUTH_DIR="$(cd "${RB_DIR}/../foaf-auth" && pwd)"
+RB_COMPOSE="${RB_DIR}/docker-compose.prod.yml"
+AUTH_COMPOSE="${AUTH_DIR}/service/docker-compose.prod.yml"
+
+echo "[beta-down] stopping backend-beta ..."
+sudo docker compose -f "${RB_COMPOSE}" --profile beta rm -sf backend-beta
+
+echo "[beta-down] stopping auth-beta ..."
+sudo docker compose -f "${AUTH_COMPOSE}" --profile beta rm -sf auth-beta
+
+echo "[beta-down] done — bpi/bauth now serve the maintenance page until next beta-up."
