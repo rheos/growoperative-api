@@ -31,14 +31,22 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
       return render json: { message: 'These contacts are already connected' }, status: :conflict
     end
 
-    # 5. No pending introduction for this A/{B,C} triple (unordered B/C pair)
+    # 5. B and C must not have a BLOCKED relationship (either direction). A block is
+    #    sacrosanct: an introduction must never un-block a pair one party deliberately
+    #    blocked (W2 safety guard). The message is intentionally generic so it does not
+    #    leak who blocked whom.
+    if blocked_pair?(b, c)
+      return render json: { message: "These contacts can't be introduced." }, status: :conflict
+    end
+
+    # 6. No pending introduction for this A/{B,C} triple (unordered B/C pair)
     if Introduction.where(introducer_id: a.id, status: :pending)
                    .where('(introducee_a_id = :b AND introducee_b_id = :c) OR (introducee_a_id = :c AND introducee_b_id = :b)', b: b_id, c: c_id)
                    .exists?
       return render json: { message: 'A pending introduction for this pair already exists' }, status: :conflict
     end
 
-    # 6. Demo boundary (belt-and-suspenders; structurally unreachable via the public API
+    # 7. Demo boundary (belt-and-suspenders; structurally unreachable via the public API
     #    because the accepted-contact checks above already force same-demo, but kept as
     #    cheap defense-in-depth per Architecture → Technical Risks → demo-422)
     intro_check = Introduction.new(introducer: a, introducee_a: b, introducee_b: c)
@@ -111,16 +119,21 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
         # find_or_create_by! (BANG) on the normalized lower/higher-ID pair — serialized by the
         # row lock. The bang raises if the record fails to persist (validation error), rolling back
         # the transaction and leaving status as :pending — AC6: "exactly one Relationship".
-        # If a PENDING Relationship already exists between B and C (an unaccepted prior contact
-        # request), the block is skipped and that row is returned as-is, still :pending. Explicitly
-        # upgrade it to :accepted: both B and C have accepted this introduction, so promoting any
-        # prior pending request is the correct outcome (AC6).
+        # If a prior Relationship already exists between B and C, find_or_create_by! matches on
+        # (user_id, friend_id) and returns that row as-is (its status is ignored by the match), so
+        # we may need to upgrade it.
         low_id, high_id = [b.id, c.id].minmax
         rel = Relationship.find_or_create_by!(user_id: low_id, friend_id: high_id) do |r|
           r.status = :accepted
           r.action_user_id = introduction.introducer_id
         end
-        rel.update!(status: :accepted, action_user_id: introduction.introducer_id) unless rel.accepted?
+        # Upgrade a prior :pending OR :declined row to :accepted — both B and C have now explicitly
+        # consented to this introduction, so promoting a prior unaccepted/declined request is correct
+        # (consistent with Edge 5 re-introduction). A :blocked row is left UNTOUCHED: a block is
+        # sacrosanct and must never be flipped by an introduction. The create guard (#5) already
+        # rejects blocked pairs, so `|| rel.blocked?` is the TOCTOU backstop for a block that lands
+        # between create and accept.
+        rel.update!(status: :accepted, action_user_id: introduction.introducer_id) unless rel.accepted? || rel.blocked?
 
         introduction.update!(status: :completed)
         did_complete = true
@@ -209,6 +222,14 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
   # Returns true when there is an accepted Relationship between user_a and user_b in either direction.
   def accepted_contact?(user_a, user_b)
     Relationship.where(status: :accepted)
+                .where('(user_id = :a AND friend_id = :b) OR (user_id = :b AND friend_id = :a)',
+                       a: user_a.id, b: user_b.id)
+                .exists?
+  end
+
+  # Returns true when there is a blocked Relationship between user_a and user_b in either direction.
+  def blocked_pair?(user_a, user_b)
+    Relationship.where(status: :blocked)
                 .where('(user_id = :a AND friend_id = :b) OR (user_id = :b AND friend_id = :a)',
                        a: user_a.id, b: user_b.id)
                 .exists?
