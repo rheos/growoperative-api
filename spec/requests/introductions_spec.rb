@@ -120,6 +120,20 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(JSON.parse(response.body)['message']).to match(/already connected/i)
     end
 
+    it 'B and C have a BLOCKED relationship → 409, no introduction, no notifications (W2 create guard)' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+      # Force-create a blocked B↔C Relationship (same save(validate: false) technique as the
+      # AC10 cross-demo test). A block must never be un-blocked by an introduction.
+      low, high = [b.id, c.id].minmax
+      blocked = Relationship.new(user_id: low, friend_id: high, status: :blocked, action_user_id: b.id)
+      blocked.save(validate: false)
+
+      expect { post_intro(a, b.id, c.id) }.not_to change(Introduction, :count)
+      expect(response).to have_http_status(:conflict)
+      expect(Notification.where(subject_type: 'Introduction').count).to eq(0)
+    end
+
     it 'duplicate pending introduction (both B/C orderings) → 409 (AC4)' do
       a = mk('a'); b = mk('b'); c = mk('c')
       connect!(a, b); connect!(a, c)
@@ -303,6 +317,20 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(completed.find_by(recipient_id: c.id).actor_id).to eq(b.id)
       expect(completed.find_by(recipient_id: a.id).actor_id).to eq(b.id)
     end
+
+    it 'no-revert: a completed introduction cannot be declined → 422, stays completed (AC2)' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+      intro = create_pending_intro(a, b, c)
+
+      patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(b)
+      patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(c)
+      expect(intro.reload.status).to eq('completed')
+
+      patch "/v1/introductions/#{intro.id}/decline", headers: auth_headers(b)
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(intro.reload.status).to eq('completed')
+    end
   end
 
   # ---- 6. DECLINE (AC7, AC8) --------------------------------------------------
@@ -342,7 +370,7 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
 
   # ---- 7. RESOLVER REGRESSION (existing events still resolve) -----------------
 
-  describe 'resolver regression — request_created still resolves after the notification: kwarg' do
+  describe 'resolver regression — shipped events still resolve after the notification: kwarg' do
     def build_item_unit
       ItemUnit.create!(unit_name: "pounds-#{SecureRandom.hex(3)}", item_symbol: 'lb',
                        unit_type: :weight, equivalent: 453.592)
@@ -380,6 +408,32 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       n.reload
       expect(n.resolved_at).to be_present
       expect(n.resolution_reason).to eq('accepted')
+    end
+
+    it "resolves a pending_payment_created notification as 'confirmed' when its PendingPayment is confirmed" do
+      creditor = mk('ppcreditor')
+      debtor   = mk('ppdebtor')
+      ua, ub   = [creditor, debtor].sort_by(&:id)
+      trustline = Trustline.create!(user_a: ua, user_b: ub,
+                                    credit_limit_a_to_b: 100, credit_limit_b_to_a: 100, current_balance: 0)
+      payment = PendingPayment.create!(from_user: creditor, to_user: debtor, trustline: trustline,
+                                       amount: 25.0, kind: :payment, status: :pending)
+
+      Notifications.publish!(event: :pending_payment_created, actor: creditor, recipients: [debtor],
+                             resource: payment, metadata: {})
+
+      n = Notification.find_by(subject_type: 'PendingPayment', subject_id: payment.id)
+      expect(n).to be_present
+      expect(n.resolved_at).to be_nil
+
+      # Set confirmed WITHOUT firing the model callback, so the explicit resolve!
+      # below is what exercises the resolved_when path (and the new notification: kwarg).
+      payment.update_column(:status, PendingPayment.statuses[:confirmed])
+      Notifications.resolve!(payment)
+
+      n.reload
+      expect(n.resolved_at).to be_present
+      expect(n.resolution_reason).to eq('confirmed')
     end
   end
 
