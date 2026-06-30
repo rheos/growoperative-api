@@ -91,6 +91,49 @@ module Notifications
           return :cancelled  if subject.cancelled?
           nil  # outstanding while paid_pending_confirmation?
         }
+      },
+
+      # --- Contact introductions ---
+
+      introduction_requested: {
+        message:       ->(actor:, metadata:, **) {
+          "#{actor.user_name} would like to introduce you to #{metadata[:other_introducee_name]}"
+        },
+        target_type:   'introduction',
+        target_screen: 'introduction_detail',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, notification:, **) {
+          return :orphaned if subject.nil? || subject.destroyed?
+          return :declined if subject.declined?
+          return :accepted if subject.completed?
+          return :accepted if subject.accepted_by?(notification.recipient_id)  # this party fulfilled their side
+          nil  # pending and this party hasn't acted yet
+        }
+      },
+
+      introduction_completed: {
+        message:       ->(metadata:, **) {
+          if metadata[:other_introducee_name]
+            "You're now connected to #{metadata[:other_introducee_name]}"
+          else
+            "Your introduction of #{metadata[:introducee_a_name]} and #{metadata[:introducee_b_name]} worked — they're now connected"
+          end
+        },
+        target_type:   'introduction',
+        target_screen: 'introduction_detail',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
+      },
+
+      introduction_declined: {
+        message:       ->(actor:, **) { "#{actor.user_name} declined your introduction" },
+        target_type:   'introduction',
+        target_screen: 'introduction_detail',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
       }
 
       # Future events follow the same shape:
