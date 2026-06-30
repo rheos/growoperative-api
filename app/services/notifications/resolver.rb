@@ -18,7 +18,7 @@ module Notifications
       # notification.notification_type is a STRING; EVENTS hash uses SYMBOL keys — to_sym is required.
       registry_entry = Notifications::EventRegistry.fetch(notification.notification_type.to_sym)
       return nil unless registry_entry&.key?(:resolved_when)
-      registry_entry[:resolved_when].call(subject: record)
+      registry_entry[:resolved_when].call(subject: record, notification: notification)
     rescue ArgumentError
       # EventRegistry.fetch raises ArgumentError for unknown events — treat as no resolver.
       nil
