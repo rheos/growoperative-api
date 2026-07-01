@@ -17,7 +17,7 @@ module Discovery
       cell_lat = (lat.to_f / GRID_SIZE_DEG).floor * GRID_SIZE_DEG + GRID_SIZE_DEG / 2.0
       lon_step = GRID_SIZE_DEG / [Math.cos(cell_lat * Math::PI / 180.0), COS_FLOOR].max
       cell_lng = (lng.to_f / lon_step).floor * lon_step + lon_step / 2.0
-      [cell_lat.round(8), cell_lng.round(8)]
+      [cell_lat.round(6), cell_lng.round(6)]
     end
   end
 end
