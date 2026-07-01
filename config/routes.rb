@@ -136,6 +136,13 @@ Rails.application.routes.draw do
       # Push notification token registration / de-registration
       resource :push_tokens, only: [:create, :destroy]
 
+      # Local Discovery — opt-in "who's near me" over the credit network.
+      scope 'discovery', controller: :discovery do
+        patch :location, action: :update_location
+        patch :settings, action: :update_settings
+        get   :nearby
+      end
+
       # Mutual Credit / Trustlines System
       resources :trustlines do
         member do
