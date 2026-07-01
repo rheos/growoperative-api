@@ -72,6 +72,21 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "introductions", options: "ENGINE=InnoDB DEFAULT CHARSET=latin1", force: :cascade do |t|
+    t.bigint "introducer_id", null: false
+    t.bigint "introducee_a_id", null: false
+    t.bigint "introducee_b_id", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "accepted_a_at"
+    t.datetime "accepted_b_at"
+    t.integer "declined_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["introducee_a_id"], name: "index_introductions_on_introducee_a_id"
+    t.index ["introducee_b_id"], name: "index_introductions_on_introducee_b_id"
+    t.index ["introducer_id", "status"], name: "index_introductions_on_introducer_and_status"
+  end
+
   create_table "inventories", options: "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
@@ -556,6 +571,9 @@ ActiveRecord::Schema.define(version: 201811070122202) do
   add_foreign_key "categories", "item_units", column: "default_unit_id"
   add_foreign_key "category_units", "categories"
   add_foreign_key "category_units", "item_units"
+  add_foreign_key "introductions", "users", column: "introducee_a_id"
+  add_foreign_key "introductions", "users", column: "introducee_b_id"
+  add_foreign_key "introductions", "users", column: "introducer_id"
   add_foreign_key "inventories", "items"
   add_foreign_key "inventories", "users"
   add_foreign_key "invitations", "users"
