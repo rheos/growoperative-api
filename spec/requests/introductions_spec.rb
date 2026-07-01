@@ -318,6 +318,34 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(completed.find_by(recipient_id: a.id).actor_id).to eq(b.id)
     end
 
+    it 'completes correctly with the W1 pair advisory lock in place and releases it (no leaked lock)' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+      intro = create_pending_intro(a, b, c)
+
+      patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(b)
+      patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(c)
+      expect(response).to have_http_status(:ok)
+      expect(intro.reload.status).to eq('completed')
+
+      # The GET_LOCK / RELEASE_LOCK wrapping did not break the normal completion path:
+      # still exactly one accepted Relationship (AC6).
+      low, high = [b.id, c.id].minmax
+      rels = Relationship.where(user_id: low, friend_id: high)
+      expect(rels.count).to eq(1)
+      expect(rels.first.status).to eq('accepted')
+
+      # And the pair advisory lock was released after the completion transaction committed —
+      # a leaked (never-released) lock would still be held by this session, so IS_FREE_LOCK == 0.
+      # (Request specs run in-process on the same connection/session, so this session is the one
+      # that acquired the lock.) IS_FREE_LOCK returns 1 when the named lock is free.
+      lock_name = "go:intro:rel:#{low}:#{high}"
+      free = ActiveRecord::Base.connection.select_value(
+        "SELECT IS_FREE_LOCK(#{ActiveRecord::Base.connection.quote(lock_name)})"
+      )
+      expect(free.to_i).to eq(1)
+    end
+
     it 'no-revert: a completed introduction cannot be declined → 422, stays completed (AC2)' do
       a = mk('a'); b = mk('b'); c = mk('c')
       connect!(a, b); connect!(a, c)
