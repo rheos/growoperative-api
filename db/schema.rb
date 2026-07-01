@@ -541,6 +541,11 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.string "display_name"
     t.datetime "deleted_at"
     t.datetime "disabled_at"
+    t.decimal "latitude", precision: 9, scale: 6
+    t.decimal "longitude", precision: 9, scale: 6
+    t.boolean "location_opted_in", default: false, null: false
+    t.datetime "location_updated_at"
+    t.integer "discovery_radius_km"
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["disabled_at"], name: "index_users_on_disabled_at"
     t.index ["email"], name: "index_users_on_email", unique: true
@@ -549,6 +554,7 @@ ActiveRecord::Schema.define(version: 201811070122202) do
     t.index ["invitations_count"], name: "index_users_on_invitations_count"
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["invited_by_id"], name: "index_users_on_invited_by_type_and_invited_by_id"
+    t.index ["latitude", "longitude"], name: "index_users_on_latitude_and_longitude"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["user_name"], name: "index_users_on_user_name", unique: true
   end
