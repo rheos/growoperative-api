@@ -31,7 +31,7 @@ module Api::V1
       current_user.location_updated_at = Time.current
 
       if current_user.save
-        render json: { cell_lat: current_user.latitude, cell_lng: current_user.longitude }
+        render json: { cell_lat: current_user.latitude.to_f, cell_lng: current_user.longitude.to_f }
       else
         render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
       end
@@ -85,10 +85,8 @@ module Api::V1
       origin_lat = current_user.latitude.to_f
       origin_lng = current_user.longitude.to_f
       radius_km  = (current_user.discovery_radius_km || 25).to_i
-      staleness  = GlobalSetting.find_or_create_by(setting: 'DiscoveryStalenessDays') { |s|
-        s.value = 30
-      }.value.to_i
-      staleness  = 30 if staleness.zero?
+      staleness  = GlobalSetting.find_by(setting: 'DiscoveryStalenessDays')&.value.to_i
+      staleness  = 30 if staleness.nil? || staleness.zero?
       cutoff     = staleness.days.ago
 
       # Bounding-box prefilter — rides the composite [latitude, longitude]
@@ -108,7 +106,7 @@ module Api::V1
 
       # Same-demo scoping (user.rb:56/59): demo users see only demo users;
       # real users never see demo users.
-      base = current_user.demo? ? base.merge(User.demo) : base.where.not(id: User.demo.select(:id))
+      base = current_user.demo? ? base.where(id: User.demo.select(:id)) : base.where.not(id: User.demo.select(:id))
 
       # Centroid-to-centroid great-circle distance, in km. Sanitized SQL so
       # the origin coordinates can never be an injection vector.
