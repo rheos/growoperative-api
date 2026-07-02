@@ -26,4 +26,6 @@ Rails.application.config.filter_parameters += %i[
   invitation_code
   invited_code
   invite_code
+  latitude
+  longitude
 ]
