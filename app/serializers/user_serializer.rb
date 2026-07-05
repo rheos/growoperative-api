@@ -2,6 +2,12 @@ class UserSerializer
   include FastJsonapi::ObjectSerializer
   attributes :id, :user_name, :name, :nickname, :tokens, :created_at, :invite_limit
 
+  # Discovery visibility + radius ride the user payload so the client can seed
+  # its settings on session start (Account Settings shows server truth). The
+  # stored centroid is deliberately NOT serialized here — AC 15 exposes cells
+  # only through the discovery endpoints.
+  attributes :location_opted_in, :discovery_radius_km
+
   attributes :user_types do |object|
     object.user_groups
   end
