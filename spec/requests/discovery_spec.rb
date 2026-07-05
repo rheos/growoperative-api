@@ -373,6 +373,19 @@ RSpec.describe 'Discovery API', type: :request, skip_hooks: true do
     end
   end
 
+  context 'user payload exposes discovery settings but never the centroid (AC15)' do
+    it 'serializes location_opted_in and discovery_radius_km, not latitude/longitude' do
+      caller.update!(latitude: 49.655, longitude: -116.83, location_opted_in: true,
+                     discovery_radius_km: 50)
+      attrs = UserSerializer.new(caller).serializable_hash.dig(:data, :attributes)
+
+      expect(attrs[:location_opted_in]).to eq(true)
+      expect(attrs[:discovery_radius_km]).to eq(50)
+      expect(attrs).not_to have_key(:latitude)
+      expect(attrs).not_to have_key(:longitude)
+    end
+  end
+
   context 'AC15d — single GRID_SIZE_DEG on write and query' do
     # Non-circular guard: consume snap's ACTUAL output. Assert the single
     # constant is 0.01, then measure the E-W width between two ADJACENT-longitude
