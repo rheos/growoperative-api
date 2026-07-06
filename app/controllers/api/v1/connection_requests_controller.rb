@@ -23,6 +23,15 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
       return render json: { message: "You can't connect with yourself." }, status: :unprocessable_entity
     end
 
+    # Demo boundary pre-check (mirror introductions#create step 7). A demo↔non-demo pair fails
+    # the Relationship demo_boundary validation on save!, which would otherwise surface as a raw
+    # 500. Pre-check here and return 422 with a clear message so no lock is taken and no row is
+    # inserted. (The reuse path below only touches a pre-existing same-demo row, so this covers it.)
+    if me.demo? != friend.demo?
+      return render json: { message: 'Cannot connect across demo and non-demo accounts' },
+                    status: :unprocessable_entity
+    end
+
     low_id, high_id = [me.id, friend_id].minmax
     lock_name = "go:intro:rel:#{low_id}:#{high_id}"
     conn = ActiveRecord::Base.connection
@@ -94,6 +103,12 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
 
     rel.update!(status: :accepted)
 
+    # Explicitly resolve the recipient's connection_requested obligation row (resolved_when →
+    # :accepted). The connection_accepted publish below also resolves it as a side-effect via the
+    # shared subject, but resolving here makes the obligation lifecycle explicit and independent of
+    # publish ordering (mirrors introductions_controller#accept's Notifications.resolve!).
+    Notifications.resolve!(rel)
+
     # Best-effort FOAF contact edge (same guard+rescue as introductions_controller#accept).
     requester = User.find_by(id: rel.action_user_id)
     begin
@@ -123,6 +138,13 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     end
 
     rel.update!(status: :declined)
+
+    # Resolve the recipient's connection_requested obligation row (resolved_when → :declined).
+    # Decline neither publishes nor resolves otherwise, so without this the actionable
+    # "X wants to connect with you" inbox row stays outstanding forever (mirrors
+    # introductions_controller#decline's Notifications.resolve!).
+    Notifications.resolve!(rel)
+
     render json: { id: rel.id, status: rel.status }
   end
 
