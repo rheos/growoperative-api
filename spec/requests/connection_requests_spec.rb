@@ -24,6 +24,13 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
     create(:user, user_name: "#{prefix}_#{suffix}", email: "#{prefix}_#{suffix}@test.com")
   end
 
+  # A demo user (member of the 'demo' user group). Same helper shape as introductions_spec.
+  def mk_demo(prefix)
+    u = mk(prefix)
+    create(:user_group, user: u, group_label: 'demo')
+    u
+  end
+
   def auth_headers(user)
     { 'Authorization' => "Bearer #{JwtGenerationService.new(user).token}",
       'Content-Type'  => 'application/json' }
@@ -171,6 +178,17 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       expect(response).to have_http_status(:not_found)
     end
 
+    it 'cross-demo pair (demo user → non-demo user) → 422, no Relationship row created' do
+      demo_user  = mk_demo('demo')
+      plain_user = mk('plain')
+
+      # Without the pre-check, save! would raise ActiveRecord::RecordInvalid from the
+      # demo_boundary validation → raw 500. Pre-check returns 422 and never touches the table.
+      expect { post_connect(demo_user, plain_user.id) }.not_to change(Relationship, :count)
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)['message']).to match(/demo/i)
+    end
+
     it 'bidirectional guard: POST when a row exists in the REVERSE direction also → 409 (lock scenario)' do
       a = mk('a'); b = mk('b')
       # a requests b → normalized pending row
@@ -202,6 +220,13 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       expect(accepted.count).to eq(1)
       expect(accepted.first.recipient_id).to eq(a.id)
       expect(accepted.first.message).to include(b.user_name)
+
+      # The recipient's actionable connection_requested row is resolved once accepted (WARNING 1):
+      # the obligation must not linger in b's inbox after b accepts.
+      requested = rel_notifications(rel, type: 'connection_requested', recipient: b)
+      expect(requested.count).to eq(1)
+      expect(requested.first.resolved_at).to be_present
+      expect(requested.first.resolution_reason).to eq('accepted')
     end
 
     it 'requester cannot accept their own request → 403' do
@@ -250,6 +275,13 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)['status']).to eq('declined')
       expect(rel.reload.status).to eq('declined')
+
+      # The recipient's actionable connection_requested row is resolved on decline (BLOCKER):
+      # decline must not leave "X wants to connect with you" outstanding in b's inbox forever.
+      requested = rel_notifications(rel, type: 'connection_requested', recipient: b)
+      expect(requested.count).to eq(1)
+      expect(requested.first.resolved_at).to be_present
+      expect(requested.first.resolution_reason).to eq('declined')
     end
 
     it 'non-party cannot decline → 403' do
