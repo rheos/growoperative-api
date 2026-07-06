@@ -134,6 +134,31 @@ module Notifications
         target_id:     ->(resource:, **) { resource.id },
         subject:       ->(resource:, **) { resource },
         resolved_when: ->(**) { :informational }
+      },
+
+      # --- Connection requests (general connect handshake; Local Discovery's first caller) ---
+
+      connection_requested: {
+        message:       ->(actor:, **) { "#{actor.user_name} wants to connect with you" },
+        target_type:   'connection_request',
+        target_screen: 'connection_requests',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(subject:, **) {
+          return :orphaned   if subject.nil? || subject.destroyed?
+          return :accepted   if subject.accepted?
+          return :declined   if subject.declined?
+          nil
+        }
+      },
+
+      connection_accepted: {
+        message:       ->(actor:, **) { "#{actor.user_name} accepted your connection request" },
+        target_type:   'connection_request',
+        target_screen: 'connection_requests',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
       }
 
       # Future events follow the same shape:
