@@ -354,6 +354,33 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       expect(body['incoming']).to eq([])
     end
 
+    it 'reverse polarity (me = friend_id on the normalized row): still returns the counterparty for both incoming and outgoing' do
+      # The two examples above create `me` first, so `me` always has the lower id and lands on
+      # user_id — other_user's else-branch (rel.user, taken when me is friend_id) never runs.
+      # Here create BOTH counterparties first, so `me` gets the higher id and is friend_id on
+      # each normalized row, exercising that branch.
+      inc_friend = mk('incfriend') # initiates → incoming
+      out_friend = mk('outfriend') # I initiate → outgoing
+      me = mk('me')                # highest id → friend_id on both rows
+
+      incoming_rel = make_rel(inc_friend, me, status: :pending, action_user: inc_friend)
+      outgoing_rel = make_rel(out_friend, me, status: :pending, action_user: me)
+      # Guard: normalization actually put me on friend_id (else the branch under test isn't hit).
+      expect(incoming_rel.friend_id).to eq(me.id)
+      expect(outgoing_rel.friend_id).to eq(me.id)
+
+      get '/v1/connection_requests', headers: auth_headers(me)
+      body = JSON.parse(response.body)
+
+      expect(body['incoming'].length).to eq(1)
+      expect(body['incoming'].first['id']).to eq(incoming_rel.id)
+      expect(body['incoming'].first['user']['id']).to eq(inc_friend.id) # counterparty, not me
+
+      expect(body['outgoing'].length).to eq(1)
+      expect(body['outgoing'].first['id']).to eq(outgoing_rel.id)
+      expect(body['outgoing'].first['user']['id']).to eq(out_friend.id) # counterparty, not me
+    end
+
     it 'does not include accepted or declined relationships' do
       me = mk('me'); friend = mk('friend'); other = mk('other')
       make_rel(friend, me, status: :accepted)
