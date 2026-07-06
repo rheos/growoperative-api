@@ -314,4 +314,65 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       expect(Relationship.find(JSON.parse(response.body)['id']).status).to eq('pending')
     end
   end
+
+  # ---- 6. GET index — pending requests for the Contact Book (Prompt 13, FR12/AC9) ---
+
+  describe 'GET /v1/connection_requests' do
+    it '401 for unauthenticated request' do
+      get '/v1/connection_requests'
+      expect(response).to have_http_status(401)
+    end
+
+    it 'empty arrays when no pending relationships' do
+      me = mk('me')
+      get '/v1/connection_requests', headers: auth_headers(me)
+      expect(response).to have_http_status(200)
+      body = JSON.parse(response.body)
+      expect(body['incoming']).to eq([])
+      expect(body['outgoing']).to eq([])
+    end
+
+    it 'incoming: other party initiated → appears in incoming with their user hash' do
+      me = mk('me'); friend = mk('friend')
+      rel = make_rel(friend, me, status: :pending)  # action_user = friend (u1)
+      get '/v1/connection_requests', headers: auth_headers(me)
+      body = JSON.parse(response.body)
+      expect(body['incoming'].length).to eq(1)
+      expect(body['incoming'].first['id']).to eq(rel.id)
+      expect(body['incoming'].first['user']['id']).to eq(friend.id)
+      expect(body['outgoing']).to eq([])
+    end
+
+    it 'outgoing: I initiated → appears in outgoing with the other party user hash' do
+      me = mk('me'); friend = mk('friend')
+      rel = make_rel(me, friend, status: :pending)  # action_user = me (u1)
+      get '/v1/connection_requests', headers: auth_headers(me)
+      body = JSON.parse(response.body)
+      expect(body['outgoing'].length).to eq(1)
+      expect(body['outgoing'].first['id']).to eq(rel.id)
+      expect(body['outgoing'].first['user']['id']).to eq(friend.id)
+      expect(body['incoming']).to eq([])
+    end
+
+    it 'does not include accepted or declined relationships' do
+      me = mk('me'); friend = mk('friend'); other = mk('other')
+      make_rel(friend, me, status: :accepted)
+      make_rel(other,  me, status: :declined)
+      get '/v1/connection_requests', headers: auth_headers(me)
+      body = JSON.parse(response.body)
+      expect(body['incoming']).to eq([])
+      expect(body['outgoing']).to eq([])
+    end
+
+    it 'user hash contains user_name, display_name, and avatar_url keys' do
+      me = mk('me'); friend = mk('friend')
+      make_rel(friend, me, status: :pending)
+      get '/v1/connection_requests', headers: auth_headers(me)
+      user_hash = JSON.parse(response.body)['incoming'].first['user']
+      expect(user_hash).to have_key('user_name')
+      expect(user_hash).to have_key('display_name')
+      expect(user_hash).to have_key('avatar_url')
+      expect(user_hash['user_name']).to eq(friend.user_name)
+    end
+  end
 end

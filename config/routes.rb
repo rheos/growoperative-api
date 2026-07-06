@@ -146,7 +146,7 @@ Rails.application.routes.draw do
 
       # Connection requests — the general connect handshake (writes an ordinary pending
       # Relationship). Local Discovery is its first caller.
-      resources :connection_requests, only: [:create] do
+      resources :connection_requests, only: [:create, :index] do
         member do
           patch :accept
           patch :decline
