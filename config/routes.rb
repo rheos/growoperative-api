@@ -144,6 +144,15 @@ Rails.application.routes.draw do
         end
       end
 
+      # Connection requests — the general connect handshake (writes an ordinary pending
+      # Relationship). Local Discovery is its first caller.
+      resources :connection_requests, only: [:create] do
+        member do
+          patch :accept
+          patch :decline
+        end
+      end
+
       # Local Discovery — opt-in "who's near me" over the credit network.
       scope 'discovery', controller: :discovery do
         patch :location, action: :update_location
