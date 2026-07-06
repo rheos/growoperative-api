@@ -1,5 +1,29 @@
 class Api::V1::ConnectionRequestsController < Api::V1::ApiController
 
+  # GET /v1/connection_requests
+  #
+  # Lists the current user's PENDING relationship requests, split into:
+  #   - incoming: the other party initiated (action_user_id != me.id) → I accept/decline
+  #   - outgoing: I initiated (action_user_id == me.id) → shown as "requested"
+  #
+  # Accepted/declined/blocked rows never appear (excluded by the status = pending WHERE clause).
+  # includes(:user, :friend) prevents N+1 on the in-Ruby partition + request_json below.
+  def index
+    me      = current_user
+    pending = Relationship
+                .where('user_id = ? OR friend_id = ?', me.id, me.id)
+                .where(status: :pending)
+                .includes(:user, :friend)
+
+    incoming = pending.select { |r| r.action_user_id != me.id }
+    outgoing = pending.select { |r| r.action_user_id == me.id }
+
+    render json: {
+      incoming: incoming.map { |r| request_json(r, me) },
+      outgoing: outgoing.map { |r| request_json(r, me) }
+    }
+  end
+
   # POST /v1/connection_requests  { friend_id: integer }
   #
   # The general connect handshake. Writes an ordinary Relationship(status: :pending) — this
@@ -156,5 +180,25 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     when :accepted then 'You are already connected.'
     when :pending  then 'A connection request is already pending.'
     end
+  end
+
+  # The party on the OTHER side of the relationship from `me` (the normalization convention
+  # stores the lower id as user_id, so either side may be me).
+  def other_user(rel, me)
+    rel.user_id == me.id ? rel.friend : rel.user
+  end
+
+  def request_json(rel, me)
+    other = other_user(rel, me)
+    {
+      id:     rel.id,
+      status: rel.status,
+      user: {
+        id:           other.id,
+        user_name:    other.user_name,
+        display_name: other.display_name.presence,
+        avatar_url:   other.avatar_url
+      }
+    }
   end
 end
