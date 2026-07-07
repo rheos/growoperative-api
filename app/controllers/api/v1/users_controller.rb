@@ -213,7 +213,14 @@ module Api::V1
 			# would nil out below and crash the serialization + price loop, taking
 			# out the whole contact book over one stale row (saw this with a leftover
 			# relationship pointing at a deleted demo user).
+			# Only accepted relationships are contacts. Discovery's connect handshake
+			# is the first path that writes :pending rows; without this filter a
+			# pending request would surface the other party as a full contact here
+			# (and in the price loop below) before it's accepted. Pending requests
+			# live only in the Connection Requests surface until accepted; declined
+			# and blocked never belong in the contact book.
 			relationships = Relationship.where("user_id = :id OR friend_id = :id", id: current_user.id)
+				.where(status: :accepted)
 				.includes(:user, :friend)
 				.select { |rel| rel.user.present? && rel.friend.present? }
 

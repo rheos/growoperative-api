@@ -137,6 +137,27 @@ RSpec.describe 'v1 user endpoints', type: :request do
       expect(friend_payload['user_name']).to eq('bruce_contact')
       expect(friend_payload['avatar_url']).to eq('https://dauth.foaf.io/uploads/bruce.png')
     end
+
+    it 'excludes pending / declined / blocked relationships — only accepted are contacts' do
+      accepted = User.create!(user_name: 'accepted_pal', email: 'accepted_pal@example.com',
+                              password: password, password_confirmation: password)
+      pending  = User.create!(user_name: 'pending_pal', email: 'pending_pal@example.com',
+                              password: password, password_confirmation: password)
+      declined = User.create!(user_name: 'declined_pal', email: 'declined_pal@example.com',
+                              password: password, password_confirmation: password)
+      Relationship.create!(user: user, friend: accepted, status: :accepted, action_user_id: user.id)
+      Relationship.create!(user: user, friend: pending,  status: :pending,  action_user_id: user.id)
+      Relationship.create!(user: user, friend: declined, status: :declined, action_user_id: user.id)
+      allow(AuthFoafClient).to receive(:identity_by_handle).and_return([200, { 'avatar_url' => nil }])
+
+      get '/v1/users/contact_list', env: auth_headers
+
+      expect(response).to have_http_status(:ok)
+      names = parsed['items'].map { |rel| [rel['user']['user_name'], rel['friend']['user_name']] }.flatten
+      expect(names).to include('accepted_pal')
+      expect(names).not_to include('pending_pal')
+      expect(names).not_to include('declined_pal')
+    end
   end
 
   describe 'GET /v1/users/by_handle/:handle' do
