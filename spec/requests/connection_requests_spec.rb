@@ -302,6 +302,82 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
     end
   end
 
+  # ---- 4b. DELETE withdraw ----------------------------------------------------
+  #
+  # The "Undo" backing: the REQUESTER (action_user) cancels their own pending outgoing
+  # request. Mirrors decline (status → declined, recipient's connection_requested resolved)
+  # but authorizes action_user_id specifically, not either party.
+
+  describe 'DELETE /v1/connection_requests/:id/withdraw' do
+    it '401 unauthenticated' do
+      a = mk('a'); b = mk('b')
+      rel = make_rel(a, b, status: :pending, action_user: a)
+      delete "/v1/connection_requests/#{rel.id}/withdraw", headers: { 'Content-Type' => 'application/json' }
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it 'requester withdraws their pending request → 200, status declined, recipient notification resolved' do
+      a = mk('a'); b = mk('b')
+      post_connect(a, b.id)
+      rel = Relationship.find(JSON.parse(response.body)['id'])
+      # sanity: a is the requester, b is the recipient holding the actionable row
+      expect(rel.action_user_id).to eq(a.id)
+      expect(rel_notifications(rel, type: 'connection_requested', recipient: b).count).to eq(1)
+
+      delete "/v1/connection_requests/#{rel.id}/withdraw", headers: auth_headers(a)
+      expect(response).to have_http_status(:ok)
+
+      body = JSON.parse(response.body)
+      expect(body['id']).to eq(rel.id)
+      expect(body['status']).to eq('declined')
+      expect(rel.reload.status).to eq('declined')
+
+      # The recipient's actionable connection_requested row must resolve (else b's inbox badge
+      # lingers on a request the sender already withdrew).
+      requested = rel_notifications(rel, type: 'connection_requested', recipient: b)
+      expect(requested.count).to eq(1)
+      expect(requested.first.resolved_at).to be_present
+      expect(requested.first.resolution_reason).to eq('declined')
+    end
+
+    it 'non-requester (recipient) cannot withdraw → 403' do
+      a = mk('a'); b = mk('b')
+      post_connect(a, b.id)
+      rel = Relationship.find(JSON.parse(response.body)['id'])
+
+      delete "/v1/connection_requests/#{rel.id}/withdraw", headers: auth_headers(b)
+      expect(response).to have_http_status(:forbidden)
+      expect(JSON.parse(response.body)['message']).to match(/not authorized/i)
+      expect(rel.reload.status).to eq('pending')
+    end
+
+    it 'non-party cannot withdraw → 403' do
+      a = mk('a'); b = mk('b'); outsider = mk('out')
+      post_connect(a, b.id)
+      rel = Relationship.find(JSON.parse(response.body)['id'])
+
+      delete "/v1/connection_requests/#{rel.id}/withdraw", headers: auth_headers(outsider)
+      expect(response).to have_http_status(:forbidden)
+      expect(rel.reload.status).to eq('pending')
+    end
+
+    it 'already-declined (non-pending) request → 422' do
+      a = mk('a'); b = mk('b')
+      rel = make_rel(a, b, status: :declined, action_user: a)
+
+      delete "/v1/connection_requests/#{rel.id}/withdraw", headers: auth_headers(a)
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)['message']).to match(/no longer pending/i)
+    end
+
+    it 'non-existent id → 404' do
+      a = mk('a')
+      delete '/v1/connection_requests/0/withdraw', headers: auth_headers(a)
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)['message']).to match(/not found/i)
+    end
+  end
+
   # ---- 5. EDGE 5 (spec:93) — target opts out of discovery mid-session ---------
 
   describe 'discovery opt-out does not affect the connect write (Edge 5)' do
