@@ -82,8 +82,16 @@ services:
       - backend
       - backend-demo
 
+  # Auto-renews all Let's Encrypt certs every 12h. MUST stay running — if this
+  # container is down, certs silently expire (api.growoperative.app lapsed
+  # 2026-07-06 because this service had never been started). `restart: always`
+  # keeps it up across reboots. Note: this renews the cert files on disk but
+  # does NOT reload nginx — a host cron reloads nginx daily so the renewed cert
+  # gets served (deploy-prod also force-recreates nginx). See the
+  # reference_prod_lightsail_ssh_and_certs memory.
   certbot:
     image: certbot/certbot
+    restart: always
     volumes:
       - ./nginx/certbot/conf:/etc/letsencrypt
       - ./nginx/certbot/www:/var/www/certbot

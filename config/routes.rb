@@ -136,6 +136,24 @@ Rails.application.routes.draw do
       # Push notification token registration / de-registration
       resource :push_tokens, only: [:create, :destroy]
 
+      # Contact introductions
+      resources :introductions, only: [:create, :show] do
+        member do
+          patch 'accept'
+          patch 'decline'
+        end
+      end
+
+      # Connection requests — the general connect handshake (writes an ordinary pending
+      # Relationship). Local Discovery is its first caller.
+      resources :connection_requests, only: [:create, :index] do
+        member do
+          patch :accept
+          patch :decline
+          delete :withdraw
+        end
+      end
+
       # Local Discovery — opt-in "who's near me" over the credit network.
       scope 'discovery', controller: :discovery do
         patch :location, action: :update_location

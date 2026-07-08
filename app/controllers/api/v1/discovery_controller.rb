@@ -12,7 +12,7 @@ module Api::V1
   # parent ApiController runs `before_action :authenticate!`, so an
   # unauthenticated request 401s before any action body runs.
   class DiscoveryController < ApiController
-    ALLOWED_RADII_KM = [5, 10, 25, 50, 100].freeze
+    ALLOWED_RADII_KM = [2, 5, 10, 25, 50, 100].freeze
 
     # PATCH /v1/discovery/location
     #
@@ -84,7 +84,7 @@ module Api::V1
 
       origin_lat = current_user.latitude.to_f
       origin_lng = current_user.longitude.to_f
-      radius_km  = (current_user.discovery_radius_km || 25).to_i
+      radius_km  = (current_user.discovery_radius_km || 5).to_i
       staleness  = GlobalSetting.find_by(setting: 'DiscoveryStalenessDays')&.value.to_i
       staleness  = 30 if staleness.nil? || staleness.zero?
       cutoff     = staleness.days.ago
@@ -120,22 +120,104 @@ module Api::V1
                 .sort_by(&:distance_km)
                 .select { |u| u.distance_km.to_f <= radius_km }
 
+      # Mutual contacts — flag-gated, privacy-critical (scope-brief §"Mutual
+      # contacts"). When SiteConfig[:show_mutual_contacts] is off there is ZERO
+      # computation and ZERO mutual data on the payload. When on, we return only
+      # the INTERSECTION of the caller's accepted contacts with each member's
+      # accepted contacts — never either party's full contact list.
+      #
+      # Query budget: at most 3 queries (my_ids pluck + cross fetch + faces
+      # load) regardless of member count — no N+1 (locked by a query-count
+      # spec). The faces load reapplies the SAME-DEMO boundary the `base` query
+      # uses (see :109 above) so a cross-demo mutual contact can never surface,
+      # even though the Relationship row is valid on each side individually.
+      mutual_by_member = compute_mutual_contacts(members) if mutual_contacts_flag?
+      mutual_by_member ||= {}
+
       render json: {
         origin_cell: { cell_lat: origin_lat, cell_lng: origin_lng },
-        members: members.map { |u| member_json(u) }
+        members: members.map { |u| member_json(u, mutual_faces: mutual_by_member[u.id]) }
       }
     end
 
     private
 
+    # Resolve the caller's subnet flag. Subnet resolution mirrors
+    # site_configs_controller.rb:19–26 (primary membership, then any). A caller
+    # with no subnet falls through to SiteConfig::DEFAULTS (flag default true).
+    def mutual_contacts_flag?
+      subnet = current_user.subnet_memberships.primary.first&.subnet ||
+               current_user.subnet_memberships.first&.subnet
+      SiteConfig.for(subnet)[:show_mutual_contacts]
+    end
+
+    # Build { member_id => [User, …] } of the mutual accepted contacts shared
+    # between the caller and each nearby member. Returns only the intersection,
+    # never a full contact list, and applies the SAME-DEMO boundary to the face
+    # load so no cross-demo contact leaks. At most 3 SQL queries total,
+    # independent of member count (no N+1).
+    def compute_mutual_contacts(members)
+      result = {}
+      return result if members.empty?
+
+      me         = current_user
+      member_ids = members.map(&:id)
+
+      # (1) My accepted contacts — one query, both directions.
+      my_ids = Relationship.where(status: :accepted)
+                           .where('user_id = :me OR friend_id = :me', me: me.id)
+                           .pluck(:user_id, :friend_id)
+                           .flatten
+                           .reject { |id| id == me.id }
+                           .uniq
+      return result if my_ids.empty?
+
+      # (2) Accepted relationships crossing (member set × my contacts) — one query.
+      cross = Relationship.where(status: :accepted)
+                          .where(
+                            '(user_id IN (:members) AND friend_id IN (:mine)) OR ' \
+                            '(user_id IN (:mine) AND friend_id IN (:members))',
+                            members: member_ids, mine: my_ids
+                          )
+
+      member_set = member_ids.to_set
+      mine_set   = my_ids.to_set
+      raw_map    = Hash.new { |h, k| h[k] = [] }
+      cross.each do |rel|
+        if member_set.include?(rel.user_id) && mine_set.include?(rel.friend_id)
+          raw_map[rel.user_id] << rel.friend_id
+        elsif member_set.include?(rel.friend_id) && mine_set.include?(rel.user_id)
+          raw_map[rel.friend_id] << rel.user_id
+        end
+      end
+      return result if raw_map.empty?
+
+      # (3) Load faces for every mutual contact id in one query, reapplying the
+      # SAME-DEMO boundary from the `base` query (discovery_controller.rb:109):
+      # a real user's contact who is a demo user (or vice-versa) is excluded
+      # here, so a cross-demo mutual can never appear even though the
+      # Relationship rows are individually valid.
+      all_mutual_ids = raw_map.values.flatten.uniq
+      faces_scope = User.auth_active.where(id: all_mutual_ids)
+      faces_scope = me.demo? ? faces_scope.where(id: User.demo.select(:id)) : faces_scope.where.not(id: User.demo.select(:id))
+      faces = faces_scope.index_by(&:id)
+
+      raw_map.each do |member_id, contact_ids|
+        result[member_id] = contact_ids.uniq.filter_map { |cid| faces[cid] }
+      end
+      result
+    end
+
     # Discovery-facing member card. No precise coordinate ever appears here:
     # cell_lat/cell_lng are the stored centroids (already coarse, snapped on
     # the /location write). role_label is the first non-meta group_label
-    # (demo/superuser filtered out).
-    def member_json(user)
+    # (demo/superuser filtered out). member_since is created_at.year (a bare
+    # integer, no coordinate). mutual (when present) carries only
+    # {id, name, avatar_url} — no coordinate. AC-15 invariant preserved.
+    def member_json(user, mutual_faces: nil)
       non_meta = user.user_groups.reject { |g| %w[demo superuser].include?(g.group_label) }
       role_label = non_meta.first&.group_label
-      {
+      hash = {
         id:           user.id,
         foaf_id:      user.foaf_id,
         display_name: user.display_name.presence || user.user_name,
@@ -143,8 +225,15 @@ module Api::V1
         role:         role_label,
         distance_km:  user.distance_km.to_f,
         cell_lat:     user.latitude.to_f,
-        cell_lng:     user.longitude.to_f
+        cell_lng:     user.longitude.to_f,
+        member_since: user.created_at.year
       }
+      if mutual_faces
+        hash[:mutual] = mutual_faces.map do |u|
+          { id: u.id, name: u.display_name.presence || u.user_name, avatar_url: u.avatar_url }
+        end
+      end
+      hash
     end
   end
 end
