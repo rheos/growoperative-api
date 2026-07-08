@@ -39,3 +39,7 @@ cookies.txt
 # Local skill symlink into parent Growoperative/.claude/skills (not portable, do not commit)
 .claude/skills/
 docker-compose.override.yml
+.DS_Store
+app/.DS_Store
+.bureau/runs/
+.bureau/archive/

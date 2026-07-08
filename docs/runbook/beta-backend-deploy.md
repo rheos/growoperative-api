@@ -150,10 +150,18 @@ sudo docker compose -f ~/foaf-auth/service/docker-compose.prod.yml --profile bet
 ```bash
 sudo docker compose -f ~/foaf-auth/service/docker-compose.prod.yml --profile beta up -d auth-beta
 # entrypoint migrates foaf_auth_beta. Then:
-sudo docker exec -e DEMO=true foaf-auth-auth-beta-1 bundle exec rake auth:keys:rotate
+sudo docker exec foaf-auth-auth-beta-1 bundle exec rake auth:keys:rotate
 sudo docker exec -e AUDIENCE=growoperative -e LABEL=railsbackend-beta \
   foaf-auth-auth-beta-1 bundle exec rake auth:service_tokens:issue   # prints token once
 ```
+
+> **Do NOT pass `-e DEMO=true` to `auth:keys:rotate`.** It mints a `demo: true`
+> signing key (kid `demo-…`), but the login path signs tokens via
+> `AuthSigningKey.current!` which defaults to `demo: false` and looks up a `prod-…`
+> key only. A demo-only key ⇒ `NoActiveSigningKeyError` ⇒ **every login 500s and the
+> app shows "invalid credentials."** `DEMO_TOKEN_ISSUER_ENABLED` / `FOAF_AUTH_ACCEPT_DEMO_KIDS`
+> are *verifier*-side flags; the issuer ignores them. Rotate WITHOUT the flag so a
+> `prod` key is minted. (Bit us on 2026-07-01 — beta login was dead from first bring-up.)
 
 Put the printed token into `~/railsbackend/.env.beta` → `FOAF_AUTH_SERVICE_TOKEN`.
 

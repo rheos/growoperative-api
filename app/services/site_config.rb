@@ -6,7 +6,8 @@ class SiteConfig
     visible_roles: %w[producer broker wholesaler retailer consumer],
     chain_limit: 3,
     default_markup: 10,
-    default_markup_type: 'percent'
+    default_markup_type: 'percent',
+    show_mutual_contacts: true
   }.freeze
 
   # Returns the merged flag hash for a subnet. Resolution order (first match wins):
