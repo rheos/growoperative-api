@@ -172,6 +172,34 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     render json: { id: rel.id, status: rel.status }
   end
 
+  # DELETE /v1/connection_requests/:id/withdraw
+  #
+  # Lets the REQUESTER cancel a pending outgoing request. Mirrors decline but
+  # authorizes action_user_id (the sender) rather than either party.
+  # Result is identical to decline: status → :declined, recipient notification resolved.
+  # A re-send later flips the declined row back to pending (existing create path at :87).
+  def withdraw
+    rel = Relationship.find_by(id: params[:id])
+    return render json: { message: 'Not found' }, status: :not_found unless rel
+
+    # Only the requester may withdraw (action_user_id is who initiated the request).
+    unless rel.action_user_id == current_user.id
+      return render json: { message: 'Not authorized' }, status: :forbidden
+    end
+
+    unless rel.pending?
+      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_entity
+    end
+
+    rel.update!(status: :declined)
+
+    # Resolve the recipient's connection_requested obligation row (resolved_when → :declined).
+    # Same as decline: without this, the recipient's "X wants to connect" row stays outstanding.
+    Notifications.resolve!(rel)
+
+    render json: { id: rel.id, status: rel.status }
+  end
+
   private
 
   def conflict_message(status)
