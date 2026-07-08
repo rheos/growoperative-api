@@ -7,6 +7,11 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
     b = User.find_by(id: b_id)
     c = User.find_by(id: c_id)
 
+    # Optional free-text note ("why they should connect") — stripped and capped at 280
+    # chars. No column: the note rides the notification metadata only, surfacing in B's
+    # and C's inbox message line. nil when omitted; the message lambda guards on presence.
+    note = params[:note].presence&.strip&.slice(0, 280)
+
     return render json: { message: 'User not found' }, status: :not_found unless b && c
 
     # VALIDATION ORDER (each returns before any notification row is created)
@@ -65,14 +70,14 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
       actor:      a,
       recipients: [b],
       resource:   introduction,
-      metadata:   { other_introducee_name: c.user_name, other_introducee_id: c.id }
+      metadata:   { other_introducee_name: c.user_name, other_introducee_id: c.id, note: note }
     )
     Notifications.publish!(
       event:      :introduction_requested,
       actor:      a,
       recipients: [c],
       resource:   introduction,
-      metadata:   { other_introducee_name: b.user_name, other_introducee_id: b.id }
+      metadata:   { other_introducee_name: b.user_name, other_introducee_id: b.id, note: note }
     )
 
     render json: introduction_json(introduction), status: :created

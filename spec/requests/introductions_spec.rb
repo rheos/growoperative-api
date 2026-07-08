@@ -171,6 +171,87 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
     end
   end
 
+  # ---- 1b. NOTE PARAM (B3) ----------------------------------------------------
+
+  describe 'POST /v1/introductions — optional note' do
+    def post_intro_with_note(a, b_id, c_id, note)
+      post '/v1/introductions',
+           params: { introducee_a_user_id: b_id, introducee_b_user_id: c_id, note: note }.to_json,
+           headers: auth_headers(a)
+    end
+
+    it 'note reaches both recipients: stored in metadata and appended to the message' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+
+      post_intro_with_note(a, b.id, c.id, "You'd get along")
+      expect(response).to have_http_status(:created)
+      intro = Introduction.find(JSON.parse(response.body)['id'])
+
+      requested = intro_notifications(intro, type: 'introduction_requested')
+      expect(requested.count).to eq(2)
+
+      # JSON metadata column round-trips to string keys.
+      requested.each do |row|
+        expect(row.metadata['note']).to eq("You'd get along")
+        expect(row.message).to include("You'd get along")
+        expect(row.message).to include('— "You\'d get along"')
+      end
+      # each row still names the OTHER introducee alongside the note
+      expect(requested.find_by(recipient_id: b.id).message).to include(c.user_name)
+      expect(requested.find_by(recipient_id: c.id).message).to include(b.user_name)
+    end
+
+    it 'without a note: message is the unchanged base form and metadata note is nil' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+
+      # post_intro sends no note param at all
+      create_pending_intro(a, b, c)
+      intro = Introduction.find(JSON.parse(response.body)['id'])
+
+      requested = intro_notifications(intro, type: 'introduction_requested')
+      requested.each do |row|
+        expect(row.metadata['note']).to be_nil
+        expect(row.message).not_to include('—')
+      end
+      # exact base form, no dash/quote suffix
+      b_row = requested.find_by(recipient_id: b.id)
+      expect(b_row.message).to eq("#{a.user_name} would like to introduce you to #{c.user_name}")
+      c_row = requested.find_by(recipient_id: c.id)
+      expect(c_row.message).to eq("#{a.user_name} would like to introduce you to #{b.user_name}")
+    end
+
+    it 'a blank note is treated as absent (no dash/quote suffix)' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+
+      post_intro_with_note(a, b.id, c.id, "   ")
+      expect(response).to have_http_status(:created)
+      intro = Introduction.find(JSON.parse(response.body)['id'])
+
+      requested = intro_notifications(intro, type: 'introduction_requested')
+      requested.each do |row|
+        expect(row.metadata['note']).to be_nil
+        expect(row.message).not_to include('—')
+      end
+    end
+
+    it 'note is capped at 280 characters' do
+      a = mk('a'); b = mk('b'); c = mk('c')
+      connect!(a, b); connect!(a, c)
+
+      long_note = 'x' * 300
+      post_intro_with_note(a, b.id, c.id, long_note)
+      expect(response).to have_http_status(:created)
+      intro = Introduction.find(JSON.parse(response.body)['id'])
+
+      row = intro_notifications(intro, type: 'introduction_requested', recipient: b).first
+      expect(row.metadata['note'].length).to eq(280)
+      expect(row.metadata['note']).to eq('x' * 280)
+    end
+  end
+
   # ---- 2. DEMO BOUNDARY (AC10) ------------------------------------------------
 
   describe 'POST /v1/introductions — demo boundary (AC10)' do

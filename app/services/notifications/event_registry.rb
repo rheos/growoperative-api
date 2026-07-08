@@ -97,7 +97,8 @@ module Notifications
 
       introduction_requested: {
         message:       ->(actor:, metadata:, **) {
-          "#{actor.user_name} would like to introduce you to #{metadata[:other_introducee_name]}"
+          base = "#{actor.user_name} would like to introduce you to #{metadata[:other_introducee_name]}"
+          metadata[:note].present? ? "#{base} — \"#{metadata[:note]}\"" : base
         },
         target_type:   'introduction',
         target_screen: 'introduction_detail',
