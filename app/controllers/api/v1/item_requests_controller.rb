@@ -203,6 +203,17 @@ module Api::V1
       # @request.accepted_at = DateTime.now
       result = @request.accept_request
       if result == true
+        # FYI to the counterparty (the requester when the owner accepts) — completes
+        # the request loop, which previously only notified on creation.
+        counterparty = current_user.id == @request.user_id ? @request.friend : @request.user
+        if counterparty
+          Notifications.publish!(
+            event:      :request_accepted,
+            actor:      current_user,
+            recipients: [counterparty],
+            resource:   @request
+          )
+        end
         render json: { message: 'Request has been accepted', data: serialize_request_result(@request) }, status: 200
       elsif result[:error] == 'unit_conversion_mismatch'
         render json: result.merge(data: serialize_request_result(@request)), status: 422
