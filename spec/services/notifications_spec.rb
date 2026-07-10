@@ -188,6 +188,64 @@ RSpec.describe Notifications, type: :model, skip_hooks: true do
       expect(n.recipient).to eq(recipient1)
       expect(n.resolved_at).to be_present
     end
+
+    it 'publishes order_shipped as a born-resolved FYI to the buyer' do
+      order = Order.create!(user_id: recipient1.id, friend_id: actor.id, order_status: :shipped)
+      Notifications.publish!(
+        event: :order_shipped, actor: actor, recipients: [recipient1], resource: order
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('order_shipped')
+      expect(n.message).to include('alice shipped')
+      expect(n.target_type).to eq('order')
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
+
+    it 'publishes order_signed as a born-resolved FYI to the seller' do
+      order = Order.create!(user_id: actor.id, friend_id: recipient1.id, order_status: :signed)
+      Notifications.publish!(
+        event: :order_signed, actor: actor, recipients: [recipient1], resource: order
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('order_signed')
+      expect(n.message).to include('alice signed for')
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
+
+    it 'publishes trustline_created as a born-resolved FYI to the counterparty' do
+      trustline = Trustline.create!(
+        user_a: actor, user_b: recipient1,
+        credit_limit_a_to_b: 100, credit_limit_b_to_a: 100, current_balance: 0
+      )
+      Notifications.publish!(
+        event: :trustline_created, actor: actor, recipients: [recipient1], resource: trustline
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('trustline_created')
+      expect(n.message).to eq('alice opened a trustline with you')
+      expect(n.target_type).to eq('trustline')
+      expect(n.target_id).to eq(trustline.id)
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
+
+    it 'publishes request_cancelled as a born-resolved FYI to the counterparty' do
+      Notifications.publish!(
+        event: :request_cancelled, actor: actor, recipients: [recipient1], resource: item_request
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('request_cancelled')
+      expect(n.message).to eq('alice cancelled the request for Tomatoes')
+      expect(n.target_type).to eq('item')
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
   end
 
   describe '.resolve!' do
