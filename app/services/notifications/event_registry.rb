@@ -218,15 +218,60 @@ module Notifications
         target_id:     ->(resource:, **) { resource.trustline_id },
         subject:       ->(resource:, **) { resource },
         resolved_when: ->(**) { :informational }
+      },
+
+      # --- Order lifecycle (FYI) ---
+
+      order_shipped: {
+        message:       ->(actor:, resource:, **) {
+          label = resource.order_label.presence || "order ##{resource.id}"
+          "#{actor.user_name} shipped #{label}"
+        },
+        target_type:   'order',
+        target_screen: 'order_detail',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
+      },
+
+      order_signed: {
+        message:       ->(actor:, resource:, **) {
+          label = resource.order_label.presence || "order ##{resource.id}"
+          "#{actor.user_name} signed for #{label}"
+        },
+        target_type:   'order',
+        target_screen: 'order_detail',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
+      },
+
+      # --- Trustline opened (FYI to the counterparty) ---
+
+      trustline_created: {
+        message:       ->(actor:, **) { "#{actor.user_name} opened a trustline with you" },
+        target_type:   'trustline',
+        target_screen: 'trustlines',
+        target_id:     ->(resource:, **) { resource.id },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
+      },
+
+      request_cancelled: {
+        message:       ->(actor:, resource:, **) {
+          item_name = resource.request_contract.inventory.item.name rescue 'an item'
+          "#{actor.user_name} cancelled the request for #{item_name}"
+        },
+        target_type:   'item',
+        target_screen: 'item_detail',
+        target_id:     ->(resource:, **) { resource.request_contract.inventory_id rescue nil },
+        subject:       ->(resource:, **) { resource },
+        resolved_when: ->(**) { :informational }
       }
 
       # Future events follow the same shape:
       #
-      # request_cancelled: { ... },
-      # order_shipped: { ... },
-      # order_signed: { ... },
-      # trustline_created: { ... },
-      # invitation_accepted: { ... },
+      # invitation_accepted: { ... },   # deferred: idempotency + multi-use-vs-single-use nuance
     }.freeze
 
     def self.fetch(event)

@@ -270,6 +270,18 @@ module Api::V1
         return
       end
 
+      # FYI to the counterparty — published here, before the contract/inventory teardown
+      # below tears @request down, so the message can still read the item name.
+      cancel_counterparty = current_user.id == @request.user_id ? @request.friend : @request.user
+      if cancel_counterparty && current_user.id != cancel_counterparty.id
+        Notifications.publish!(
+          event:      :request_cancelled,
+          actor:      current_user,
+          recipients: [cancel_counterparty],
+          resource:   @request
+        )
+      end
+
       if @request.status == 'reserved'
         inventory = @request.request_contract.inventory
         Rails.logger.info "Cancel reserved request - Inventory ID: #{inventory.id}, Status: #{inventory.status}, Ref ID: #{inventory.ref_id}"
