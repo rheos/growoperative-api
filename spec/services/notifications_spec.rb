@@ -116,6 +116,78 @@ RSpec.describe Notifications, type: :model, skip_hooks: true do
       expect(n.subject_type).to eq('ItemRequest')
       expect(n.subject_id).to eq(item_request.id)
     end
+
+    it 'publishes request_accepted as a born-resolved FYI to the requester' do
+      Notifications.publish!(
+        event:      :request_accepted,
+        actor:      actor,        # the party who accepted (the owner)
+        recipients: [recipient1], # the original requester
+        resource:   item_request
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('request_accepted')
+      expect(n.message).to eq('alice accepted your request for Tomatoes')
+      expect(n.target_type).to eq('item')
+      expect(n.target_screen).to eq('item_detail')
+      expect(n.target_id).to eq(inventory.id)
+      expect(n.recipient).to eq(recipient1)
+      expect(n.subject_type).to eq('ItemRequest')
+      expect(n.resolved_at).to be_present   # FYI is born resolved (:informational)
+    end
+
+    it 'publishes settlement_proposed as an actionable notification to the receiver' do
+      order = Order.create!(user_id: recipient1.id, friend_id: actor.id,
+                            order_status: :pending, settlement_status: 'proposed')
+      Notifications.publish!(
+        event: :settlement_proposed, actor: actor, recipients: [recipient1], resource: order
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('settlement_proposed')
+      expect(n.message).to include('alice proposed a settlement')
+      expect(n.target_type).to eq('order')
+      expect(n.target_id).to eq(order.id)
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_nil       # actionable: outstanding while 'proposed'
+    end
+
+    it 'publishes settlement_completed as a born-resolved FYI to the counterparty' do
+      order = Order.create!(user_id: recipient1.id, friend_id: actor.id,
+                            order_status: :shipped, settlement_status: 'settled')
+      Notifications.publish!(
+        event: :settlement_completed, actor: actor, recipients: [recipient1], resource: order
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('settlement_completed')
+      expect(n.message).to include('Settlement complete')
+      expect(n.target_type).to eq('order')
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
+
+    it 'publishes payment_received as a born-resolved FYI to the payer' do
+      trustline = Trustline.create!(
+        user_a: actor, user_b: recipient1,
+        credit_limit_a_to_b: 100, credit_limit_b_to_a: 100, current_balance: 0
+      )
+      pp = PendingPayment.create!(
+        from_user: recipient1, to_user: actor, trustline: trustline,
+        amount: 12.5, kind: :payment, status: :confirmed
+      )
+      Notifications.publish!(
+        event: :payment_received, actor: actor, recipients: [recipient1], resource: pp
+      )
+
+      n = Notification.last
+      expect(n.notification_type).to eq('payment_received')
+      expect(n.message).to eq('alice confirmed receipt of your $12.50')
+      expect(n.target_type).to eq('trustline')
+      expect(n.target_id).to eq(trustline.id)
+      expect(n.recipient).to eq(recipient1)
+      expect(n.resolved_at).to be_present
+    end
   end
 
   describe '.resolve!' do
