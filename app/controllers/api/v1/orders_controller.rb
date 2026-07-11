@@ -71,8 +71,11 @@ module Api::V1
         return
       end
 
+      prev_order_status = order.order_status
+      prev_settlement = order.settlement_status
       if order.apply_action(order_action_params, current_user.id)
         if Order.exists?(order.id)
+          publish_order_events!(order, prev_order_status, prev_settlement)
           render json: {
             data: serialize_order_detail(order.reload)
           }, status: 200
@@ -97,6 +100,37 @@ module Api::V1
 
     def order_action_params
       params.require(:order_action).permit(:action_name, :item_id, :settlement_type, :cash_amount)
+    end
+
+    # Publishes order-lifecycle + settlement notifications to the counterparty when
+    # apply_action moved the order's status. Guarded on prev != new so each transition
+    # fires once (a 'ship' can move both order_status and settlement_status).
+    def publish_order_events!(order, prev_order_status, prev_settlement)
+      counterparty_id = current_user.id.to_s == order.user_id.to_s ? order.friend_id : order.user_id
+      counterparty = User.find_by(id: counterparty_id)
+      return unless counterparty
+
+      if order.order_status != prev_order_status
+        case order.order_status
+        when 'shipped'
+          Notifications.publish!(event: :order_shipped, actor: current_user,
+                                 recipients: [counterparty], resource: order)
+        when 'signed'
+          Notifications.publish!(event: :order_signed, actor: current_user,
+                                 recipients: [counterparty], resource: order)
+        end
+      end
+
+      if order.settlement_status != prev_settlement
+        case order.settlement_status
+        when 'proposed'
+          Notifications.publish!(event: :settlement_proposed, actor: current_user,
+                                 recipients: [counterparty], resource: order)
+        when 'settled', 'accepted'
+          Notifications.publish!(event: :settlement_completed, actor: current_user,
+                                 recipients: [counterparty], resource: order)
+        end
+      end
     end
 
     def order_params

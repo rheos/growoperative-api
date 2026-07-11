@@ -75,6 +75,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     my_limit = params[:my_credit_limit] || params[:credit_limit] || 0
     their_limit = params[:their_credit_limit] || 0
 
+    # establish_trustline_with returns the existing line if one is already there;
+    # only notify the counterparty when this call actually opens a NEW trustline.
+    already_existed = current_user.trustline_with(@other_user).present?
     @trustline = current_user.establish_trustline_with(
       @other_user,
       my_credit_limit: my_limit,
@@ -84,6 +87,10 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
 
     if @trustline.persisted?
       Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
+      if !already_existed && @other_user
+        Notifications.publish!(event: :trustline_created, actor: current_user,
+                               recipients: [@other_user], resource: @trustline)
+      end
       render json: serialize_trustline(@trustline), status: :created
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_entity
