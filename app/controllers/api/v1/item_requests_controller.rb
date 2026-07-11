@@ -203,6 +203,17 @@ module Api::V1
       # @request.accepted_at = DateTime.now
       result = @request.accept_request
       if result == true
+        # FYI to the counterparty (the requester when the owner accepts) — completes
+        # the request loop, which previously only notified on creation.
+        counterparty = current_user.id == @request.user_id ? @request.friend : @request.user
+        if counterparty
+          Notifications.publish!(
+            event:      :request_accepted,
+            actor:      current_user,
+            recipients: [counterparty],
+            resource:   @request
+          )
+        end
         render json: { message: 'Request has been accepted', data: serialize_request_result(@request) }, status: 200
       elsif result[:error] == 'unit_conversion_mismatch'
         render json: result.merge(data: serialize_request_result(@request)), status: 422
@@ -257,6 +268,18 @@ module Api::V1
       if @request.request_contract.accepted? && @request.request_contract.user_id == current_user.id
         render json: { message: 'Request is reserved already, you can not cancel' }, status: 406
         return
+      end
+
+      # FYI to the counterparty — published here, before the contract/inventory teardown
+      # below tears @request down, so the message can still read the item name.
+      cancel_counterparty = current_user.id == @request.user_id ? @request.friend : @request.user
+      if cancel_counterparty && current_user.id != cancel_counterparty.id
+        Notifications.publish!(
+          event:      :request_cancelled,
+          actor:      current_user,
+          recipients: [cancel_counterparty],
+          resource:   @request
+        )
       end
 
       if @request.status == 'reserved'

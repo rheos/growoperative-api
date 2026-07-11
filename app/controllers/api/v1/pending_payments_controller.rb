@@ -87,6 +87,13 @@ module Api::V1
 
       begin
         new_balance = @pending_payment.confirm!
+        # FYI to the payer (the counterparty of the confirmer) that receipt was confirmed
+        # and the trustline balance settled.
+        payer = current_user.id == @pending_payment.from_user_id ? @pending_payment.to_user : @pending_payment.from_user
+        if payer
+          Notifications.publish!(event: :payment_received, actor: current_user,
+                                 recipients: [payer], resource: @pending_payment)
+        end
         render json: {
           message: 'Payment confirmed',
           new_balance: new_balance,
