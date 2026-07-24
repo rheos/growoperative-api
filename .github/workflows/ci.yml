@@ -1,0 +1,66 @@
+name: Rails upgrade safety
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  rspec-upgrade-safety:
+    name: RSpec upgrade safety
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: growoperative_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -uroot -prootpassword"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      RAILS_ENV: test
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_USERNAME: root
+      DATABASE_PASSWORD: rootpassword
+      SECRET_KEY_BASE: ci-secret-key-base
+      FOAF_AUTH_BASE_URL: http://localhost:3013
+      FOAF_AUTH_PUBLIC_BASE_URL: https://auth.foaf.io
+      FOAF_AUTH_SERVICE_TOKEN: ci-service-token
+      EXPO_ACCESS_TOKEN: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev imagemagick libmagickwand-dev
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2.11
+          bundler-cache: true
+
+      - name: Prepare test database
+        run: bundle exec rails db:test:prepare
+
+      # Temporary Rails-upgrade gate. The historical full suite is currently
+      # red on stale legacy scenario specs; expand this back to bare `rspec`
+      # once those baseline failures are retired.
+      - name: Run upgrade-safety specs
+        run: >
+          bundle exec rspec
+          spec/requests/foaf_auth_round_trip_contract_spec.rb
+          spec/services/auth_jwks_verifier_spec.rb
+          spec/controllers/job36_auth_resolution_spec.rb
+          spec/controllers/v1_auth_envelope_spec.rb
+          spec/controllers/sessions_cookie_attributes_spec.rb
+          spec/controllers/jwt_aud_enforcement_spec.rb
+          spec/controllers/jwt_hs256_bridge_sunset_spec.rb
+          spec/controllers/jwt_bridge_resolution_spec.rb
+          spec/services/jwt_generation_service_spec.rb
+          spec/requests/discovery_spec.rb

@@ -1,5 +1,5 @@
-require 'base64'
 require 'json'
+require 'jwt'
 require 'net/http'
 require 'openssl'
 require 'uri'
@@ -58,7 +58,7 @@ class AuthJwksClient
         @negative_cache = {}
         @key_cache
       end
-    rescue KeyError, JSON::ParserError, OpenSSL::PKey::RSAError, ArgumentError => e
+    rescue KeyError, JSON::ParserError, JWT::JWKError, OpenSSL::PKey::RSAError, ArgumentError => e
       raise FetchError, e.message
     end
 
@@ -129,17 +129,7 @@ class AuthJwksClient
     end
 
     def public_key_from_jwk(jwk)
-      rsa = OpenSSL::PKey::RSA.new
-      rsa.set_key(
-        OpenSSL::BN.new(base64url_decode(jwk.fetch('n')), 2),
-        OpenSSL::BN.new(base64url_decode(jwk.fetch('e')), 2),
-        nil
-      )
-      rsa
-    end
-
-    def base64url_decode(value)
-      Base64.urlsafe_decode64(value.to_s + ('=' * ((4 - value.to_s.length % 4) % 4)))
+      JWT::JWK.import(jwk).public_key
     end
   end
 end

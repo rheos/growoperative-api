@@ -21,7 +21,7 @@ RSpec.describe 'V1 password reset proxy', type: :request do
 
       post '/v1/password_resets', params: { email: 'x@example.test', origin: 'https://evil.example.com' }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)['error']).to eq('Invalid origin')
     end
   end

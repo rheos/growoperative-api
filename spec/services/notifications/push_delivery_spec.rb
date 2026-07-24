@@ -134,7 +134,7 @@ RSpec.describe Notifications::PushDelivery, type: :model, skip_hooks: true do
         }.to change { PushToken.where(token: token_str).count }.from(1).to(0)
       end
 
-      it 'sends a PII-free title and the notification id in data' do
+      it 'sends the category title, message body, and notification id in data' do
         recipient = create_user('recip')
         register_token(recipient, 'ExponentPushToken[okokokokokokokokokokok]')
         n = create_notification(recipient, notification_type: 'request_created')
@@ -145,7 +145,7 @@ RSpec.describe Notifications::PushDelivery, type: :model, skip_hooks: true do
 
         payload = captured.flatten.first
         expect(payload['title']).to eq('New item request')
-        expect(payload['body']).to eq('Open the app to see details')
+        expect(payload['body']).to eq('something happened')
         expect(payload.dig('data', 'notificationId')).to eq(n.id)
       end
 

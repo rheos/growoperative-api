@@ -109,7 +109,7 @@ RSpec.describe 'v1 user endpoints', type: :request do
         params: { user: { password: 'newpw1234!', password_confirmation: 'different' } },
         env: auth_headers
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(AuthFoafClient).not_to have_received(:change_password)
     end
   end

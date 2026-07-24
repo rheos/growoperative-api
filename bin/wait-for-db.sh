@@ -7,7 +7,7 @@ host="$1"
 shift
 cmd="$@"
 
-until mysql -h "$host" -u"$DATABASE_USERNAME" -p"$DATABASE_PASSWORD" -e 'SELECT 1'; do
+until mysql --skip-ssl -h "$host" -u"$DATABASE_USERNAME" -p"$DATABASE_PASSWORD" -e 'SELECT 1'; do
   >&2 echo "MySQL is unavailable - sleeping"
   sleep 1
 done

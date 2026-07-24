@@ -131,9 +131,12 @@ RSpec.describe 'log filter coverage', type: :request do
       invited_code
       invite_code
     ]
-    filter = Rails.application.config.filter_parameters
+    filters = Rails.application.config.filter_parameters
     expected.each do |key|
-      expect(filter).to include(key), "filter_parameters missing #{key.inspect} — log shipping could leak it"
+      matches = filters.any? do |filter|
+        filter.to_s == key.to_s || (filter.respond_to?(:match?) && filter.match?(key.to_s))
+      end
+      expect(matches).to be(true), "filter_parameters missing #{key.inspect} - log shipping could leak it"
     end
   end
 end

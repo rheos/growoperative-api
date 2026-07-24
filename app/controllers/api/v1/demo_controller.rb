@@ -45,7 +45,7 @@ class Api::V1::DemoController < Api::V1::ApiController
 
     if user.foaf_id.blank?
       Rails.logger.error("Demo login refused: user_id=#{user.id} has no foaf_id")
-      return render json: { error: 'Demo user is not provisioned for v1 auth' }, status: :unprocessable_entity
+      return render json: { error: 'Demo user is not provisioned for v1 auth' }, status: :unprocessable_content
     end
 
     status, body = AuthFoafClient.demo_token(foaf_id: user.foaf_id)
@@ -156,7 +156,7 @@ class Api::V1::DemoController < Api::V1::ApiController
 
     name = params[:name]
     if name.blank?
-      return render json: { error: 'Snapshot name is required' }, status: :unprocessable_entity
+      return render json: { error: 'Snapshot name is required' }, status: :unprocessable_content
     end
 
     include_requests = params[:include_requests] != false && params[:include_requests] != 'false'

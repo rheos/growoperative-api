@@ -33,7 +33,7 @@ module Api::V1
       if current_user.save
         render json: { cell_lat: current_user.latitude.to_f, cell_lng: current_user.longitude.to_f }
       else
-        render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: current_user.errors.full_messages }, status: :unprocessable_content
       end
     end
 
@@ -56,7 +56,7 @@ module Api::V1
         unless ALLOWED_RADII_KM.include?(radius)
           return render json: {
             errors: ["radius_km must be one of #{ALLOWED_RADII_KM.join(', ')}"]
-          }, status: :unprocessable_entity
+          }, status: :unprocessable_content
         end
         current_user.discovery_radius_km = radius
       end
@@ -67,7 +67,7 @@ module Api::V1
           discovery_radius_km: current_user.discovery_radius_km
         }
       else
-        render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: current_user.errors.full_messages }, status: :unprocessable_content
       end
     end
 

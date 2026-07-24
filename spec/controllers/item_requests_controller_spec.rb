@@ -302,7 +302,7 @@ RSpec.describe Api::V1::ItemRequestsController, type: :controller, skip_hooks: t
 
       post :accept, params: { id: request.id }
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)['error']).to eq('unit_conversion_mismatch')
       expect(request.reload).to be_pending
     end

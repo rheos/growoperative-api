@@ -46,7 +46,7 @@ RSpec.describe 'Multi-use invitation registration', type: :request, skip_hooks: 
     invitation = make_multi_use(code: 'MURMUL02', disabled: true)
 
     signup(code: invitation.invitation_code, user_name: 'mur_off')
-    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response).to have_http_status(:unprocessable_content)
     expect(parsed['message']).to eq('This invitation code is no longer active')
   end
 
@@ -66,7 +66,7 @@ RSpec.describe 'Multi-use invitation registration', type: :request, skip_hooks: 
       user_type: 'consumer', status: 1, accepted_id: inviter.id, invitation_code: 'MURSING1',
     )
     signup(code: invitation.invitation_code, user_name: 'mur_single')
-    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response).to have_http_status(:unprocessable_content)
     expect(parsed['message']).to eq('Invitation code is already used')
   end
 end

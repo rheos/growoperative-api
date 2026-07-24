@@ -28,7 +28,7 @@ module Api::V1
       head :no_content
     rescue ActiveRecord::RecordInvalid => e
       # Invalid param (e.g. platform not in ios/android) → 422, not an unhandled 500.
-      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_content
     end
 
     def destroy

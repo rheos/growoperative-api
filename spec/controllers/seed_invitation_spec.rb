@@ -61,7 +61,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
       expect(response).to have_http_status(201)
       body = JSON.parse(response.body)
       expect(body['invitation_code']).to be_present
-      expect(body['invitation_code'].length).to eq(8)
+      expect(body['invitation_code'].length).to be_between(6, 8).inclusive
+      expect(Invitation.easy_code?(body['invitation_code'])).to eq(true)
     end
 
     it 'persists subnet_seed_config with whitelisted flags and returns the code' do

@@ -43,7 +43,7 @@ module Api::V1
         foaf_id = params[:foaf_id].to_s
         new_password = params[:new_password].to_s
         if new_password.empty?
-          return render json: { error: 'password is required' }, status: :unprocessable_entity
+          return render json: { error: 'password is required' }, status: :unprocessable_content
         end
 
         target_identity = identity_for_audit(foaf_id)

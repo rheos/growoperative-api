@@ -6,7 +6,7 @@ class Inventory < ApplicationRecord
   has_many :unit_options, dependent: :destroy
  
   mount_uploaders :avatars, ImagesUploader
-  serialize :gallery_map, Array
+  serialize :gallery_map, coder: YAML, type: Array
 
   # Prevent S3 image deletion for demo users — images are shared across resets
   skip_callback :destroy, :before, :remove_avatars!, raise: false

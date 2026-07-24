@@ -169,7 +169,7 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
     it 'self-connect → 422' do
       a = mk('a')
       expect { post_connect(a, a.id) }.not_to change(Relationship, :count)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
 
     it 'unknown friend_id → 404' do
@@ -185,7 +185,7 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       # Without the pre-check, save! would raise ActiveRecord::RecordInvalid from the
       # demo_boundary validation → raw 500. Pre-check returns 422 and never touches the table.
       expect { post_connect(demo_user, plain_user.id) }.not_to change(Relationship, :count)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)['message']).to match(/demo/i)
     end
 
@@ -253,7 +253,7 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       rel = make_rel(a, b, status: :accepted, action_user: a)
 
       patch "/v1/connection_requests/#{rel.id}/accept", headers: auth_headers(b)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
 
     it 'accept a missing id → 404' do
@@ -298,7 +298,7 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       rel = make_rel(a, b, status: :accepted, action_user: a)
 
       patch "/v1/connection_requests/#{rel.id}/decline", headers: auth_headers(b)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 
@@ -366,7 +366,7 @@ RSpec.describe 'Connection Requests API', type: :request, skip_hooks: true do
       rel = make_rel(a, b, status: :declined, action_user: a)
 
       delete "/v1/connection_requests/#{rel.id}/withdraw", headers: auth_headers(a)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)['message']).to match(/no longer pending/i)
     end
 

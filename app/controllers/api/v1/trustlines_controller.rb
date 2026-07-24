@@ -93,7 +93,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       end
       render json: serialize_trustline(@trustline), status: :created
     else
-      render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_content
     end
   end
   
@@ -112,7 +112,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
       render json: serialize_trustline(@trustline)
     else
-      render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_content
     end
   end
   
@@ -127,7 +127,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     if @trustline.update(is_active: false)
       render json: { message: 'Trustline deactivated successfully' }
     else
-      render json: { errors: ['Failed to deactivate trustline'] }, status: :unprocessable_entity
+      render json: { errors: ['Failed to deactivate trustline'] }, status: :unprocessable_content
     end
   end
   
@@ -199,10 +199,10 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
           trustline: serialize_trustline(@trustline.reload)
         }
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     else
-      render json: { errors: ['Insufficient credit limit'] }, status: :unprocessable_entity
+      render json: { errors: ['Insufficient credit limit'] }, status: :unprocessable_content
     end
   end
   
@@ -225,7 +225,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     to_user = @trustline.other_user(current_user)
 
     if amount <= 0
-      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
+      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_content
     end
 
     # The Rails commit doesn't enforce the limit (force_capacity below), but the
@@ -265,7 +265,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         trustline: serialize_trustline(@trustline.reload)
       }
     rescue => e
-      render json: { errors: [e.message] }, status: :unprocessable_entity
+      render json: { errors: [e.message] }, status: :unprocessable_content
     end
   end
 
@@ -287,7 +287,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     from_user = @trustline.other_user(current_user)
 
     if amount <= 0
-      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_entity
+      return render json: { errors: ['Amount must be greater than zero'] }, status: :unprocessable_content
     end
 
     # Settlement direction: from_user's debt to current_user decreases.
@@ -310,7 +310,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
         trustline: serialize_trustline(@trustline.reload)
       }
     rescue => e
-      render json: { errors: [e.message] }, status: :unprocessable_entity
+      render json: { errors: [e.message] }, status: :unprocessable_content
     end
   end
 
@@ -396,13 +396,13 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
             amount: amount
           }
         else
-          render json: { errors: ['Path payment execution failed'] }, status: :unprocessable_entity
+          render json: { errors: ['Path payment execution failed'] }, status: :unprocessable_content
         end
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     else
-      render json: { errors: ['No payment path found'] }, status: :unprocessable_entity
+      render json: { errors: ['No payment path found'] }, status: :unprocessable_content
     end
   end
   
