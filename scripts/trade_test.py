@@ -691,31 +691,31 @@ def scenario_rotational_orders(client: Client, nodes: dict[int, str], edges: lis
             client.api_errors.append({"action": f"{buyer_name} fetch around", "error": str(e)[:160]})
             continue
         items_data = resp.get("data", []) if isinstance(resp, dict) else resp
-        inv_id = None
-        item_name = None
+        best_inventory: tuple[str, str | None, float] | None = None
         for entry in items_data or []:
             attrs = entry.get("attributes", {})
             owner = int(attrs.get("owner-id") or attrs.get("user-id") or 0)
             if owner != seller_id:
                 continue
-            if float(attrs.get("quantity") or 0) <= 0:
+            available = float(attrs.get("quantity") or 0)
+            if available <= 0:
                 continue
-            inv_id = entry["id"]
-            item_name = attrs.get("name")
-            break
-        if not inv_id:
+            if best_inventory is None or available > best_inventory[2]:
+                best_inventory = (entry["id"], attrs.get("name"), available)
+        if not best_inventory:
             info(f"  {buyer_name} → {seller_name}: no inventory visible, skipping hop")
             continue
         # Use a large quantity so this rotational contribution dominates any
         # cross-graph chain flow that happens to hit the same trustlines. Without
         # enough rotational magnitude, one misaligned edge can keep the loop open.
-        qty = 30.0
+        inv_id, item_name, available = best_inventory
+        qty = min(30.0, available)
         try:
             client.use(buyer_name).post(
                 f"/v1/items/{inv_id}/requests",
                 {"request": {"quantity": qty}},
             )
-            info(f"  {buyer_name} ordered {qty} of {item_name} from {seller_name}")
+            info(f"  {buyer_name} ordered {qty} of {item_name} from {seller_name} (available {available})")
             check_invariants(client, f"{buyer_name} ordered from {seller_name} (rotation)")
         except ApiError as e:
             msg = str(e)[:160]
