@@ -739,6 +739,30 @@ class Api::V1::DebugController < Api::V1::ApiController
     render json: { error: "Trustline #{params[:trustline_id]} not found" }, status: 404
   end
 
+  # GET /v1/debug/subnet_applications?status=pending
+  # Lists subnet applications. Optional ?status= filter (pending/approved/rejected).
+  def subnet_applications
+    scope = SubnetApplication.order(created_at: :desc)
+    scope = scope.where(status: params[:status]) if params[:status].present?
+
+    render json: {
+      count: scope.count,
+      applications: scope.map { |a|
+        {
+          id: a.id,
+          status: a.status,
+          community_name: a.community_name,
+          location: a.location,
+          contact_name: a.contact_name,
+          contact_email: a.contact_email,
+          description: a.description,
+          created_at: a.created_at,
+          reviewed_by: a.reviewed_by&.user_name,
+        }
+      }
+    }
+  end
+
   # GET /v1/debug/foaf/status
   # Quick check: is FOAF reachable and what's its state?
   def foaf_status
