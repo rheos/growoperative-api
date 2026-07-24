@@ -48,6 +48,26 @@ EXPECTED_APP_DB="growoperative_demo"
 EXPECTED_AUTH_DB="foaf_auth_demo"
 EXPECTED_FOAF_NETWORK="testnet"
 
+env_value() {
+  local file="$1"
+  local key="$2"
+  local value
+
+  value="$(grep -E "^[[:space:]]*${key}=" "${file}" | tail -n 1 | sed -E "s/^[[:space:]]*${key}=//" || true)"
+  value="${value%$'\r'}"
+  value="${value#\"}"
+  value="${value%\"}"
+  value="${value#\'}"
+  value="${value%\'}"
+
+  if [[ -z "${value}" ]]; then
+    echo "ERROR: ${key} not in ${file}"
+    exit 1
+  fi
+
+  printf '%s' "${value}"
+}
+
 # --- Safety: snapshots must be a clean baseline ----------------------------
 if [[ ! -f "${APP_SNAPSHOT_PATH}" ]]; then
   echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
@@ -79,16 +99,10 @@ if [[ ! -f "${APP_ENV_FILE}" ]]; then
   echo "ERROR: .env.demo not found at ${APP_ENV_FILE}"
   exit 1
 fi
-# shellcheck disable=SC1090
-set -a; source "${APP_ENV_FILE}"; set +a
-: "${DATABASE_HOST:?DATABASE_HOST not in railsbackend/.env.demo}"
-: "${DATABASE_USERNAME:?DATABASE_USERNAME not in railsbackend/.env.demo}"
-: "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in railsbackend/.env.demo}"
-: "${DATABASE_NAME:?DATABASE_NAME not in railsbackend/.env.demo}"
-APP_DB_HOST="${DATABASE_HOST}"
-APP_DB_USER="${DATABASE_USERNAME}"
-APP_DB_PASS="${DATABASE_PASSWORD}"
-APP_DB_NAME="${DATABASE_NAME}"
+APP_DB_HOST="$(env_value "${APP_ENV_FILE}" DATABASE_HOST)"
+APP_DB_USER="$(env_value "${APP_ENV_FILE}" DATABASE_USERNAME)"
+APP_DB_PASS="$(env_value "${APP_ENV_FILE}" DATABASE_PASSWORD)"
+APP_DB_NAME="$(env_value "${APP_ENV_FILE}" DATABASE_NAME)"
 
 # --- Load auth DB creds from foaf-auth/service/.env.demo -------------------
 AUTH_ENV_FILE="$(dirname "$(realpath "$0")")/../../foaf-auth/service/.env.demo"
@@ -96,16 +110,10 @@ if [[ ! -f "${AUTH_ENV_FILE}" ]]; then
   echo "ERROR: auth .env.demo not found at ${AUTH_ENV_FILE}"
   exit 1
 fi
-# shellcheck disable=SC1090
-set -a; source "${AUTH_ENV_FILE}"; set +a
-: "${DATABASE_HOST:?DATABASE_HOST not in foaf-auth/service/.env.demo}"
-: "${DATABASE_USERNAME:?DATABASE_USERNAME not in foaf-auth/service/.env.demo}"
-: "${DATABASE_PASSWORD:?DATABASE_PASSWORD not in foaf-auth/service/.env.demo}"
-: "${DATABASE_NAME:?DATABASE_NAME not in foaf-auth/service/.env.demo}"
-AUTH_DB_HOST="${DATABASE_HOST}"
-AUTH_DB_USER="${DATABASE_USERNAME}"
-AUTH_DB_PASS="${DATABASE_PASSWORD}"
-AUTH_DB_NAME="${DATABASE_NAME}"
+AUTH_DB_HOST="$(env_value "${AUTH_ENV_FILE}" DATABASE_HOST)"
+AUTH_DB_USER="$(env_value "${AUTH_ENV_FILE}" DATABASE_USERNAME)"
+AUTH_DB_PASS="$(env_value "${AUTH_ENV_FILE}" DATABASE_PASSWORD)"
+AUTH_DB_NAME="$(env_value "${AUTH_ENV_FILE}" DATABASE_NAME)"
 
 # --- Allowlist guards: both DBs must be the demo ones ---------------------
 if [[ "${APP_DB_NAME}" != "${EXPECTED_APP_DB}" ]]; then
