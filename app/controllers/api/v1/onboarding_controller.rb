@@ -79,7 +79,7 @@ class Api::V1::OnboardingController < Api::V1::ApiController
       render json: {
         error: result.error_message || 'onboarding_rejected',
         onboarding: status_payload(result.invitation),
-      }, status: :unprocessable_entity
+      }, status: :unprocessable_content
     when 'failed'
       # Retryable: 500 so the saga's retry policy fires. `failed` state
       # is recorded so subsequent GET /v1/onboarding/status reflects it.

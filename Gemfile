@@ -1,30 +1,19 @@
 source 'https://rubygems.org'
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
-ruby '2.7.8'
+ruby '3.2.11'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-gem 'rails', '~> 5.2.1'
+gem 'rails', '~> 7.1.5'
 # Use sqlite3 as the database for Active Record
-gem 'mysql2', '0.5.5'
+gem 'mysql2', '~> 0.5', '>= 0.5.6'
 # Use Puma as the app server
-gem 'puma', '~> 5.6'
-# Use SCSS for stylesheets
-gem 'sassc-rails', '~> 2.1'
-# Use Uglifier as compressor for JavaScript assets
-gem 'uglifier', '>= 4.2.0'
-# See https://github.com/rails/execjs#readme for more supported runtimes
-# gem 'mini_racer', platforms: :ruby
-gem 'jquery-ui-rails'
-# Use CoffeeScript for .coffee assets and views
-gem 'coffee-rails', '~> 5.0'
-# Turbolinks makes navigating your web application faster. Read more: https://github.com/turbolinks/turbolinks
-gem 'turbolinks', '~> 5'
+gem 'puma', '~> 6.4'
+gem 'sprockets-rails'
 # Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
 gem 'jbuilder', '~> 2.5'
 gem 'jwt'
-gem 'fast_jsonapi'
-gem 'react-rails', '~> 2.7'
+gem 'jsonapi-serializer'
 
 
 gem 'aws-sdk-s3', '~> 1.130.0', require: false
@@ -47,21 +36,18 @@ gem 'bootsnap', '>= 1.17.0', require: false
 # gem 'devise_token_auth'
 # gem 'omniauth'
 gem 'active_model_serializers', '~> 0.10.0'
-gem "font-awesome-rails"
-gem 'jquery-rails'
 gem 'devise',           '~> 4.9'
 gem 'devise-jwt'
 gem 'carrierwave', '~> 2.0'
 gem 'fog-aws'
 gem "rmagick", '~> 5.0'
-gem 'spawnling', '~>2.1.6'
 gem 'devise_invitable', '~> 2.0'
 
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
   gem 'dotenv-rails', '~> 2.7'
   gem 'byebug', '~> 11.1'
-  gem 'rspec-rails', '~> 4.1'
+  gem 'rspec-rails', '~> 6.1'
   gem 'factory_bot_rails', '~> 6.1'
   gem 'pry-rails', '~> 0.3'
   gem 'pry-byebug', '~> 3.10'
@@ -79,14 +65,12 @@ end
 
 group :test do
   # Adds support for Capybara system testing and selenium driver
-  gem 'nokogiri', '~> 1.13.10'
+  gem 'nokogiri', '>= 1.15'
   gem 'capybara', '~> 3.35'
-  gem 'selenium-webdriver', '~> 4.8'
-  # Easy installation and use of chromedriver to run system tests with Chrome
-  gem 'webdrivers', '~> 4.7.0'
+  gem 'selenium-webdriver', '>= 4.11', '< 5'
   gem 'database_cleaner', '~> 2.0'
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem 'tzinfo-data', '~> 1.2023.3'
-gem 'rack-cors', '~> 1.1'
+gem 'rack-cors', '~> 2.0'

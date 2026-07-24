@@ -52,7 +52,7 @@ module Api::V1
 
         # Mint a pronounceable code from auth.foaf.io (CVCV-CVCV "mavo-leni")
         # so seed codes look the same as normal invite codes. Without this
-        # the model's local before_create generator emits 8-char random
+        # the model's local before_create generator emits an easy random
         # alphanumeric instead. Fall through to that local generator on any
         # auth.foaf.io failure so transient blips don't kill the mint UX.
         invitation.invitation_code = pronounceable_code_or_nil(current_user)

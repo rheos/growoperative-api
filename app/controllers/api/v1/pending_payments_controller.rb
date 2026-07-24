@@ -49,7 +49,7 @@ module Api::V1
         )
         render json: serialize(pp), status: :created
       else
-        render json: { errors: pp.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: pp.errors.full_messages }, status: :unprocessable_content
       end
     rescue ActiveRecord::RecordNotFound
       render json: { errors: ['Trustline not found'] }, status: :not_found
@@ -73,7 +73,7 @@ module Api::V1
         )
         render json: { message: 'Marked as paid', pending_payment: serialize(@pending_payment) }
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     end
 
@@ -100,7 +100,7 @@ module Api::V1
           pending_payment: serialize(@pending_payment)
         }
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     end
 
@@ -115,7 +115,7 @@ module Api::V1
         @pending_payment.reject!(reason: params[:reason])
         render json: { message: 'Payment rejected', pending_payment: serialize(@pending_payment) }
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     end
 
@@ -130,7 +130,7 @@ module Api::V1
         @pending_payment.cancel!
         render json: { message: 'Payment cancelled' }
       rescue => e
-        render json: { errors: [e.message] }, status: :unprocessable_entity
+        render json: { errors: [e.message] }, status: :unprocessable_content
       end
     end
 

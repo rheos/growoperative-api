@@ -41,7 +41,7 @@ RSpec.describe 'Session cookie sunset', type: :request do
       delete '/v1/sessions',
         env: { 'HTTPS' => 'on', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
       expect(response).to have_http_status(:ok)
-      expect(JWTBlacklist.exists?(jti: decoded['jti'])).to be(true)
+      expect(JwtBlacklist.exists?(jti: decoded['jti'])).to be(true)
 
       get '/v1/sessions',
         env: { 'HTTPS' => 'on', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }

@@ -37,7 +37,9 @@ module Api::V1
 
     # PATCH /v1/notifications/:id/read
     def read
-      notification = current_user.notifications.find(params[:id])
+      notification = current_user.notifications.find_by(id: params[:id])
+      return head :not_found unless notification
+
       notification.mark_read!
       head :ok
     end

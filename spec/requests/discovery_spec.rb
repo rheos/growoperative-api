@@ -149,7 +149,7 @@ RSpec.describe 'Discovery API', type: :request, skip_hooks: true do
       patch '/v1/discovery/settings',
         params: { radius_km: 7 }.to_json, headers: auth_headers(caller)
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
 
     it 'opt-out does NOT clear latitude/longitude (AC 11)' do

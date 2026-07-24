@@ -1,5 +1,5 @@
 class UserSerializer
-  include FastJsonapi::ObjectSerializer
+  include JSONAPI::Serializer
   attributes :id, :user_name, :name, :nickname, :tokens, :created_at, :invite_limit
 
   # Discovery visibility + radius ride the user payload so the client can seed

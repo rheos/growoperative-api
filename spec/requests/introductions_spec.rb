@@ -265,7 +265,7 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       force_connect!(a, c)
 
       expect { post_intro(a, b.id, c.id) }.not_to change(Introduction, :count)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(Notification.where(subject_type: 'Introduction').count).to eq(0)
     end
   end
@@ -353,7 +353,7 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(response).to have_http_status(:ok)
 
       patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(b)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
   end
 
@@ -437,7 +437,7 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(intro.reload.status).to eq('completed')
 
       patch "/v1/introductions/#{intro.id}/decline", headers: auth_headers(b)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(intro.reload.status).to eq('completed')
     end
   end
@@ -466,9 +466,9 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
 
       # AC7 — C can no longer accept or decline (no longer pending)
       patch "/v1/introductions/#{intro.id}/accept", headers: auth_headers(c)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       patch "/v1/introductions/#{intro.id}/decline", headers: auth_headers(c)
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
 
       # AC8 — A gets exactly one introduction_declined notice whose message names B
       declined = intro_notifications(intro, type: 'introduction_declined', recipient: a)

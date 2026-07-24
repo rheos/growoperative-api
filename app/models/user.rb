@@ -5,7 +5,7 @@ class User < ApplicationRecord
 	# :confirmable, :lockable, :timeoutable and :omniauthable
 
 	devise :database_authenticatable, :registerable,
-				 :recoverable, :rememberable, :validatable, :jwt_authenticatable, jwt_revocation_strategy: JWTBlacklist, authentication_keys: [:user_name]
+				 :recoverable, :rememberable, :validatable, :jwt_authenticatable, jwt_revocation_strategy: JwtBlacklist, authentication_keys: [:user_name]
 
 	# Avatar upload (uses existing `image` column)
 	mount_uploader :image, UserAvatarUploader
@@ -236,7 +236,7 @@ class User < ApplicationRecord
 
   # If the inviting user is a demo user, the new user inherits the demo group
   def inherit_demo_group
-    parent = User.find_by(id: parent_id)
+    parent = self.class.default_scoped.find_by(id: parent_id)
     if parent&.demo?
       user_groups.find_or_create_by!(group_label: 'demo')
     end

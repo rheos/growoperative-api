@@ -56,7 +56,7 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
     #    cheap defense-in-depth per Architecture → Technical Risks → demo-422)
     intro_check = Introduction.new(introducer: a, introducee_a: b, introducee_b: c)
     unless intro_check.demo_consistent?
-      return render json: { message: 'Cannot introduce across demo and non-demo accounts' }, status: :unprocessable_entity
+      return render json: { message: 'Cannot introduce across demo and non-demo accounts' }, status: :unprocessable_content
     end
 
     # Create introduction and publish notifications to B and C
@@ -100,11 +100,11 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
     end
 
     unless introduction.pending?
-      return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_entity
+      return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_content
     end
 
     if introduction.accepted_by?(current_user.id)
-      return render json: { message: 'You have already responded to this introduction' }, status: :unprocessable_entity
+      return render json: { message: 'You have already responded to this introduction' }, status: :unprocessable_content
     end
 
     did_complete = false
@@ -136,7 +136,7 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
       introduction.with_lock do
         # Re-check status inside the lock (concurrent accept race)
         unless introduction.pending?
-          return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_entity
+          return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_content
         end
 
         introduction.accept_for!(current_user.id)
@@ -231,7 +231,7 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
     end
 
     unless introduction.pending?
-      return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_entity
+      return render json: { message: 'This introduction is no longer pending' }, status: :unprocessable_content
     end
 
     introduction.update!(status: :declined, declined_by_id: current_user.id)

@@ -54,7 +54,7 @@ class Api::V1::SessionsController < Api::V1::ApiController
     if jwt.present?
       begin
         decoded = JwtDecodingService.new(jwt).decrypt!
-        JWTBlacklist.create!(
+        JwtBlacklist.create!(
           jti: decoded['jti'] || SecureRandom.uuid,
           exp: Time.at(decoded['exp'] || 1.year.from_now.to_i)
         )

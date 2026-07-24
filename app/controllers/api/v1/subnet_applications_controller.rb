@@ -24,7 +24,7 @@ module Api::V1
         )
         render json: { id: application.id, status: application.status }, status: :created
       else
-        render json: { errors: application.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: application.errors.full_messages }, status: :unprocessable_content
       end
     end
 
@@ -58,7 +58,7 @@ module Api::V1
       if application.update(attrs)
         render json: serialize(application), status: 200
       else
-        render json: { errors: application.errors.full_messages }, status: :unprocessable_entity
+        render json: { errors: application.errors.full_messages }, status: :unprocessable_content
       end
     end
 

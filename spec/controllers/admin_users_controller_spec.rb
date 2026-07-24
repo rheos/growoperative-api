@@ -175,7 +175,7 @@ RSpec.describe 'Admin users API', type: :request, skip_hooks: true do
            params: { new_password: '' }.to_json,
            headers: super_headers
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
     end
 
     it 'forwards short admin-set passwords without enforcing the user-facing 8-char minimum' do

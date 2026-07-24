@@ -44,7 +44,7 @@ RSpec.describe 'V1 email verification + profile proxy', type: :request, skip_hoo
       post '/v1/email_verifications',
            params: { origin: 'https://evil.example.com' }.to_json, headers: headers
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(json['error']).to eq('Invalid origin')
     end
   end
@@ -106,7 +106,7 @@ RSpec.describe 'V1 email verification + profile proxy', type: :request, skip_hoo
 
       patch '/v1/users/profile', params: { email: '' }.to_json, headers: headers
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(json['code']).to eq('recovery_phrase_required')
     end
   end

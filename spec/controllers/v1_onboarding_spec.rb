@@ -116,7 +116,7 @@ RSpec.describe 'v1 onboarding', type: :request do
       post '/v1/onboarding',
         params: { invitation_code: own_invitation.invitation_code }.to_json,
         env: auth_headers
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(parsed['onboarding']['app_onboarding_status']).to eq('rejected')
       expect(parsed['onboarding']['app_onboarding_rejection_code']).to eq('role_policy_violation')
 
@@ -130,14 +130,14 @@ RSpec.describe 'v1 onboarding', type: :request do
       post '/v1/onboarding',
         params: { invitation_code: own_invitation.invitation_code }.to_json,
         env: auth_headers
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
 
       # A second call returns the same rejection without re-evaluating
       # policy (i.e., does not "fix itself" if policy changes underneath).
       post '/v1/onboarding',
         params: { invitation_code: own_invitation.invitation_code }.to_json,
         env: auth_headers
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(parsed['onboarding']['app_onboarding_rejection_code']).to eq('role_policy_violation')
     end
 
@@ -151,7 +151,7 @@ RSpec.describe 'v1 onboarding', type: :request do
       post '/v1/onboarding',
         params: { invitation_code: invitation.invitation_code }.to_json,
         env: { 'HTTP_AUTHORIZATION' => "Bearer #{token}", 'HTTPS' => 'on', 'CONTENT_TYPE' => 'application/json' }
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(parsed['onboarding']['app_onboarding_rejection_code']).to eq('banned_email_domain')
     end
   end
@@ -191,9 +191,11 @@ RSpec.describe 'v1 onboarding', type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it 'rejects without invitation_code' do
+    it 'allows profile ensure mode without invitation_code' do
       post '/v1/onboarding', params: '{}', env: auth_headers
-      expect(response).to have_http_status(:bad_request)
+      expect(response).to have_http_status(:ok)
+      expect(parsed['identity']['foaf_id']).to eq(accepter.foaf_id)
+      expect(parsed['onboarding']).to be_nil
     end
   end
 end

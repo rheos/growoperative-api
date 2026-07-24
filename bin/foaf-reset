@@ -21,6 +21,20 @@ APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
 AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
 APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
 AUTH_SNAPSHOT_PATH="db/snapshots/${AUTH_SNAPSHOT}"
+RB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ -n "${FOAF_PROTOCOL_DIR:-}" ]; then
+  FOAF_DIR="${FOAF_PROTOCOL_DIR}"
+elif [ -d "${RB_DIR}/../foaf-protocol-ruby" ]; then
+  FOAF_DIR="${RB_DIR}/../foaf-protocol-ruby"
+elif [ -d "${RB_DIR}/../../foaf-protocol-ruby" ]; then
+  FOAF_DIR="${RB_DIR}/../../foaf-protocol-ruby"
+else
+  echo "ERROR: foaf-protocol-ruby not found. Set FOAF_PROTOCOL_DIR to its local path."
+  exit 1
+fi
+
+FOAF_COMPOSE_FILE="${FOAF_DIR}/docker-compose.yml"
 
 if [ ! -f "${APP_SNAPSHOT_PATH}" ]; then
   echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
@@ -52,7 +66,11 @@ echo "  OK"
 
 # --- Step 2: Run app migrations ---
 echo "[2/6] Running app migrations..."
-docker-compose exec backend rails db:migrate 2>&1 | grep -v "warning:" | grep -E "(migrat|==)" || true
+MIGRATE_OUTPUT="$(docker-compose exec backend rails db:migrate 2>&1)" || {
+  echo "${MIGRATE_OUTPUT}" | grep -v "warning:" || true
+  exit 1
+}
+echo "${MIGRATE_OUTPUT}" | grep -v "warning:" | grep -E "(migrat|==)" || true
 echo "  OK"
 
 # --- Step 2.5: Restore auth identities, clear transactional auth state ---
@@ -76,7 +94,7 @@ echo "  OK"
 
 # --- Step 4: Clear FOAF DB ---
 echo "[4/6] Clearing FOAF DB..."
-docker-compose -f ../foaf-protocol-ruby/docker-compose.yml exec -T foaf bundle exec rails runner '
+docker-compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
 [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, Operation,
  PendingTransfer, CurrencyNetwork].each(&:destroy_all)
 puts "  Cleared."
@@ -113,9 +131,9 @@ end
 puts data.to_json
 ' 2>&1 | grep -v "warning:" | grep '^\[' > /tmp/foaf_seed.json
 
-docker cp /tmp/foaf_seed.json "$(docker-compose -f ../foaf-protocol-ruby/docker-compose.yml ps -q foaf)":/tmp/foaf_seed.json 2>/dev/null
+docker cp /tmp/foaf_seed.json "$(docker-compose -f "${FOAF_COMPOSE_FILE}" ps -q foaf)":/tmp/foaf_seed.json 2>/dev/null
 
-docker-compose -f ../foaf-protocol-ruby/docker-compose.yml exec -T foaf bundle exec rails runner '
+docker-compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
 require "json"
 data = JSON.parse(File.read("/tmp/foaf_seed.json"))
 

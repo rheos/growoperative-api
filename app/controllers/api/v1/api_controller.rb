@@ -34,7 +34,7 @@ class Api::V1::ApiController < ApplicationController
     decoded = current_jwt_payload
     return @current_user = nil unless decoded
 
-    return @current_user = nil if decoded['jti'] && JWTBlacklist.exists?(jti: decoded['jti'])
+    return @current_user = nil if decoded['jti'] && JwtBlacklist.exists?(jti: decoded['jti'])
 
     user = resolve_user_from_jwt(decoded)
     if user&.auth_inactive?
@@ -161,10 +161,13 @@ class Api::V1::ApiController < ApplicationController
     foaf_id = current_jwt_foaf_id
     return if foaf_id.blank?
 
+    handle = unique_local_handle_for(current_jwt_payload['user_name'], foaf_id)
+    email = current_jwt_payload['email'].to_s.downcase.presence
+    email_available = email && !User.default_scoped.where.not(foaf_id: foaf_id).exists?(email: email)
+
     User.find_or_create_by!(foaf_id: foaf_id) do |user|
-      user.user_name = unique_local_handle_for(current_jwt_payload['user_name'], foaf_id)
-      email = current_jwt_payload['email'].to_s.downcase.presence
-      user.email = email if email && !User.where.not(foaf_id: foaf_id).exists?(email: email)
+      user.user_name = handle
+      user.email = email if email_available
       user.first_name = current_jwt_payload['first_name'].presence
       user.last_name = current_jwt_payload['last_name'].presence
       user.display_name = current_jwt_payload['display_name'].presence || user.user_name
@@ -215,7 +218,7 @@ class Api::V1::ApiController < ApplicationController
   def unique_local_handle_for(preferred, foaf_id)
     base = preferred.to_s.downcase.gsub(/[^a-z0-9_.-]/, '').presence || "user-#{foaf_id.delete('-')[0, 8]}"
     base = base[0, 32]
-    return base unless User.where.not(foaf_id: foaf_id).exists?(user_name: base)
+    return base unless User.default_scoped.where.not(foaf_id: foaf_id).exists?(user_name: base)
 
     suffix = foaf_id.delete('-')[0, 8]
     "#{base[0, 23]}-#{suffix}"

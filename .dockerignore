@@ -1,0 +1,16 @@
+.git
+.gitignore
+.DS_Store
+.bundle
+.byebug_history
+
+.env
+.env.*
+
+log/*
+tmp/*
+!tmp/.keep
+
+node_modules
+vendor/bundle
+coverage

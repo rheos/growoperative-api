@@ -44,7 +44,7 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
 
     return render json: { message: 'User not found' }, status: :not_found unless friend
     if me.id == friend_id
-      return render json: { message: "You can't connect with yourself." }, status: :unprocessable_entity
+      return render json: { message: "You can't connect with yourself." }, status: :unprocessable_content
     end
 
     # Demo boundary pre-check (mirror introductions#create step 7). A demo↔non-demo pair fails
@@ -53,7 +53,7 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     # inserted. (The reuse path below only touches a pre-existing same-demo row, so this covers it.)
     if me.demo? != friend.demo?
       return render json: { message: 'Cannot connect across demo and non-demo accounts' },
-                    status: :unprocessable_entity
+                    status: :unprocessable_content
     end
 
     low_id, high_id = [me.id, friend_id].minmax
@@ -122,7 +122,7 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
       return render json: { message: 'Not authorized' }, status: :forbidden
     end
     unless rel.pending?
-      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_entity
+      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_content
     end
 
     rel.update!(status: :accepted)
@@ -158,7 +158,7 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
       return render json: { message: 'Not authorized' }, status: :forbidden
     end
     unless rel.pending?
-      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_entity
+      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_content
     end
 
     rel.update!(status: :declined)
@@ -188,7 +188,7 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     end
 
     unless rel.pending?
-      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_entity
+      return render json: { message: 'This request is no longer pending' }, status: :unprocessable_content
     end
 
     rel.update!(status: :declined)

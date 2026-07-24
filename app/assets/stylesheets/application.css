@@ -12,7 +12,6 @@
  *
  *= require_tree .
  *= require_self
- *= require font-awesome
  */
 html, body {
     margin: 0;
