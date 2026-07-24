@@ -218,7 +218,7 @@ echo "  OK"
 # Restarting both auth and backend-demo flushes any cached state: rails'
 # 5-min revocation-snapshot cache and auth's in-memory caches.
 echo "[5/5] Enabling debug API + restarting ${AUTH_CONTAINER} and ${BACKEND_CONTAINER}..."
-docker exec "${BACKEND_CONTAINER}" bundle exec rails runner '
+docker exec -e DISABLE_SPRING=1 "${BACKEND_CONTAINER}" bundle exec rails runner '
 GlobalSetting.find_or_create_by(setting: "debug_api_enabled").update!(value: 1)
 puts "  debug_api_enabled = 1"
 ' 2>&1 | { grep -v -E "warning:|Spring" || true; }
@@ -227,7 +227,7 @@ puts "  debug_api_enabled = 1"
 # script. This path bypasses DemoResetService, so it logs directly. Done before
 # the restart, while the backend container is still up.
 OPERATOR="${SUDO_USER:-$(whoami)}@$(hostname)"
-docker exec "${BACKEND_CONTAINER}" bundle exec rails runner "
+docker exec -e DISABLE_SPRING=1 "${BACKEND_CONTAINER}" bundle exec rails runner "
 AuditLog.record(
   action: 'demo.reset', status: 'succeeded', source: 'script',
   actor: 'operator:${OPERATOR}',
