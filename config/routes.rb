@@ -202,6 +202,7 @@ Rails.application.routes.draw do
       get 'debug/foaf/reconcile' => 'debug#foaf_reconcile'
       get 'debug/foaf/status' => 'debug#foaf_status'
       get 'debug/foaf/events/:trustline_id' => 'debug#foaf_events'
+      get 'debug/subnet_applications' => 'debug#subnet_applications'
 
       # Authenticated FOAF reads scoped to current_user (replaces the
       # equivalent /v1/debug/foaf/* endpoints for end-user traffic).
