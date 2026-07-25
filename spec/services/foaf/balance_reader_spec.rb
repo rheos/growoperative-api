@@ -28,7 +28,7 @@ RSpec.describe Foaf::BalanceReader, type: :model, skip_hooks: true do
   let(:fake_client) { instance_double(Foaf::Client) }
 
   before do
-    allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
+    allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(true)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
   end

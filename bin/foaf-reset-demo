@@ -4,7 +4,7 @@
 #
 # Loads growoperative_demo from a dev_clean_* snapshot (which contains
 # DROP TABLE IF EXISTS per table, so it cleanly replaces state), then
-# wipes foaf_testnet so the FOAF side also starts empty. Shadow hooks
+# wipes foaf_testnet so the FOAF side also starts empty. Ledger hooks
 # will populate FOAF as the test creates trades.
 #
 # Uses the buddy user — no MySQL root credential needed. buddy has
@@ -206,8 +206,8 @@ puts "  Cleared: #{models.map(&:name).join(", ")}"
 echo "  OK"
 
 # --- Step 4: deploy the FOAF currency network -----------------------------
-# Shadow mirroring needs a network to attach trustlines to. Without one,
-# every shadow call fails with "No network found on FOAF" and FOAF stays
+# FOAF publishing needs a network to attach trustlines to. Without one,
+# every publish call fails with "No network found on FOAF" and FOAF stays
 # empty even though the app is generating activity.
 echo "[4/5] Deploying FOAF currency network..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '

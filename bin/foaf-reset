@@ -202,5 +202,5 @@ for tl in data['trustlines']:
 
 echo ""
 echo "=== Reset Complete ==="
-echo "Both databases synced. Shadow hooks are active."
+echo "Both databases synced. FOAF ledger hooks are active."
 echo "  curl http://localhost:3001/v1/debug/foaf/reconcile"
