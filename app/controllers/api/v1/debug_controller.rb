@@ -523,8 +523,8 @@ class Api::V1::DebugController < Api::V1::ApiController
   # GET /v1/debug/foaf/reconcile
   # Compare all trustline state between the app and FOAF protocol.
   def foaf_reconcile
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     client = Foaf::Client.new
@@ -641,8 +641,8 @@ class Api::V1::DebugController < Api::V1::ApiController
   # AuditLedgerRow shape the app uses, so the audit report can render them
   # with the same component.
   def foaf_events
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     trustline = Trustline.find(params[:trustline_id])
@@ -670,7 +670,7 @@ class Api::V1::DebugController < Api::V1::ApiController
 
     rows = []
 
-    # Shadow mode emits TWO update_trustline API calls per logical limit change
+    # Publisher emits TWO update_trustline API calls per logical limit change
     # (one from each side of the bilateral agreement), which FOAF records as
     # two TrustlineUpdate events at the same timestamp but from opposite POVs.
     # After normalizing to user_a's perspective in build_trustline_update_row,
@@ -766,8 +766,12 @@ class Api::V1::DebugController < Api::V1::ApiController
   # GET /v1/debug/foaf/status
   # Quick check: is FOAF reachable and what's its state?
   def foaf_status
-    unless Foaf::Config.shadow_mode?
-      return render json: { shadow_mode: false }
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: {
+        foaf_write_enabled: false,
+        # Temporary response compatibility for the existing admin frontend.
+        shadow_mode: false
+      }
     end
 
     client = Foaf::Client.new
@@ -781,6 +785,8 @@ class Api::V1::DebugController < Api::V1::ApiController
     networks = client.networks
 
     render json: {
+      foaf_write_enabled: true,
+      # Temporary response compatibility for the existing admin frontend.
       shadow_mode: true,
       foaf_url: Foaf::Config.api_url,
       foaf_reachable: version.present?,

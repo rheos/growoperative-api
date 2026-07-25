@@ -54,6 +54,27 @@ class CredloopAssertionTest(unittest.TestCase):
             trade_test.check_credloop_fired(attempts=2, interval=0)
 
 
+class PublisherHealthTest(unittest.TestCase):
+    @patch.object(trade_test.requests, "get")
+    def test_disabled_publishing_is_fatal(self, get):
+        get.return_value = FakeResponse({"foaf_write_enabled": False})
+
+        with self.assertRaisesRegex(trade_test.SetupError, "publishing is disabled"):
+            trade_test.check_foaf_publishing_health()
+
+    @patch.object(trade_test.requests, "get")
+    def test_legacy_status_key_remains_accepted_during_rollout(self, get):
+        get.return_value = FakeResponse({
+            "shadow_mode": True,
+            "foaf_reachable": True,
+            "foaf_url": "http://foaf-testnet:3002",
+            "foaf_version": "test",
+            "networks": 1,
+        })
+
+        trade_test.check_foaf_publishing_health()
+
+
 class WrapperResetRoutingTest(unittest.TestCase):
     script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "bin", "foaf-trade-test"))
 

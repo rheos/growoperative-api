@@ -16,7 +16,7 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     allow(Rails.logger).to receive(:warn)
 
     expect(client.networks).to eq([{ 'source' => 'shared' }])
-    expect(Rails.logger).to have_received(:warn).with(/foaf-client shadow diff/)
+    expect(Rails.logger).to have_received(:warn).with(/foaf-client shared-read diff/)
   end
 
   it 'parallel-runs a read but keeps the legacy result when disabled' do

@@ -163,11 +163,11 @@ def check_invariants(client: Client, after_action: str) -> None:
         info(f"invariants OK after: {after_action}")
 
 
-def check_foaf_shadow_health() -> None:
-    """If shadow mode is on, refuse to run unless FOAF is reachable AND has
-    at least one currency network. Without a network, every shadow op fails
-    silently and the test passes while mirroring nothing — exactly the
-    failure mode that prompted this check.
+def check_foaf_publishing_health() -> None:
+    """Require FOAF publishing, connectivity, and a deployed currency network.
+
+    A trade-test run without publication can validate only the Rails workflow,
+    so it must not count as the FOAF acceptance gate.
     """
     try:
         resp = requests.get(f"{HOST}/v1/debug/foaf/status", timeout=10)
@@ -176,24 +176,27 @@ def check_foaf_shadow_health() -> None:
     except Exception as e:
         raise SetupError(f"FOAF status endpoint unreachable: {e}")
 
-    if not s.get("shadow_mode"):
-        info("FOAF shadow mode off — test will not mirror to FOAF (this is fine if intended)")
-        return
+    publishing_enabled = s.get("foaf_write_enabled", s.get("shadow_mode", False))
+    if not publishing_enabled:
+        raise SetupError(
+            "FOAF publishing is disabled. Set FOAF_WRITE_ENABLED=true "
+            "(or the rollout-compatible FOAF_SHADOW_MODE=true) before running this acceptance test."
+        )
 
     if not s.get("foaf_reachable"):
         raise SetupError(
-            f"FOAF shadow_mode=true but FOAF is unreachable at {s.get('foaf_url')}. "
-            "Refusing to run — every trustline op would silently drop."
+            f"FOAF publishing is enabled but FOAF is unreachable at {s.get('foaf_url')}. "
+            "Refusing to run — every trustline operation would remain unpublished."
         )
 
     if int(s.get("networks", 0)) < 1:
         raise SetupError(
-            "FOAF shadow_mode=true and reachable, but no currency networks deployed. "
-            "Every shadow op will fail with 'No network found on FOAF'. "
+            "FOAF publishing is enabled and reachable, but no currency networks are deployed. "
+            "Every publish operation will fail with 'No network found on FOAF'. "
             "Run bin/foaf-reset-demo (which deploys the network) before retrying."
         )
 
-    ok(f"FOAF shadow OK: networks={s['networks']} version={s.get('foaf_version')}")
+    ok(f"FOAF publisher OK: networks={s['networks']} version={s.get('foaf_version')}")
 
 
 # --- Graph + target discovery ----------------------------------------------
@@ -867,7 +870,7 @@ def main() -> int:
     try:
         check_invariants(client, "baseline (post-reset)")
         ok("baseline invariants pass")
-        check_foaf_shadow_health()
+        check_foaf_publishing_health()
         nodes, edges = fetch_demo_graph()
 
         # Concurrency regression check first, on the clean graph (needs a buyer

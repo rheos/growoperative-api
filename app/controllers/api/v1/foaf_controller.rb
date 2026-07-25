@@ -9,8 +9,8 @@ class Api::V1::FoafController < Api::V1::ApiController
   # Bulk reconcile for all of current_user's trustlines.
   # Same shape as the (admin-only) bulk debug reconcile, but scoped.
   def index
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     tls = Trustline.where(is_active: true)
@@ -31,8 +31,8 @@ class Api::V1::FoafController < Api::V1::ApiController
   # GET /v1/foaf/trustlines/:id
   # Per-trustline reconcile data (app-side vs FOAF-side comparison).
   def show_trustline
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     render json: Foaf::AuditService.reconcile_trustline(@trustline)
@@ -41,8 +41,8 @@ class Api::V1::FoafController < Api::V1::ApiController
   # GET /v1/foaf/trustlines/:id/events
   # FOAF event log for this trustline (audit ledger row shape).
   def trustline_events
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     render json: Foaf::AuditService.events_for_trustline(@trustline, viewer: current_user)

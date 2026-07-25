@@ -7,8 +7,8 @@ class Api::V1::CreditLoopsController < Api::V1::ApiController
 
   # GET /v1/admin/credit_loops?limit=
   def index
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     limit = [params.fetch(:limit, 20).to_i, 1].max
@@ -17,8 +17,8 @@ class Api::V1::CreditLoopsController < Api::V1::ApiController
 
   # GET /v1/admin/credit_loops/:id
   def show
-    unless Foaf::Config.shadow_mode?
-      return render json: { error: "FOAF shadow mode is not enabled" }, status: 400
+    unless Foaf::Config.foaf_write_enabled?
+      return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
     render json: CreditLoopAnalyzer.detail(params[:id])
