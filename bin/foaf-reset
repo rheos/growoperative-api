@@ -95,8 +95,10 @@ echo "  OK"
 # --- Step 4: Clear FOAF DB ---
 echo "[4/6] Clearing FOAF DB..."
 docker-compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
-[Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, Operation,
- PendingTransfer, CurrencyNetwork].each(&:destroy_all)
+# Confirmed pending transfers reference their Operation, so dependants must be
+# removed first or MySQL correctly rejects the reset on the foreign key.
+[Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, PendingTransfer,
+ Operation, CurrencyNetwork].each(&:destroy_all)
 puts "  Cleared."
 ' 2>&1
 echo "  OK"
