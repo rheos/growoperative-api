@@ -29,10 +29,19 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
 
   def unposted_tx(direction:, initiator: alice, amount: 10)
+    mark_limit_updates_posted!
     trustline.trustline_transactions.create!(
       amount: amount, description: 'test', transaction_type: 'payment',
       initiated_by: initiator, balance_after: amount,
       foaf_direction: direction, foaf_posted_at: nil,
+    )
+  end
+
+  def mark_limit_updates_posted!
+    trustline
+    FoafOutboxEntry.update_all(
+      foaf_posted_at: Time.current,
+      foaf_write_state: "posted"
     )
   end
 
@@ -52,6 +61,84 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
       expect(results).to include(attempted: 1, posted: 1, still_unposted: 0)
       expect(tx.reload.foaf_operation_id).to eq(77)
       expect(tx.reload.foaf_posted_at).not_to be_nil
+    end
+
+    it 'replays a retained trustline-limit update before balance writes' do
+      entry = FoafOutboxEntry.latest_trustline_update_for(trustline)
+      tx = trustline.trustline_transactions.create!(
+        amount: 10, description: 'test', transaction_type: 'payment',
+        initiated_by: alice, balance_after: 10,
+        foaf_direction: 'sent', foaf_posted_at: nil,
+      )
+
+      expect(fake_client).to receive(:update_trustline).ordered.twice
+        .and_return({ 'action' => 'accepted' })
+      expect(fake_client).to receive(:create_pending_transfer).ordered
+        .and_return({ 'id' => 1 })
+      expect(fake_client).to receive(:confirm_transfer).ordered
+        .and_return({ 'operation' => 77 })
+
+      results = described_class.run
+
+      expect(entry.reload.foaf_posted_at).to be_present
+      expect(tx.reload.foaf_posted_at).to be_present
+      expect(results).to include(
+        attempted: 2,
+        posted: 2,
+        limit_attempted: 1,
+        limit_posted: 1
+      )
+    end
+
+    it 'retains a failed trustline-limit update and posts it on a later replay' do
+      entry = FoafOutboxEntry.latest_trustline_update_for(trustline)
+      allow(fake_client).to receive(:update_trustline).and_return(
+        nil,
+        { 'action' => 'proposed' },
+        { 'action' => 'accepted' }
+      )
+
+      failed_results = described_class.run
+
+      expect(entry.reload).to have_attributes(
+        foaf_write_state: 'ambiguous_proposal',
+        foaf_posted_at: nil
+      )
+      expect(failed_results).to include(
+        attempted: 1,
+        posted: 0,
+        still_unposted: 1,
+        limit_still_unposted: 1
+      )
+
+      replayed_results = described_class.run
+
+      expect(entry.reload).to have_attributes(
+        foaf_write_state: 'posted'
+      )
+      expect(entry.foaf_posted_at).to be_present
+      expect(replayed_results).to include(
+        attempted: 1,
+        posted: 1,
+        still_unposted: 0,
+        limit_posted: 1
+      )
+    end
+
+    it 'does not automatically retry a definitive limit rejection' do
+      allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
+      entry = FoafOutboxEntry.latest_trustline_update_for(trustline)
+      entry.update!(foaf_write_state: 'rejected')
+      expect(fake_client).not_to receive(:update_trustline)
+
+      results = described_class.run
+
+      expect(results).to include(
+        attempted: 0,
+        skipped: 1,
+        limit_skipped: 1
+      )
+      expect(entry.reload.foaf_posted_at).to be_nil
     end
 
     it 'posts received-direction rows by swapping sender/receiver (publish_settlement)' do
@@ -82,6 +169,7 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
     end
 
     it 'skips rows with nil foaf_direction (historical / no-direction rows)' do
+      mark_limit_updates_posted!
       trustline.trustline_transactions.create!(
         amount: 5, transaction_type: 'payment', initiated_by: alice,
         balance_after: 5, foaf_direction: nil, foaf_posted_at: nil,
@@ -95,6 +183,7 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
     end
 
     it 'skips rows that are already posted' do
+      mark_limit_updates_posted!
       trustline.trustline_transactions.create!(
         amount: 5, transaction_type: 'payment', initiated_by: alice,
         balance_after: 5, foaf_direction: 'sent',

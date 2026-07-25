@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
-# Foaf::ReplayWorker — resolves TrustlineTransaction rows whose publication to FOAF
-# never reached a known success. A row qualifies when foaf_posted_at IS NULL.
+# Foaf::ReplayWorker — resolves durable Rails publication records that never
+# reached a known FOAF success.
 #
-# Flow per row (see Foaf::Publisher#publish_payment):
+# Limit-update outbox rows run first because an unposted capacity increase may
+# be required before a retained payment can succeed.
+#
+# Balance-write flow per TrustlineTransaction (see Foaf::Publisher#publish_payment):
 #   foaf_direction: 'sent'     -> publish_payment(from: initiated_by, to: other)
 #   foaf_direction: 'received' -> publish_settlement(payer: initiated_by, payee: other)
 #   foaf_direction: nil        -> skip (historical row or legacy data)
@@ -27,14 +30,30 @@ module Foaf
       return { skipped: "foaf_write_disabled" } unless Foaf::Config.foaf_write_enabled?
 
       publisher = Foaf::Publisher.new
+      results = {
+        attempted: 0,
+        posted: 0,
+        still_unposted: 0,
+        skipped: 0,
+        limit_attempted: 0,
+        limit_posted: 0,
+        limit_still_unposted: 0,
+        limit_skipped: 0
+      }
+
+      limit_entries_processed = replay_limit_updates(
+        publisher,
+        results,
+        limit: limit
+      )
+      remaining = [limit - limit_entries_processed, 0].max
+
       scope = TrustlineTransaction
                 .where(foaf_posted_at: nil)
                 .where.not(foaf_direction: nil)
                 .includes(trustline: [:user_a, :user_b], initiated_by: [])
                 .order(:created_at)
-                .limit(limit)
-
-      results = { attempted: 0, posted: 0, still_unposted: 0, skipped: 0 }
+                .limit(remaining)
 
       scope.each do |tx|
         if Foaf::Config.shared_writes? && tx.foaf_write_state == "rejected"
@@ -83,6 +102,50 @@ module Foaf
 
       Rails.logger.info("[FOAF Replay] #{results}")
       results
+    end
+
+    def replay_limit_updates(publisher, results, limit:)
+      entries = FoafOutboxEntry
+                  .active
+                  .trustline_updates
+                  .includes(trustline: [:user_a, :user_b])
+                  .oldest_first
+                  .limit(limit)
+                  .to_a
+
+      entries.each do |entry|
+        if Foaf::Config.shared_writes? &&
+            entry.foaf_write_state == "rejected"
+          results[:skipped] += 1
+          results[:limit_skipped] += 1
+          next
+        end
+
+        results[:attempted] += 1
+        results[:limit_attempted] += 1
+
+        begin
+          publisher.publish_trustline_update(
+            entry.trustline,
+            nil,
+            outbox_entry: entry
+          )
+        rescue StandardError => e
+          Rails.logger.warn(
+            "[FOAF Replay] limit outbox #{entry.id} raised: #{e.message}"
+          )
+        end
+
+        if entry.reload.foaf_posted_at.present?
+          results[:posted] += 1
+          results[:limit_posted] += 1
+        else
+          results[:still_unposted] += 1
+          results[:limit_still_unposted] += 1
+        end
+      end
+
+      entries.length
     end
 
     # tx.transaction_type can be 'payment', 'adjustment', 'settlement' (on the

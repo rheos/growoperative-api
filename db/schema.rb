@@ -57,6 +57,21 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["item_unit_id"], name: "index_category_units_on_item_unit_id"
   end
 
+  create_table "foaf_outbox_entries", charset: "utf8mb4", force: :cascade do |t|
+    t.bigint "trustline_id", null: false
+    t.string "operation_type", limit: 32, null: false
+    t.json "payload", null: false
+    t.string "foaf_write_state", default: "pending", null: false
+    t.text "foaf_write_error"
+    t.datetime "foaf_posted_at"
+    t.datetime "superseded_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["operation_type", "foaf_posted_at", "superseded_at"], name: "index_foaf_outbox_entries_for_replay"
+    t.index ["trustline_id", "operation_type", "created_at"], name: "index_foaf_outbox_entries_on_trustline_operation"
+    t.index ["trustline_id"], name: "index_foaf_outbox_entries_on_trustline_id"
+  end
+
   create_table "global_settings", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.integer "value", default: 3
     t.datetime "created_at", precision: nil, null: false
@@ -581,6 +596,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
   add_foreign_key "categories", "item_units", column: "default_unit_id"
   add_foreign_key "category_units", "categories"
   add_foreign_key "category_units", "item_units"
+  add_foreign_key "foaf_outbox_entries", "trustlines", on_delete: :cascade
   add_foreign_key "introductions", "users", column: "introducee_a_id"
   add_foreign_key "introductions", "users", column: "introducee_b_id"
   add_foreign_key "introductions", "users", column: "introducer_id"
