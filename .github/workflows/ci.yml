@@ -51,6 +51,9 @@ jobs:
       - name: Test FOAF trade harness guards
         run: python3 scripts/test_trade_test.py
 
+      - name: Test FOAF demo reset guards
+        run: python3 scripts/test_foaf_reset_demo.py
+
       - name: Test deployment isolation
         run: python3 scripts/test_deploy_isolation.py
 
