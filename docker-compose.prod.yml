@@ -87,7 +87,7 @@ services:
   # 2026-07-06 because this service had never been started). `restart: always`
   # keeps it up across reboots. Note: this renews the cert files on disk but
   # does NOT reload nginx — a host cron reloads nginx daily so the renewed cert
-  # gets served (deploy-prod also force-recreates nginx). See the
+  # gets served (backend deploys also issue a graceful nginx reload). See the
   # reference_prod_lightsail_ssh_and_certs memory.
   certbot:
     image: certbot/certbot
