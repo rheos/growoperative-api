@@ -196,8 +196,10 @@ echo "  OK"
 # --- Step 3: clear foaf-testnet data ---------------------------------------
 echo "[3/5] Clearing foaf_testnet tables..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
+# Confirmed pending transfers reference their Operation, so dependants must be
+# removed first or MySQL correctly rejects the reset on the foreign key.
 models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
-          Operation, PendingTransfer, CurrencyNetwork]
+          PendingTransfer, Operation, CurrencyNetwork]
 models.each { |m| m.delete_all if defined?(m) }
 puts "  Cleared: #{models.map(&:name).join(", ")}"
 ' 2>&1 | { grep -v "warning:" || true; }
