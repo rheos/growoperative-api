@@ -134,7 +134,7 @@ class Trustline < ApplicationRecord
       # Create transaction record for audit trail. foaf_direction='sent'
       # means the FOAF transfer goes in the same direction as the Rails
       # initiator (from_user → to_user). The replay worker keys off this
-      # to pick mirror_payment vs mirror_settlement on retry.
+      # to pick publish_payment vs publish_settlement on retry.
       tx_row = trustline_transactions.create!(
         amount: amount,
         description: description || "Payment from #{from_user.user_name} to #{to_user.user_name}",
@@ -152,10 +152,10 @@ class Trustline < ApplicationRecord
         last_activity: Time.current
       )
 
-      # Shadow mirror to FOAF. Writes foaf_operation_id + foaf_posted_at onto
+      # Publish to FOAF. Writes foaf_operation_id + foaf_posted_at onto
       # tx_row on success. If FOAF is down the row sits with foaf_posted_at
       # nil — Foaf::ReplayWorker replays it when FOAF recovers.
-      Foaf::ShadowHooks.after_payment(self, amount, from_user, to_user,
+      Foaf::LedgerHooks.after_payment(self, amount, from_user, to_user,
                                        description: description, order: order,
                                        operation: operation, tx_row: tx_row)
 
@@ -184,7 +184,7 @@ class Trustline < ApplicationRecord
       end
 
       # foaf_direction='received' marks this as a settlement-shape row. On
-      # replay the worker picks mirror_settlement (which sends a reverse-
+      # replay the worker picks publish_settlement (which sends a reverse-
       # direction FOAF transfer to reduce the initiator's debt).
       tx_row = trustline_transactions.create!(
         amount: amount,
@@ -202,10 +202,10 @@ class Trustline < ApplicationRecord
         last_activity: Time.current
       )
 
-      # Settlement gets its own shadow hook — the mirror auto-expands the
+      # Settlement gets its own ledger hook — the publisher auto-expands the
       # swapped sender's credit room before the transfer (FOAF doesn't have
       # a native settle primitive yet).
-      Foaf::ShadowHooks.after_settlement(self, amount, from_user, to_user,
+      Foaf::LedgerHooks.after_settlement(self, amount, from_user, to_user,
                                           description: description, order: order,
                                           metadata: path_info,
                                           operation: operation, tx_row: tx_row)

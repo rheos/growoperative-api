@@ -1,8 +1,8 @@
 namespace :foaf do
   desc "Check FOAF protocol status and connectivity"
   task status: :environment do
-    unless Foaf::Config.shadow_mode?
-      puts "FOAF shadow mode is OFF"
+    unless Foaf::Config.foaf_write_enabled?
+      puts "FOAF publishing is OFF"
       exit
     end
 
@@ -14,7 +14,7 @@ namespace :foaf do
       nil
     end
 
-    puts "Shadow mode:  ON"
+    puts "Publishing:   ON"
     puts "FOAF URL:     #{Foaf::Config.api_url}"
     puts "Reachable:    #{version.present? ? 'YES' : 'NO'}"
     puts "Version:      #{version || 'N/A'}"
@@ -23,8 +23,8 @@ namespace :foaf do
 
   desc "Compare all trustline state between app and FOAF protocol"
   task reconcile: :environment do
-    unless Foaf::Config.shadow_mode?
-      puts "FOAF shadow mode is OFF"
+    unless Foaf::Config.foaf_write_enabled?
+      puts "FOAF publishing is OFF"
       exit
     end
 
@@ -96,7 +96,7 @@ namespace :foaf do
     puts "Missing/Skip:  #{missing}"
   end
 
-  desc "Replay TrustlineTransaction rows that never mirrored to FOAF"
+  desc "Replay TrustlineTransaction rows that were never published to FOAF"
   task :replay_unposted, [:limit] => :environment do |_, args|
     limit = (args[:limit] || 100).to_i
     results = Foaf::ReplayWorker.run(limit: limit)

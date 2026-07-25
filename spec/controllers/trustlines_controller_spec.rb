@@ -91,7 +91,7 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       allow(controller).to receive(:authenticate_user!).and_return(true)
       allow(controller).to receive(:current_user).and_return(bruce)
       # Isolate the Rails behaviour — FOAF mirroring is exercised elsewhere.
-      allow(Foaf::Config).to receive(:shadow_mode?).and_return(false)
+      allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(false)
     end
 
     it 'raises the debtor-side limit to cover the debt when consent is given' do

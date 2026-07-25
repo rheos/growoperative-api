@@ -1,15 +1,19 @@
 # frozen_string_literal: true
 
-# Single point of control for FOAF shadow mode.
-# Set FOAF_SHADOW_MODE=true in docker-compose environment to enable.
-# Only enable in development — production uses the existing trustline code.
+# Single point of control for publishing GrowOperative ledger writes to FOAF.
+#
+# FOAF_WRITE_ENABLED is the current name. FOAF_SHADOW_MODE remains an
+# intentionally temporary compatibility bridge during the config/image rollout:
+# either variable enables publishing, so a mixed deployment cannot silently
+# switch the publisher off.
 
 module Foaf
   module Config
     module_function
 
-    def shadow_mode?
-      ENV["FOAF_SHADOW_MODE"] == "true"
+    def foaf_write_enabled?
+      ENV["FOAF_WRITE_ENABLED"] == "true" ||
+        ENV["FOAF_SHADOW_MODE"] == "true"
     end
 
     def api_url
