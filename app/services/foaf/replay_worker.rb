@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-# Foaf::ReplayWorker — resolves TrustlineTransaction rows whose mirror to FOAF
+# Foaf::ReplayWorker — resolves TrustlineTransaction rows whose publication to FOAF
 # never reached a known success. A row qualifies when foaf_posted_at IS NULL.
 #
-# Flow per row (see Foaf::Shadow#mirror_payment):
-#   foaf_direction: 'sent'     -> mirror_payment(from: initiated_by, to: other)
-#   foaf_direction: 'received' -> mirror_settlement(payer: initiated_by, payee: other)
+# Flow per row (see Foaf::Publisher#publish_payment):
+#   foaf_direction: 'sent'     -> publish_payment(from: initiated_by, to: other)
+#   foaf_direction: 'received' -> publish_settlement(payer: initiated_by, payee: other)
 #   foaf_direction: nil        -> skip (historical row or legacy data)
 #
-# With FOAF_SHARED_WRITES=true, Foaf::Shadow first reads by the deterministic
+# With FOAF_SHARED_WRITES=true, Foaf::Publisher first reads by the deterministic
 # idempotency key (or retained pending-transfer id), and only creates/confirms
 # when FOAF proves that step is still needed. It never falls back to the legacy
 # writer. A known 4xx rejection is terminal and is not retried automatically.
@@ -24,9 +24,9 @@ module Foaf
     module_function
 
     def run(limit: 100)
-      return { skipped: "shadow_mode_off" } unless Foaf::Config.shadow_mode?
+      return { skipped: "foaf_write_disabled" } unless Foaf::Config.foaf_write_enabled?
 
-      shadow = Foaf::Shadow.new
+      publisher = Foaf::Publisher.new
       scope = TrustlineTransaction
                 .where(foaf_posted_at: nil)
                 .where.not(foaf_direction: nil)
@@ -55,13 +55,13 @@ module Foaf
         begin
           case tx.foaf_direction
           when "sent"
-            shadow.mirror_payment(
+            publisher.publish_payment(
               trustline, tx.amount, initiator, counterparty,
               description: tx.description, order: tx.order,
               operation: infer_operation(tx), tx_row: tx,
             )
           when "received"
-            shadow.mirror_settlement(
+            publisher.publish_settlement(
               trustline, tx.amount, initiator, counterparty,
               description: tx.description, order: tx.order,
               operation: infer_operation(tx), tx_row: tx,

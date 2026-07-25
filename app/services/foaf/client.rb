@@ -271,13 +271,13 @@ module Foaf
       shared_result = yield
       if normalized(legacy_result) != normalized(shared_result)
         Rails.logger.warn(
-          "[foaf-client shadow diff] method=#{name} legacy=#{legacy_result.inspect} " \
+          "[foaf-client shared-read diff] method=#{name} legacy=#{legacy_result.inspect} " \
           "shared=#{shared_result.inspect}"
         )
       end
       Foaf::Config.shared_reads? ? shared_result : legacy_result
     rescue StandardError => e
-      Rails.logger.warn("[foaf-client shadow diff] method=#{name} failed: #{e.message}")
+      Rails.logger.warn("[foaf-client shared-read diff] method=#{name} failed: #{e.message}")
       legacy_result
     end
 
@@ -329,7 +329,7 @@ module Foaf
     end
 
     def log_error(method, error)
-      Rails.logger.warn("[FOAF Shadow] #{method} failed: #{error.message}")
+      Rails.logger.warn("[FOAF Client] #{method} failed: #{error.message}")
     end
   end
 end

@@ -18,7 +18,7 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
   let(:fake_client) { instance_double(Foaf::Client) }
 
   before do
-    allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
+    allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(true)
     allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
@@ -37,9 +37,9 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
   end
 
   describe '.run' do
-    it 'skips when shadow mode is off' do
-      allow(Foaf::Config).to receive(:shadow_mode?).and_return(false)
-      expect(described_class.run).to eq(skipped: 'shadow_mode_off')
+    it 'skips when FOAF publishing is disabled' do
+      allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(false)
+      expect(described_class.run).to eq(skipped: 'foaf_write_disabled')
     end
 
     it 'posts sent-direction rows via create_pending_transfer + confirm' do
@@ -54,7 +54,7 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
       expect(tx.reload.foaf_posted_at).not_to be_nil
     end
 
-    it 'posts received-direction rows by swapping sender/receiver (mirror_settlement)' do
+    it 'posts received-direction rows by swapping sender/receiver (publish_settlement)' do
       tx = unposted_tx(direction: 'received')
       sent_args = nil
       allow(fake_client).to receive(:create_pending_transfer) do |args|

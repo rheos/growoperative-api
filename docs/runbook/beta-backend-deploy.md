@@ -19,7 +19,7 @@ split, but deliberately leaner and not always-on.
   when testing: `bin/beta-up`; tear down: `bin/beta-down`. While down, nginx
   serves the maintenance page for bpi/bauth (the vhosts use a runtime docker
   resolver, NOT a static upstream, so nginx loads fine when beta is absent).
-- **No FOAF shadow:** beta's mutual-credit lives entirely in `growoperative_beta`;
+- **No FOAF publishing:** beta's mutual-credit lives entirely in `growoperative_beta`;
   there's no `foaf-beta` protocol container. (Add later if beta needs the FOAF mirror.)
 
 Footprint when up: ~230 MiB (1-worker backend-beta + auth-beta). Idle: 0.
@@ -180,7 +180,7 @@ sudo docker compose -f docker-compose.prod.yml up -d --force-recreate nginx
 
 Adapt `bin/foaf-reset-demo` → `bin/foaf-reset-beta` (retarget the allowlist to
 `growoperative_beta` / `foaf_auth_beta`, containers `railsbackend-backend-beta-1`
-/ `foaf-auth-auth-beta-1`; drop the foaf-testnet steps since beta has no shadow).
+/ `foaf-auth-auth-beta-1`; drop the foaf-testnet steps since beta does not publish to FOAF).
 It loads the paired `dev_clean_*` → growoperative_beta and `auth_clean_*` →
 foaf_auth_beta (foaf_id alignment), and enables the debug API.
 

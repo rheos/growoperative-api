@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
-# Shadow mode: mirrors trustline operations to FOAF protocol.
-# The existing code remains authoritative. FOAF receives a copy.
-# Discrepancies are logged for investigation.
+# Publishes GrowOperative trustline operations to FOAF.
 #
-# All shadow calls are fire-and-forget — failures are logged, never raised.
-# The app must never break because FOAF is down or returns an error.
+# Balance-moving operations retain their Rails TrustlineTransaction row as a
+# failure buffer until FOAF returns a known successful operation. Publication
+# errors are recorded/logged and ReplayWorker resolves unposted rows.
 
 module Foaf
-  class Shadow
+  class Publisher
     def initialize
       @client = Foaf::Client.new
     end
@@ -21,7 +20,7 @@ module Foaf
         @network_address = networks.first["address"]
       else
         @network_address = nil
-        Rails.logger.warn("[FOAF Shadow] No network found on FOAF")
+        Rails.logger.warn("[FOAF Publisher] No network found on FOAF")
       end
 
       @network_address
@@ -33,10 +32,10 @@ module Foaf
       Foaf::Signer.ensure_keypair!(user)
     end
 
-    # Mirror a trustline update to FOAF.
+    # Publish a trustline update to FOAF.
     # FOAF uses two-stage accept — we send both sides so it completes immediately.
-    def mirror_trustline_update(trustline, current_user)
-      return unless Foaf::Config.shadow_mode?
+    def publish_trustline_update(trustline, current_user)
+      return unless Foaf::Config.foaf_write_enabled?
       return unless ensure_network!
 
       user_a = User.find(trustline.user_a_id)
@@ -61,7 +60,7 @@ module Foaf
       )
 
       unless write_succeeded?(r1)
-        Rails.logger.warn("[FOAF Shadow] Trustline proposal failed: #{user_a.user_name} -> #{user_b.user_name} (network=#{@network_address})")
+        Rails.logger.warn("[FOAF Publisher] Trustline proposal failed: #{user_a.user_name} -> #{user_b.user_name} (network=#{@network_address})")
         return
       end
 
@@ -75,37 +74,37 @@ module Foaf
       )
 
       unless write_succeeded?(r2)
-        Rails.logger.warn("[FOAF Shadow] Trustline accept failed: #{user_b.user_name} -> #{user_a.user_name}")
+        Rails.logger.warn("[FOAF Publisher] Trustline accept failed: #{user_b.user_name} -> #{user_a.user_name}")
         return
       end
 
-      Rails.logger.info("[FOAF Shadow] Mirrored trustline update: #{user_a.user_name} <-> #{user_b.user_name}")
+      Rails.logger.info("[FOAF Publisher] Published trustline update: #{user_a.user_name} <-> #{user_b.user_name}")
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Trustline mirror failed: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Trustline publish failed: #{e.message}")
     end
 
-    # Mirror a settlement to FOAF.
+    # Publish a settlement to FOAF.
     #
     # Settlement reduces payer's debt to payee. FOAF's only balance-affecting
     # primitive is `transfer`, which always extends credit (sender becomes
     # more indebted to receiver). To express settlement via transfer, we send
     # payee→payer (making payee more indebted to payer = payer less indebted
     # to payee — same net result). See project_settlement_vs_extension memory.
-    def mirror_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", metadata: nil, tx_row: nil)
-      mirror_payment(trustline, amount, payee, payer,
+    def publish_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", metadata: nil, tx_row: nil)
+      publish_payment(trustline, amount, payee, payer,
                       description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
     end
 
-    # Mirror a payment to FOAF. Honors FOAF's existing credit limits — if the
-    # transfer exceeds capacity, FOAF rejects and the shadow logs a warning
+    # Publish a payment to FOAF. Honors FOAF's existing credit limits — if the
+    # transfer exceeds capacity, FOAF rejects and the publisher logs a warning
     # without affecting the local Rails commit. The proper warn-and-expand UX
     # is tracked in project_settlement_vs_extension memory.
     #
     # When shared writes are enabled, tx_row supplies a deterministic
     # idempotency key and retains the pending-transfer/reconciliation state.
     # When they are disabled this executes the unchanged legacy write path.
-    def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
-      return unless Foaf::Config.shadow_mode?
+    def publish_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
+      return unless Foaf::Config.foaf_write_enabled?
       return unless ensure_network!
 
       ensure_identity!(from_user)
@@ -117,11 +116,13 @@ module Foaf
         operation: operation,
         order_id: order&.id,
         order_label: order&.try(:order_label),
+        # Preserve the existing wire metadata key during this naming-only
+        # rollout so FOAF event consumers see byte-for-byte compatible metadata.
         mirrored_at: (tx_row&.created_at || Time.current).iso8601
       }.merge(metadata || {}).compact.to_json
 
       if Foaf::Config.shared_writes?
-        return mirror_shared_payment(
+        return publish_shared_payment(
           amount: amount,
           from_user: from_user,
           to_user: to_user,
@@ -130,7 +131,7 @@ module Foaf
         )
       end
 
-      mirror_legacy_payment(
+      publish_legacy_payment(
         amount: amount,
         from_user: from_user,
         to_user: to_user,
@@ -138,12 +139,12 @@ module Foaf
         tx_row: tx_row
       )
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Payment publish failed: #{e.message}")
     end
 
     private
 
-    def mirror_legacy_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
+    def publish_legacy_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
       result = @client.create_pending_transfer(
         network_address: @network_address,
         from_address: Foaf::Signer.address_for(from_user),
@@ -153,7 +154,7 @@ module Foaf
       )
 
       unless result && result["id"]
-        Rails.logger.warn("[FOAF Shadow] Create pending transfer failed: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
+        Rails.logger.warn("[FOAF Publisher] Create pending transfer failed: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
         return
       end
 
@@ -164,16 +165,16 @@ module Foaf
       )
 
       unless confirm
-        Rails.logger.warn("[FOAF Shadow] Confirm transfer failed: PT##{result["id"]} #{from_user.user_name} -> #{to_user.user_name}")
+        Rails.logger.warn("[FOAF Publisher] Confirm transfer failed: PT##{result["id"]} #{from_user.user_name} -> #{to_user.user_name}")
         return
       end
 
       mark_legacy_posted!(tx_row, confirm) if tx_row
 
-      Rails.logger.info("[FOAF Shadow] Mirrored payment: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
+      Rails.logger.info("[FOAF Publisher] Published payment: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
     end
 
-    def mirror_shared_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
+    def publish_shared_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
       from_address = Foaf::Signer.address_for(from_user)
       to_address = Foaf::Signer.address_for(to_user)
       idempotency_key = shared_idempotency_key(tx_row)
@@ -453,7 +454,7 @@ module Foaf
         foaf_posted_at: Time.current
       )
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Failed to mark tx #{tx_row.id} posted: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Failed to mark tx #{tx_row.id} posted: #{e.message}")
     end
 
     def record_write_result!(tx_row, state, result, pending_transfer_id: nil)
@@ -465,7 +466,7 @@ module Foaf
         foaf_write_error: result.slice("status", "outcome", "body", "error").to_json
       )
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Failed to record tx #{tx_row.id} state=#{state}: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Failed to record tx #{tx_row.id} state=#{state}: #{e.message}")
     end
 
     # Confirm response shape: { status, transfer, operation, totalFees }.
@@ -487,7 +488,7 @@ module Foaf
       )
       confirm_response
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Failed to mark tx #{tx_row&.id || "adhoc"} posted: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Failed to mark tx #{tx_row&.id || "adhoc"} posted: #{e.message}")
       nil
     end
 
@@ -495,7 +496,7 @@ module Foaf
 
     # Compare FOAF state with local state for a trustline.
     def reconcile_trustline(trustline)
-      return unless Foaf::Config.shadow_mode?
+      return unless Foaf::Config.foaf_write_enabled?
       return unless ensure_network!
 
       user_a = User.find(trustline.user_a_id)
@@ -513,27 +514,29 @@ module Foaf
 
       discrepancies = {}
 
+      # Map raw FOAF state into the app's canonical user_a perspective. This is
+      # the same mapping used by Foaf::AuditService.
       local_balance = trustline.balance_for(user_a).to_f
-      foaf_balance = foaf_tl["balance"].to_f
+      foaf_balance = -foaf_tl["balance"].to_f
       discrepancies[:balance] = { local: local_balance, foaf: foaf_balance } if local_balance != foaf_balance
 
-      local_given = trustline.credit_limit_a_to_b.to_f
+      local_given = trustline.credit_limit_b_to_a.to_f
       foaf_given = foaf_tl["given"].to_f
       discrepancies[:given] = { local: local_given, foaf: foaf_given } if local_given != foaf_given
 
-      local_received = trustline.credit_limit_b_to_a.to_f
+      local_received = trustline.credit_limit_a_to_b.to_f
       foaf_received = foaf_tl["received"].to_f
       discrepancies[:received] = { local: local_received, foaf: foaf_received } if local_received != foaf_received
 
       if discrepancies.any?
-        Rails.logger.warn("[FOAF Shadow] DISCREPANCY on trustline #{trustline.id} " \
+        Rails.logger.warn("[FOAF Publisher] DISCREPANCY on trustline #{trustline.id} " \
                           "(#{user_a.user_name} <-> #{user_b.user_name}): #{discrepancies}")
         discrepancies
       else
         nil
       end
     rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Reconcile failed: #{e.message}")
+      Rails.logger.warn("[FOAF Publisher] Reconcile failed: #{e.message}")
       { error: e.message }
     end
 

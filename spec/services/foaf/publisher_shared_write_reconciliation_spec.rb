@@ -1,6 +1,6 @@
 require 'rails_helper'
 
-RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
+RSpec.describe Foaf::Publisher, type: :model, skip_hooks: true do
   let(:alice) do
     User.create!(user_name: 'alice', password: 'password123',
                  foaf_address: '0x' + 'aa' * 20)
@@ -26,7 +26,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
   let(:idempotency_key) { "growoperative:trustline_transaction:#{tx_row.id}" }
 
   before do
-    allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
+    allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(true)
     allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
@@ -54,7 +54,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
       signer_address: bob.foaf_address
     ).and_return(success(confirmed_payload))
 
-    described_class.new.mirror_payment(
+    described_class.new.publish_payment(
       trustline, 10, alice, bob, tx_row: tx_row
     )
 
@@ -84,7 +84,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
       signer_address: alice.foaf_address
     ).and_return(success(confirmed_payload))
 
-    described_class.new.mirror_settlement(
+    described_class.new.publish_settlement(
       trustline, 10, alice, bob, tx_row: tx_row
     )
 
@@ -103,7 +103,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
     )
     expect(fake_client).not_to receive(:confirm_transfer)
 
-    described_class.new.mirror_payment(
+    described_class.new.publish_payment(
       trustline, 10, alice, bob, tx_row: tx_row
     )
 
@@ -126,7 +126,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
         success(pending_payload.merge('status' => 'confirmed', 'operation' => 888))
       )
 
-    described_class.new.mirror_payment(
+    described_class.new.publish_payment(
       trustline, 10, alice, bob, tx_row: tx_row
     )
 
@@ -148,8 +148,8 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
       .with(pending_transfer_id: 42)
       .and_return(success(pending_payload), success(pending_payload))
 
-    shadow = described_class.new
-    shadow.mirror_payment(trustline, 10, alice, bob, tx_row: tx_row)
+    publisher = described_class.new
+    publisher.publish_payment(trustline, 10, alice, bob, tx_row: tx_row)
 
     expect(tx_row.reload).to have_attributes(
       foaf_pending_transfer_id: 42,
@@ -157,7 +157,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
       foaf_posted_at: nil
     )
 
-    shadow.mirror_payment(trustline, 10, alice, bob, tx_row: tx_row)
+    publisher.publish_payment(trustline, 10, alice, bob, tx_row: tx_row)
 
     expect(tx_row.reload).to have_attributes(
       foaf_operation_id: 999,

@@ -86,7 +86,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     )
 
     if @trustline.persisted?
-      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
+      Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
       if !already_existed && @other_user
         Notifications.publish!(event: :trustline_created, actor: current_user,
                                recipients: [@other_user], resource: @trustline)
@@ -109,7 +109,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # Returns: Updated trustline object or validation errors
   def update
     if @trustline.update(trustline_params)
-      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
+      Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
       render json: serialize_trustline(@trustline)
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_content
@@ -241,7 +241,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       else
         @trustline.update!(credit_limit_b_to_a: raise_to)
       end
-      Foaf::ShadowHooks.after_trustline_save(@trustline, current_user)
+      Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
     end
 
     # No credit-limit check: voluntary self-adverse declaration. The user is
