@@ -750,39 +750,77 @@ def _users_with_inventory() -> set[int]:
     return owners
 
 
-def check_credloop_fired(expect_min: int = 1) -> int:
-    """Infer credloop cancellations from the app-side/FOAF reconciliation:
-    any trustline where app_balance > foaf_balance reflects FOAF having
-    cancelled part of the balance through a loop. Sum of diffs / 2 = total
-    cancelled (each loop cancels two edges at min; we use the conservative
-    max diff as a lower bound)."""
-    header("Scenario: verify credit loop was detected + cancelled")
-    try:
-        reconcile = requests.get(f"{HOST}/v1/debug/foaf/reconcile", timeout=10).json()
-    except Exception as e:
-        info(f"reconcile fetch failed: {e}")
-        return 0
+def credloop_differences(reconcile: dict) -> list[dict]:
+    """Return trustlines where FOAF cancelled part of the notional app balance."""
     diffs = []
-    for tl in reconcile.get("trustlines", []):
-        app_bal = abs(float(tl["app"]["balance"]))
-        foaf_bal = abs(float(tl["foaf"]["balance"]))
+    for trustline in reconcile.get("trustlines", []):
+        app = trustline.get("app") or {}
+        foaf = trustline.get("foaf") or {}
+        app_bal = abs(float(app["balance"]))
+        foaf_bal = abs(float(foaf["balance"]))
         if app_bal > foaf_bal + 0.01:
             diffs.append({
-                "pair": f"{tl['user_a']}↔{tl['user_b']}",
+                "pair": f"{trustline['user_a']}↔{trustline['user_b']}",
                 "app": app_bal,
                 "foaf": foaf_bal,
                 "cancelled": app_bal - foaf_bal,
             })
-    if diffs:
-        total = sum(d["cancelled"] for d in diffs)
-        info(f"credloops cancelled ${total:.2f} across {len(diffs)} trustline(s):")
-        for d in diffs:
-            info(f"  {d['pair']}: app=${d['app']:.2f} foaf=${d['foaf']:.2f}  cancelled ${d['cancelled']:.2f}")
-        return len(diffs)
-    info(f"no credloop activity detected — {reconcile.get('summary', {}).get('matches', 0)} trustlines match exactly")
-    if expect_min > 0:
-        info(f"(expected at least {expect_min} credloop)")
-    return 0
+    return diffs
+
+
+def check_credloop_fired(
+    expect_min: int = 1,
+    attempts: int = 15,
+    interval: float = 2,
+) -> int:
+    """Infer credloop cancellations from the app-side/FOAF reconciliation:
+    any trustline where app_balance > foaf_balance reflects FOAF having
+    cancelled part of the balance through a loop. Sum of diffs / 2 = total
+    cancelled (each loop cancels two edges at min; we use the conservative
+    max diff as a lower bound).
+
+    Credloop cancellation runs asynchronously, so poll briefly. Missing the
+    required cancellation is fatal: a green trade test must prove the FOAF
+    credloop path actually executed.
+    """
+    header("Scenario: verify credit loop was detected + cancelled")
+    last_reconcile = {}
+    last_error = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.get(f"{HOST}/v1/debug/foaf/reconcile", timeout=10)
+            response.raise_for_status()
+            last_reconcile = response.json()
+            diffs = credloop_differences(last_reconcile)
+            last_error = None
+        except Exception as error:
+            diffs = []
+            last_error = error
+
+        if len(diffs) >= expect_min:
+            total = sum(diff["cancelled"] for diff in diffs)
+            info(f"credloops cancelled ${total:.2f} across {len(diffs)} trustline(s):")
+            for diff in diffs:
+                info(
+                    f"  {diff['pair']}: app=${diff['app']:.2f} "
+                    f"foaf=${diff['foaf']:.2f}  cancelled ${diff['cancelled']:.2f}"
+                )
+            return len(diffs)
+
+        if attempt < attempts:
+            time.sleep(interval)
+
+    if last_error:
+        raise SetupError(
+            f"FOAF reconciliation failed while waiting for credloop cancellation: {last_error}"
+        )
+
+    matches = last_reconcile.get("summary", {}).get("matches", 0)
+    raise SetupError(
+        f"Expected at least {expect_min} credloop-cancelled trustline(s), found 0 "
+        f"after {attempts} reconciliation attempt(s); {matches} trustlines match exactly"
+    )
 
 
 # --- Helpers ---------------------------------------------------------------
