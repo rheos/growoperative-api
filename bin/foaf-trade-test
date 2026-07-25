@@ -16,58 +16,77 @@
 
 set -euo pipefail
 
-SNAPSHOT_DATE="${1:-2026-05-23}"
-TRADE_TEST_HOST="${TRADE_TEST_HOST:-http://localhost:3001}"
-TRADE_TEST_HOST="${TRADE_TEST_HOST%/}"
-
-case "${TRADE_TEST_HOST}" in
-  http://localhost:3001|http://127.0.0.1:3001)
-    RESET_MODE="local"
-    ;;
-  https://demo.growoperative.app|https://dpi.growoperative.app)
-    RESET_MODE="demo"
-    ;;
-  *)
-    echo "REFUSED: unsupported TRADE_TEST_HOST '${TRADE_TEST_HOST}'."
-    echo "         Allowed: localhost:3001, demo.growoperative.app, dpi.growoperative.app."
-    exit 2
-    ;;
-esac
-
-export TRADE_TEST_HOST
-
-echo "=== FOAF Trade Test ==="
-echo "  Host: ${TRADE_TEST_HOST}"
-echo "  Reset mode: ${RESET_MODE}"
-echo
-echo "[A] Reset ($SNAPSHOT_DATE)"
-if [[ "${RESET_MODE}" == "demo" ]]; then
-  ./bin/foaf-reset-demo "$SNAPSHOT_DATE" > /tmp/trade_test_reset.log 2>&1
-else
-  ./bin/foaf-reset "$SNAPSHOT_DATE" > /tmp/trade_test_reset.log 2>&1
-fi || {
-  echo "  Reset failed. See /tmp/trade_test_reset.log"
-  exit 2
+select_reset_mode() {
+  case "${1%/}" in
+    http://localhost:3001|http://127.0.0.1:3001)
+      echo "local"
+      ;;
+    https://demo.growoperative.app|https://dpi.growoperative.app)
+      echo "demo"
+      ;;
+    *)
+      echo "REFUSED: unsupported TRADE_TEST_HOST '${1}'." >&2
+      echo "         Allowed: localhost:3001, demo.growoperative.app, dpi.growoperative.app." >&2
+      return 2
+      ;;
+  esac
 }
-echo "  OK"
-echo
 
-if [[ "${RESET_MODE}" == "demo" ]]; then
-  echo "[A.1] Wait for demo backend after reset"
-  for attempt in {1..30}; do
-    if curl -fsS "${TRADE_TEST_HOST}/v1/debug/invariants" > /dev/null; then
-      echo "  OK"
-      break
-    fi
-    if [[ "${attempt}" -eq 30 ]]; then
-      echo "  Demo backend did not become ready after 30 seconds."
-      exit 2
-    fi
-    sleep 1
-  done
+reset_command_for_mode() {
+  case "$1" in
+    local) echo "./bin/foaf-reset" ;;
+    demo) echo "./bin/foaf-reset-demo" ;;
+    *)
+      echo "REFUSED: unsupported reset mode '$1'." >&2
+      return 2
+      ;;
+  esac
+}
+
+main() {
+  local snapshot_date="${1:-2026-05-23}"
+  local trade_test_host="${TRADE_TEST_HOST:-http://localhost:3001}"
+  local reset_mode
+  local reset_command
+
+  trade_test_host="${trade_test_host%/}"
+  reset_mode="$(select_reset_mode "${trade_test_host}")"
+  reset_command="$(reset_command_for_mode "${reset_mode}")"
+  export TRADE_TEST_HOST="${trade_test_host}"
+
+  echo "=== FOAF Trade Test ==="
+  echo "  Host: ${trade_test_host}"
+  echo "  Reset mode: ${reset_mode}"
   echo
-fi
+  echo "[A] Reset (${snapshot_date})"
+  "${reset_command}" "${snapshot_date}" > /tmp/trade_test_reset.log 2>&1 || {
+    echo "  Reset failed. See /tmp/trade_test_reset.log"
+    exit 2
+  }
+  echo "  OK"
+  echo
 
-echo "[B] Run scenarios (Python driver, via HTTP)"
-echo
-python3 scripts/trade_test.py
+  if [[ "${reset_mode}" == "demo" ]]; then
+    echo "[A.1] Wait for demo backend after reset"
+    for attempt in {1..30}; do
+      if curl -fsS "${trade_test_host}/v1/debug/invariants" > /dev/null; then
+        echo "  OK"
+        break
+      fi
+      if [[ "${attempt}" -eq 30 ]]; then
+        echo "  Demo backend did not become ready after 30 seconds."
+        exit 2
+      fi
+      sleep 1
+    done
+    echo
+  fi
+
+  echo "[B] Run scenarios (Python driver, via HTTP)"
+  echo
+  python3 scripts/trade_test.py
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

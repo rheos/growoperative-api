@@ -48,6 +48,9 @@ jobs:
       - name: Prepare test database
         run: bundle exec rails db:test:prepare
 
+      - name: Test FOAF trade harness guards
+        run: python3 scripts/test_trade_test.py
+
       # Temporary Rails-upgrade gate. The historical full suite is currently
       # red on stale legacy scenario specs; expand this back to bare `rspec`
       # once those baseline failures are retired.
