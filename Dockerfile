@@ -4,12 +4,17 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update -qq && apt-get install -y \
+    autoconf \
+    automake \
     build-essential \
     libpq-dev \
     default-libmysqlclient-dev \
     default-mysql-client \
     imagemagick \
+    git \
     libmagickwand-dev \
+    libssl-dev \
+    libtool \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 

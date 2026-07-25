@@ -1,6 +1,7 @@
 require 'jwt/current_request_id'
 require 'jwt/auth_jwks_client'
 require 'jwt/auth_revocation_snapshot'
+require 'jwt/foaf_auth_verifier'
 require 'jwt/decoding_service'
 require 'jwt/generation_service'
 require 'auth_foaf_client'
