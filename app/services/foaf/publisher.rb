@@ -34,8 +34,13 @@ module Foaf
 
     # Publish a trustline update to FOAF.
     # FOAF uses two-stage accept — we send both sides so it completes immediately.
-    def publish_trustline_update(trustline, current_user)
+    def publish_trustline_update(trustline, _current_user = nil, outbox_entry: nil)
       return unless Foaf::Config.foaf_write_enabled?
+      if outbox_entry
+        outbox_entry.reload
+        return if outbox_entry.foaf_posted_at.present? ||
+                  outbox_entry.superseded_at.present?
+      end
       return unless ensure_network!
 
       user_a = User.find(trustline.user_a_id)
@@ -45,6 +50,10 @@ module Foaf
 
       addr_a = Foaf::Signer.address_for(user_a)
       addr_b = Foaf::Signer.address_for(user_b)
+      limit_a_to_b = outbox_entry&.credit_limit_a_to_b ||
+                     trustline.credit_limit_a_to_b
+      limit_b_to_a = outbox_entry&.credit_limit_b_to_a ||
+                     trustline.credit_limit_b_to_a
 
       # CRITICAL: semantic mapping (see foaf-protocol skill)
       # App credit_limit_a_to_b (A can owe B) = FOAF creditline_received (from A's perspective)
@@ -55,11 +64,16 @@ module Foaf
         network_address: @network_address,
         creditor_address: addr_a,
         debtor_address: addr_b,
-        creditline_given: trustline.credit_limit_b_to_a,
-        creditline_received: trustline.credit_limit_a_to_b
+        creditline_given: limit_b_to_a,
+        creditline_received: limit_a_to_b
       )
 
       unless write_succeeded?(r1)
+        record_trustline_write_result!(
+          outbox_entry,
+          trustline_failure_state(r1, "proposal"),
+          r1
+        )
         Rails.logger.warn("[FOAF Publisher] Trustline proposal failed: #{user_a.user_name} -> #{user_b.user_name} (network=#{@network_address})")
         return
       end
@@ -69,17 +83,38 @@ module Foaf
         network_address: @network_address,
         creditor_address: addr_b,
         debtor_address: addr_a,
-        creditline_given: trustline.credit_limit_a_to_b,
-        creditline_received: trustline.credit_limit_b_to_a
+        creditline_given: limit_a_to_b,
+        creditline_received: limit_b_to_a
       )
 
       unless write_succeeded?(r2)
+        record_trustline_write_result!(
+          outbox_entry,
+          trustline_failure_state(r2, "accept"),
+          r2
+        )
         Rails.logger.warn("[FOAF Publisher] Trustline accept failed: #{user_b.user_name} -> #{user_a.user_name}")
         return
       end
 
+      marked_posted = mark_trustline_posted!(outbox_entry)
+      unless marked_posted
+        latest = FoafOutboxEntry.latest_trustline_update_for(trustline)
+        if latest && latest.id != outbox_entry&.id
+          return publish_trustline_update(
+            trustline,
+            nil,
+            outbox_entry: latest
+          )
+        end
+      end
       Rails.logger.info("[FOAF Publisher] Published trustline update: #{user_a.user_name} <-> #{user_b.user_name}")
     rescue StandardError => e
+      record_trustline_write_result!(
+        outbox_entry,
+        "ambiguous_exception",
+        "error" => e.message
+      )
       Rails.logger.warn("[FOAF Publisher] Trustline publish failed: #{e.message}")
     end
 
@@ -446,6 +481,69 @@ module Foaf
       else
         result.present?
       end
+    end
+
+    def trustline_failure_state(result, stage)
+      if Foaf::Config.shared_writes? &&
+          result.is_a?(Hash) &&
+          result["outcome"] == "rejected"
+        "rejected"
+      else
+        "ambiguous_#{stage}"
+      end
+    end
+
+    def record_trustline_write_result!(outbox_entry, state, result)
+      return unless outbox_entry
+
+      details = if result.is_a?(Hash)
+        result.slice("status", "outcome", "body", "error")
+      else
+        { "result" => result }
+      end
+
+      FoafOutboxEntry
+        .where(
+          id: outbox_entry.id,
+          foaf_posted_at: nil,
+          superseded_at: nil
+        )
+        .update_all(
+          foaf_write_state: state,
+          foaf_write_error: details.to_json,
+          updated_at: Time.current
+        )
+      outbox_entry.reload
+    rescue StandardError => e
+      Rails.logger.warn(
+        "[FOAF Publisher] Failed to record limit outbox #{outbox_entry&.id} " \
+        "state=#{state}: #{e.message}"
+      )
+    end
+
+    def mark_trustline_posted!(outbox_entry)
+      return true unless outbox_entry
+
+      updated = FoafOutboxEntry
+        .where(
+          id: outbox_entry.id,
+          foaf_posted_at: nil,
+          superseded_at: nil
+        )
+        .update_all(
+          foaf_posted_at: Time.current,
+          foaf_write_state: "posted",
+          foaf_write_error: nil,
+          updated_at: Time.current
+        )
+      outbox_entry.reload
+      updated == 1
+    rescue StandardError => e
+      Rails.logger.warn(
+        "[FOAF Publisher] Failed to mark limit outbox #{outbox_entry&.id} " \
+        "posted: #{e.message}"
+      )
+      false
     end
 
     def mark_legacy_posted!(tx_row, confirm_response)

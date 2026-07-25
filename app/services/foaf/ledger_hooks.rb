@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # Ledger hooks that publish app operations to FOAF.
-# Balance-moving calls run after their failure-buffer row is recorded; trustline
-# limit updates currently publish directly. Errors never escape the hook.
+# Balance-moving calls run after their failure-buffer row is recorded. Trustline
+# limit updates are snapshotted transactionally in FoafOutboxEntry before this
+# hook attempts publication. Errors never escape the hook.
 #
 # Runs synchronously (not threaded) to avoid race conditions on
 # keypair generation. The HTTP calls to FOAF are local and fast.
@@ -19,7 +20,16 @@ module Foaf
     def after_trustline_save(trustline, current_user)
       return unless Foaf::Config.foaf_write_enabled?
 
-      publisher.publish_trustline_update(trustline, current_user)
+      outbox_entry = FoafOutboxEntry.latest_trustline_update_for(trustline)
+      return unless outbox_entry
+      return if Foaf::Config.shared_writes? &&
+                outbox_entry.foaf_write_state == "rejected"
+
+      publisher.publish_trustline_update(
+        trustline,
+        current_user,
+        outbox_entry: outbox_entry
+      )
     rescue StandardError => e
       Rails.logger.warn("[FOAF Publisher] Trustline publish failed: #{e.message}")
     end

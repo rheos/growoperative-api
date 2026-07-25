@@ -70,3 +70,7 @@ jobs:
           spec/controllers/jwt_bridge_resolution_spec.rb
           spec/services/jwt_generation_service_spec.rb
           spec/requests/discovery_spec.rb
+          spec/models/foaf_outbox_entry_spec.rb
+          spec/services/foaf/ledger_hooks_limit_outbox_spec.rb
+          spec/services/foaf/publisher_limit_outbox_spec.rb
+          spec/services/foaf/replay_worker_spec.rb
