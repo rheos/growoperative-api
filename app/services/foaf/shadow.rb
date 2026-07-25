@@ -134,7 +134,10 @@ module Foaf
       end
 
       # Auto-confirm since the app already processed the payment
-      confirm = @client.confirm_transfer(pending_transfer_id: result["id"])
+      confirm = @client.confirm_transfer(
+        pending_transfer_id: result["id"],
+        signer_address: Foaf::Signer.address_for(to_user)
+      )
 
       unless confirm
         Rails.logger.warn("[FOAF Shadow] Confirm transfer failed: PT##{result["id"]} #{from_user.user_name} -> #{to_user.user_name}")

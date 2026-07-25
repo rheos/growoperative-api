@@ -49,6 +49,9 @@ services:
       # FOAF Protocol shadow mode (development only)
       FOAF_SHADOW_MODE: "true"
       FOAF_API_URL: "http://host.docker.internal:3002"
+      FOAF_SHARED_READS: "true"
+      FOAF_SHARED_WRITES: "true"
+      FOAF_SHARED_AUTH_VERIFIER: "false"
     depends_on:
       - db
 

@@ -1,3 +1,13 @@
+GIT
+  remote: https://github.com/rheos/foaf-client.git
+  revision: 69f3db5dae3ef40eb90b69a64f8d5b810ff77cc4
+  tag: v0.1.0
+  glob: gem/*.gemspec
+  specs:
+    foaf_client (0.1.0)
+      eth (~> 0.5)
+      jwt (>= 2.7, < 3)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -177,6 +187,13 @@ GEM
       zeitwerk (~> 2.6)
     erb (6.0.6)
     erubi (1.13.1)
+    eth (0.5.13)
+      forwardable (~> 1.3)
+      keccak (~> 1.3)
+      konstructor (~> 1.0)
+      openssl (>= 2.2, < 4.0)
+      rbsecp256k1 (~> 6.0)
+      scrypt (~> 3.0)
     excon (1.2.5)
       logger
     factory_bot (6.4.5)
@@ -184,7 +201,10 @@ GEM
     factory_bot_rails (6.4.3)
       factory_bot (~> 6.4)
       railties (>= 5.0.0)
-    ffi (1.17.2-x86_64-linux-gnu)
+    ffi (1.17.4-x86_64-linux-gnu)
+    ffi-compiler (1.4.2)
+      ffi (>= 1.15.5)
+      rake
     fog-aws (3.24.0)
       fog-core (~> 2.1)
       fog-json (~> 1.1)
@@ -201,6 +221,7 @@ GEM
       fog-core
       nokogiri (>= 1.5.11, < 2.0.0)
     formatador (1.1.0)
+    forwardable (1.4.0)
     globalid (1.4.0)
       activesupport (>= 6.1)
     i18n (1.15.2)
@@ -221,8 +242,10 @@ GEM
     jsonapi-renderer (0.2.2)
     jsonapi-serializer (2.2.0)
       activesupport (>= 4.2)
-    jwt (2.10.1)
+    jwt (2.10.3)
       base64
+    keccak (1.3.3)
+    konstructor (1.0.2)
     listen (3.9.0)
       rb-fsevent (~> 0.10, >= 0.10.3)
       rb-inotify (~> 0.9, >= 0.9.10)
@@ -247,6 +270,7 @@ GEM
       benchmark
       logger
     mini_mime (1.1.5)
+    mini_portile2 (2.8.9)
     minitest (6.0.6)
       drb (~> 2.0)
       prism (~> 1.5)
@@ -268,8 +292,9 @@ GEM
     nokogiri (1.19.4-x86_64-linux-gnu)
       racc (~> 1.4)
     observer (0.1.2)
+    openssl (3.3.3)
     orm_adapter (0.5.0)
-    pkg-config (1.6.2)
+    pkg-config (1.6.5)
     pp (0.6.4)
       prettyprint
     prettyprint (0.2.0)
@@ -338,6 +363,10 @@ GEM
       logger
       prism (>= 1.6.0)
       tsort
+    rbsecp256k1 (6.0.0)
+      mini_portile2 (~> 2.8)
+      pkg-config (~> 1.5)
+      rubyzip (~> 2.3)
     rdoc (8.0.0)
       erb
       prism (>= 1.6.0)
@@ -373,7 +402,10 @@ GEM
     ruby-vips (2.2.4)
       ffi (~> 1.12)
       logger
-    rubyzip (3.4.1)
+    rubyzip (2.4.1)
+    scrypt (3.1.0)
+      ffi-compiler (>= 1.0, < 2.0)
+      rake (~> 13)
     securerandom (0.4.1)
     selenium-webdriver (4.44.0)
       base64 (~> 0.2)
@@ -438,6 +470,7 @@ DEPENDENCIES
   devise_invitable (~> 2.0)
   dotenv-rails (~> 2.7)
   factory_bot_rails (~> 6.1)
+  foaf_client!
   fog-aws
   jbuilder (~> 2.5)
   jsonapi-serializer

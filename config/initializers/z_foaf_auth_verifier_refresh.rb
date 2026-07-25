@@ -3,8 +3,12 @@ if Rails.env.production? && ENV.fetch('FOAF_AUTH_VERIFIER_REFRESH_ENABLED', 'tru
     audience = ENV.fetch('FOAF_AUD', JwtDecodingService::DEFAULT_AUDIENCE)
 
     begin
-      AuthJwksClient.refresh!
-      AuthRevocationSnapshot.refresh!(audience: audience)
+      if JwtDecodingService.shared_auth_verifier?
+        FoafAuthVerifier.refresh!
+      else
+        AuthJwksClient.refresh!
+        AuthRevocationSnapshot.refresh!(audience: audience)
+      end
     rescue StandardError => e
       Rails.logger.warn("[foaf-auth-verifier] initial refresh failed: #{e.class}: #{e.message}")
     end
@@ -14,8 +18,12 @@ if Rails.env.production? && ENV.fetch('FOAF_AUTH_VERIFIER_REFRESH_ENABLED', 'tru
       loop do
         sleep 5.minutes
         begin
-          AuthJwksClient.refresh!
-          AuthRevocationSnapshot.refresh!(audience: audience)
+          if JwtDecodingService.shared_auth_verifier?
+            FoafAuthVerifier.refresh!
+          else
+            AuthJwksClient.refresh!
+            AuthRevocationSnapshot.refresh!(audience: audience)
+          end
         rescue StandardError => e
           Rails.logger.warn("[foaf-auth-verifier] background refresh failed: #{e.class}: #{e.message}")
         end
