@@ -5,9 +5,6 @@
 #
 # IMPORTANT: This entire module is swappable.
 
-require "openssl"
-require "digest"
-
 module Foaf
   module Signer
     module_function
@@ -50,15 +47,8 @@ module Foaf
       ensure_keypair!(user)
       return nil unless user.foaf_private_key.present?
 
-      ec = OpenSSL::PKey::EC.new("secp256k1")
-      ec.private_key = OpenSSL::BN.new(user.foaf_private_key, 16)
-      group = OpenSSL::PKey::EC::Group.new("secp256k1")
-      ec.public_key = group.generator.mul(ec.private_key)
-
-      digest = Digest::SHA256.digest(payload)
-      signature = ec.dsa_sign_asn1(digest)
-      signature.unpack1("H*")
-    rescue => e
+      Foaf::LedgerSigner.sign(user.foaf_private_key, payload)
+    rescue StandardError => e
       Rails.logger.warn("[FOAF Signer] Signing failed: #{e.message}")
       nil
     end

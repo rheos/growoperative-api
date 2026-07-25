@@ -427,8 +427,13 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.bigint "foaf_operation_id"
     t.datetime "foaf_posted_at", precision: nil
     t.string "foaf_direction", limit: 16
+    t.bigint "foaf_pending_transfer_id"
+    t.string "foaf_write_state"
+    t.text "foaf_write_error"
     t.index ["created_at"], name: "index_trustline_transactions_on_created_at"
+    t.index ["foaf_pending_transfer_id"], name: "index_trustline_transactions_on_foaf_pending_transfer_id"
     t.index ["foaf_posted_at"], name: "index_trustline_transactions_on_foaf_posted_at"
+    t.index ["foaf_write_state"], name: "index_trustline_transactions_on_foaf_write_state"
     t.index ["initiated_by_id"], name: "index_trustline_transactions_on_initiated_by_id"
     t.index ["is_reversed"], name: "index_trustline_transactions_on_is_reversed"
     t.index ["order_id"], name: "index_trustline_transactions_on_order_id"

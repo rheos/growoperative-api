@@ -77,6 +77,7 @@ RSpec.describe Foaf::BalanceReader, type: :model, skip_hooks: true do
                        balance: -80.0, given: 200.0, received: 100.0),
       ])
 
+      expect(Foaf::Balances).to receive(:from_trustline_row).and_call_original
       rows = described_class.fetch(canonical_user_a)
       expect(rows.size).to eq(1)
       row = rows.first

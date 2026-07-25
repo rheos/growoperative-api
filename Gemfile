@@ -14,6 +14,10 @@ gem 'sprockets-rails'
 gem 'jbuilder', '~> 2.5'
 gem 'jwt'
 gem 'jsonapi-serializer'
+gem "foaf_client",
+    git: "https://github.com/rheos/foaf-client.git",
+    tag: "v0.1.2",
+    glob: "gem/*.gemspec"
 
 
 gem 'aws-sdk-s3', '~> 1.130.0', require: false
