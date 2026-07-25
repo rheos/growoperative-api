@@ -25,6 +25,10 @@ class JwtDecodingService
     !%w[0 false no off].include?(flag.downcase)
   end
 
+  def self.shared_auth_verifier?
+    ENV['FOAF_SHARED_AUTH_VERIFIER'] == 'true'
+  end
+
   def initialize(token, audience: nil)
     @token = token
     @audience = audience || ENV.fetch('FOAF_AUD', DEFAULT_AUDIENCE)
@@ -68,6 +72,10 @@ class JwtDecodingService
   private
 
   def decrypt_auth_token!(header)
+    if self.class.shared_auth_verifier?
+      return FoafAuthVerifier.verify(@token, request_id: CurrentRequestId.value)
+    end
+
     kid = header['kid'].to_s
     snapshot = AuthRevocationSnapshot.current(audience: @audience, request_id: CurrentRequestId.value)
     if snapshot&.revoked_kid?(kid)
@@ -90,7 +98,7 @@ class JwtDecodingService
 
     enforce_revocation_snapshot!(decoded, snapshot)
     decoded
-  rescue AuthJwksClient::Error, AuthRevocationSnapshot::Error => e
+  rescue AuthJwksClient::Error, AuthRevocationSnapshot::Error, Foaf::Auth::Error => e
     Rails.logger.warn("JWT auth.foaf.io verification failed request_id=#{CurrentRequestId.value}: #{e.message}")
     raise JWTDecodingError, e.message
   end

@@ -47,9 +47,7 @@ module Foaf
         next unless entry
 
         rows << entry.merge(
-          viewer_balance: -foaf_tl["balance"].to_f,
-          my_credit_limit: foaf_tl["received"].to_f,
-          their_credit_limit: foaf_tl["given"].to_f,
+          Foaf::Balances.from_trustline_row(foaf_tl).transform_values(&:to_f)
         )
       end
     end
