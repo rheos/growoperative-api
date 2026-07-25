@@ -22,6 +22,7 @@ class Trustline < ApplicationRecord
   belongs_to :user_a, class_name: 'User'
   belongs_to :user_b, class_name: 'User'
   has_many :trustline_transactions, dependent: :destroy
+  has_many :foaf_outbox_entries, dependent: :delete_all
   
   # === VALIDATIONS ===
   validates :credit_limit_a_to_b, :credit_limit_b_to_a, :current_balance, 
@@ -42,6 +43,8 @@ class Trustline < ApplicationRecord
   # === CALLBACKS ===
   before_validation :ensure_user_order, on: :create
   before_create :set_established_date
+  after_save :enqueue_foaf_limit_update,
+             if: :foaf_limit_publication_needed?
   
   # === CORE MUTUAL CREDIT METHODS ===
   
@@ -54,6 +57,24 @@ class Trustline < ApplicationRecord
     return user_a if current_user.id == user_b_id
     raise ArgumentError, "User #{current_user.id} is not part of this trustline"
   end
+
+  private
+
+  def foaf_limit_publication_needed?
+    Foaf::Config.foaf_write_enabled? &&
+      (previously_new_record? ||
+       saved_change_to_credit_limit_a_to_b? ||
+       saved_change_to_credit_limit_b_to_a?)
+  end
+
+  # Runs inside the Trustline save transaction. If Rails commits the limit,
+  # the durable publication record commits with it; if Rails rolls back, both
+  # roll back. A newer snapshot supersedes any older unposted value.
+  def enqueue_foaf_limit_update
+    FoafOutboxEntry.enqueue_trustline_update!(self)
+  end
+
+  public
   
   # Returns the credit limit that a specific user can borrow
   # @param user [User] - The user whose credit limit to retrieve

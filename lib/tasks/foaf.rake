@@ -96,7 +96,7 @@ namespace :foaf do
     puts "Missing/Skip:  #{missing}"
   end
 
-  desc "Replay TrustlineTransaction rows that were never published to FOAF"
+  desc "Replay durable limit and balance writes that were never published to FOAF"
   task :replay_unposted, [:limit] => :environment do |_, args|
     limit = (args[:limit] || 100).to_i
     results = Foaf::ReplayWorker.run(limit: limit)
