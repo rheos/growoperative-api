@@ -29,6 +29,7 @@ RSpec.describe Foaf::Shadow, type: :model, skip_hooks: true do
 
   before do
     allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
+    allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
     allow(Foaf::Signer).to receive(:ensure_keypair!)

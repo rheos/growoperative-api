@@ -19,6 +19,7 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
 
   before do
     allow(Foaf::Config).to receive(:shadow_mode?).and_return(true)
+    allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     allow(Foaf::Client).to receive(:new).and_return(fake_client)
     allow(fake_client).to receive(:networks).and_return([{ 'address' => '0xnetwork' }])
     allow(Foaf::Signer).to receive(:ensure_keypair!)
@@ -103,6 +104,21 @@ RSpec.describe Foaf::ReplayWorker, type: :model, skip_hooks: true do
 
       results = described_class.run
       expect(results[:attempted]).to eq(0)
+    end
+
+    it 'does not automatically retry a definitive shared-write rejection' do
+      allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
+      tx = unposted_tx(direction: 'sent')
+      tx.update!(foaf_write_state: 'rejected')
+      expect(fake_client).not_to receive(:create_pending_transfer)
+      expect(fake_client).not_to receive(:confirm_transfer)
+      expect(fake_client).not_to receive(:pending_transfer)
+      expect(fake_client).not_to receive(:pending_transfer_by_idempotency_key)
+
+      results = described_class.run
+
+      expect(results).to include(attempted: 0, skipped: 1)
+      expect(tx.reload.foaf_posted_at).to be_nil
     end
   end
 end

@@ -1,16 +1,19 @@
 # frozen_string_literal: true
 
-# Foaf::ReplayWorker — replays TrustlineTransaction rows whose mirror to FOAF
-# never succeeded. A row qualifies when foaf_posted_at IS NULL.
+# Foaf::ReplayWorker — resolves TrustlineTransaction rows whose mirror to FOAF
+# never reached a known success. A row qualifies when foaf_posted_at IS NULL.
 #
 # Flow per row (see Foaf::Shadow#mirror_payment):
 #   foaf_direction: 'sent'     -> mirror_payment(from: initiated_by, to: other)
 #   foaf_direction: 'received' -> mirror_settlement(payer: initiated_by, payee: other)
 #   foaf_direction: nil        -> skip (historical row or legacy data)
 #
-# A successful retry updates foaf_operation_id + foaf_posted_at on the row,
-# so the next run skips it. Failures leave the row unposted and a warning in
-# the Rails log — the next run tries again.
+# With FOAF_SHARED_WRITES=true, Foaf::Shadow first reads by the deterministic
+# idempotency key (or retained pending-transfer id), and only creates/confirms
+# when FOAF proves that step is still needed. It never falls back to the legacy
+# writer. A known 4xx rejection is terminal and is not retried automatically.
+#
+# With FOAF_SHARED_WRITES=false, the existing legacy replay path is unchanged.
 #
 # Adjustment-direction rows (record_debt / record_receipt) replay through the
 # same primitives. If FOAF rejects the replay for a capacity reason — e.g.
@@ -34,6 +37,11 @@ module Foaf
       results = { attempted: 0, posted: 0, still_unposted: 0, skipped: 0 }
 
       scope.each do |tx|
+        if Foaf::Config.shared_writes? && tx.foaf_write_state == "rejected"
+          results[:skipped] += 1
+          next
+        end
+
         trustline = tx.trustline
         initiator = tx.initiated_by
         unless trustline && initiator
