@@ -52,7 +52,7 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     ).to eq('legacy-write')
   end
 
-  it 'routes trustline updates through the shared client and preserves the app response shape' do
+  it 'routes trustline updates through the shared client and preserves the strict result' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
     expect(client).not_to receive(:post)
     expect(shared_client).to receive(:update_trustline).with(
@@ -63,6 +63,8 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
       creditline_received: '20'
     ).and_return(
       'ok' => true,
+      'status' => 201,
+      'body' => '{"action":"accepted"}',
       'data' => { 'action' => 'accepted' }
     )
 
@@ -74,7 +76,13 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
       creditline_received: '20'
     )
 
-    expect(result).to eq('action' => 'accepted')
+    expect(result).to include(
+      'ok' => true,
+      'status' => 201,
+      'outcome' => 'success',
+      'body' => '{"action":"accepted"}',
+      'data' => { 'action' => 'accepted' }
+    )
   end
 
   it 'routes all pending-transfer mutations through the shared client' do
@@ -87,24 +95,35 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
       from_address: 'sender',
       to_address: 'receiver',
       value: '3.25',
-      extra_data: '{"order_id":7}'
-    ).and_return('ok' => true, 'data' => { 'id' => 41 })
+      extra_data: '{"order_id":7}',
+      idempotency_key: 'growoperative:trustline_transaction:7'
+    ).and_return(
+      'ok' => true, 'status' => 201, 'body' => '{"id":41}',
+      'data' => { 'id' => 41 }
+    )
     expect(shared_client).to receive(:confirm_transfer).with(
       pending_transfer_id: 41,
       signer_address: 'receiver'
-    ).and_return('ok' => true, 'data' => { 'operation' => 91 })
+    ).and_return(
+      'ok' => true, 'status' => 200, 'body' => '{"operation":91}',
+      'data' => { 'operation' => 91 }
+    )
     expect(shared_client).to receive(:reject_transfer).with(
       pending_transfer_id: 42,
       signer_address: 'receiver',
       reason: 'declined'
-    ).and_return('ok' => true, 'data' => { 'status' => 'rejected' })
+    ).and_return(
+      'ok' => true, 'status' => 200, 'body' => '{"status":"rejected"}',
+      'data' => { 'status' => 'rejected' }
+    )
 
     pending = client.create_pending_transfer(
       network_address: 'network',
       from_address: 'sender',
       to_address: 'receiver',
       value: '3.25',
-      extra_data: '{"order_id":7}'
+      extra_data: '{"order_id":7}',
+      idempotency_key: 'growoperative:trustline_transaction:7'
     )
     confirmed = client.confirm_transfer(
       pending_transfer_id: 41,
@@ -116,9 +135,21 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
       reason: 'declined'
     )
 
-    expect(pending).to eq('id' => 41)
-    expect(confirmed).to eq('operation' => 91)
-    expect(rejected).to eq('status' => 'rejected')
+    expect(pending).to include(
+      'outcome' => 'success',
+      'status' => 201,
+      'data' => { 'id' => 41 }
+    )
+    expect(confirmed).to include(
+      'outcome' => 'success',
+      'status' => 200,
+      'data' => { 'operation' => 91 }
+    )
+    expect(rejected).to include(
+      'outcome' => 'success',
+      'status' => 200,
+      'data' => { 'status' => 'rejected' }
+    )
   end
 
   it 'keeps all pending-transfer mutations on the legacy transport when shared writes are disabled' do
@@ -175,6 +206,7 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     expect(shared_client).to receive(:create_pending_transfer).and_return(
       'ok' => false,
       'status' => 503,
+      'body' => '{"error":"temporarily unavailable"}',
       'error' => '{"error":"temporarily unavailable"}'
     )
 
@@ -185,9 +217,37 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
       value: '3.25'
     )
 
-    expect(result).to be_nil
+    expect(result).to include(
+      'ok' => false,
+      'status' => 503,
+      'outcome' => 'ambiguous',
+      'body' => '{"error":"temporarily unavailable"}'
+    )
     expect(Rails.logger).to have_received(:warn).with(
-      /method=create_pending_transfer failed status=503/
+      /method=create_pending_transfer outcome=ambiguous status=503/
+    )
+  end
+
+  it 'distinguishes a definitive shared-write rejection from ambiguity' do
+    allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
+    allow(Rails.logger).to receive(:warn)
+    expect(shared_client).to receive(:confirm_transfer).and_return(
+      'ok' => false,
+      'status' => 422,
+      'body' => '{"error":"InsufficientCapacity"}',
+      'error' => '{"error":"InsufficientCapacity"}'
+    )
+
+    result = client.confirm_transfer(
+      pending_transfer_id: 41,
+      signer_address: 'receiver'
+    )
+
+    expect(result).to include(
+      'ok' => false,
+      'status' => 422,
+      'outcome' => 'rejected',
+      'body' => '{"error":"InsufficientCapacity"}'
     )
   end
 

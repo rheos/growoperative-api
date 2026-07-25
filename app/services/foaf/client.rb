@@ -69,7 +69,7 @@ module Foaf
     # === TRANSFERS ===
 
     def create_pending_transfer(network_address:, from_address:, to_address:,
-                                value:, extra_data: nil)
+                                value:, extra_data: nil, idempotency_key: nil)
       body = {
         network_address: network_address,
         from_address: from_address,
@@ -80,7 +80,10 @@ module Foaf
       return post("/api/v1/pending_transfers", body) unless Foaf::Config.shared_writes?
 
       shared_write(:create_pending_transfer) do
-        @shared_client.create_pending_transfer(**body)
+        @shared_client.create_pending_transfer(
+          **body,
+          idempotency_key: idempotency_key
+        )
       end
     end
 
@@ -93,6 +96,20 @@ module Foaf
         @shared_client.confirm_transfer(
           pending_transfer_id: pending_transfer_id,
           signer_address: signer_address
+        )
+      end
+    end
+
+    def pending_transfer(pending_transfer_id:)
+      shared_read_result(:pending_transfer) do
+        @shared_client.pending_transfer(pending_transfer_id: pending_transfer_id)
+      end
+    end
+
+    def pending_transfer_by_idempotency_key(idempotency_key:)
+      shared_read_result(:pending_transfer_by_idempotency_key) do
+        @shared_client.pending_transfer_by_idempotency_key(
+          idempotency_key: idempotency_key
         )
       end
     end
@@ -188,19 +205,55 @@ module Foaf
     private
 
     def shared_write(name)
-      result = yield
-      return result["data"] if result.is_a?(Hash) && result["ok"] == true
-
-      status = result.is_a?(Hash) ? result["status"] : nil
-      error = result.is_a?(Hash) ? result["error"] : result.inspect
-      Rails.logger.warn(
-        "[foaf-client write] method=#{name} failed status=#{status || "unknown"} " \
-        "error=#{error.to_s[0, 500]}"
-      )
-      nil
+      classify_result(name, yield)
     rescue StandardError => e
-      Rails.logger.warn("[foaf-client write] method=#{name} raised: #{e.message}")
-      nil
+      classify_result(
+        name,
+        "ok" => false,
+        "status" => 0,
+        "body" => nil,
+        "error" => e.message
+      )
+    end
+
+    def shared_read_result(name)
+      classify_result(name, yield)
+    rescue StandardError => e
+      classify_result(
+        name,
+        "ok" => false,
+        "status" => 0,
+        "body" => nil,
+        "error" => e.message
+      )
+    end
+
+    def classify_result(name, result)
+      result = {
+        "ok" => false,
+        "status" => 0,
+        "body" => nil,
+        "error" => "Unexpected foaf-client result: #{result.inspect}"
+      } unless result.is_a?(Hash)
+
+      status = result["status"].to_i
+      outcome = if result["ok"] == true
+        "success"
+      elsif status >= 400 && status < 500
+        "rejected"
+      else
+        "ambiguous"
+      end
+      classified = result.merge("status" => status, "outcome" => outcome)
+
+      unless outcome == "success"
+        Rails.logger.warn(
+          "[foaf-client result] method=#{name} outcome=#{outcome} status=#{status} " \
+          "body=#{classified["body"].to_s[0, 500]} error=#{classified["error"].to_s[0, 500]}"
+        )
+      end
+
+      classified
     end
 
     def sign_shared_payload(address, payload)

@@ -47,17 +47,24 @@ RSpec.describe 'GrowOperative shared FOAF write adapter', :integration, skip_hoo
       from_address: sender.foaf_address,
       to_address: receiver.foaf_address,
       value: '2.5',
-      extra_data: { contract: 'growoperative-shared-write-adapter' }.to_json
+      extra_data: { contract: 'growoperative-shared-write-adapter' }.to_json,
+      idempotency_key: "growoperative:signature-contract:#{SecureRandom.hex(12)}"
     )
+    expect(pending).to include('outcome' => 'success')
+    expect(pending.dig('data', 'id')).not_to be_nil
+
     confirmed = client.confirm_transfer(
-      pending_transfer_id: pending.fetch('id'),
+      pending_transfer_id: pending.dig('data', 'id'),
       signer_address: receiver.foaf_address
     )
 
-    expect(first_update).to include('action')
-    expect(second_update).to include('action')
-    expect(confirmed).to include('status' => 'confirmed')
-    expect(confirmed.fetch('operation')).not_to be_nil
+    expect(first_update).to include('outcome' => 'success')
+    expect(first_update.fetch('data')).to include('action')
+    expect(second_update).to include('outcome' => 'success')
+    expect(second_update.fetch('data')).to include('action')
+    expect(confirmed).to include('outcome' => 'success')
+    expect(confirmed.fetch('data')).to include('status' => 'confirmed')
+    expect(confirmed.dig('data', 'operation')).not_to be_nil
   end
 
   def create_signer_user(label, keypair)

@@ -1,10 +1,10 @@
 GIT
   remote: https://github.com/rheos/foaf-client.git
-  revision: 69f3db5dae3ef40eb90b69a64f8d5b810ff77cc4
-  tag: v0.1.0
+  revision: 443cf6af221992474e5c766e956d4e6155a67ead
+  tag: v0.1.2
   glob: gem/*.gemspec
   specs:
-    foaf_client (0.1.0)
+    foaf_client (0.1.2)
       eth (~> 0.5)
       jwt (>= 2.7, < 3)
 

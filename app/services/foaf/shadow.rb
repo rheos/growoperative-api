@@ -60,7 +60,7 @@ module Foaf
         creditline_received: trustline.credit_limit_a_to_b
       )
 
-      unless r1
+      unless write_succeeded?(r1)
         Rails.logger.warn("[FOAF Shadow] Trustline proposal failed: #{user_a.user_name} -> #{user_b.user_name} (network=#{@network_address})")
         return
       end
@@ -74,7 +74,7 @@ module Foaf
         creditline_received: trustline.credit_limit_b_to_a
       )
 
-      unless r2
+      unless write_succeeded?(r2)
         Rails.logger.warn("[FOAF Shadow] Trustline accept failed: #{user_b.user_name} -> #{user_a.user_name}")
         return
       end
@@ -101,9 +101,9 @@ module Foaf
     # without affecting the local Rails commit. The proper warn-and-expand UX
     # is tracked in project_settlement_vs_extension memory.
     #
-    # When tx_row is supplied, a successful confirm writes foaf_operation_id
-    # and foaf_posted_at back onto the row. On any failure the row stays
-    # with foaf_posted_at nil — Foaf::ReplayWorker retries later.
+    # When shared writes are enabled, tx_row supplies a deterministic
+    # idempotency key and retains the pending-transfer/reconciliation state.
+    # When they are disabled this executes the unchanged legacy write path.
     def mirror_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
       return unless Foaf::Config.shadow_mode?
       return unless ensure_network!
@@ -117,9 +117,33 @@ module Foaf
         operation: operation,
         order_id: order&.id,
         order_label: order&.try(:order_label),
-        mirrored_at: Time.current.iso8601
+        mirrored_at: (tx_row&.created_at || Time.current).iso8601
       }.merge(metadata || {}).compact.to_json
 
+      if Foaf::Config.shared_writes?
+        return mirror_shared_payment(
+          amount: amount,
+          from_user: from_user,
+          to_user: to_user,
+          extra_data: extra_data,
+          tx_row: tx_row
+        )
+      end
+
+      mirror_legacy_payment(
+        amount: amount,
+        from_user: from_user,
+        to_user: to_user,
+        extra_data: extra_data,
+        tx_row: tx_row
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
+    end
+
+    private
+
+    def mirror_legacy_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
       result = @client.create_pending_transfer(
         network_address: @network_address,
         from_address: Foaf::Signer.address_for(from_user),
@@ -144,25 +168,327 @@ module Foaf
         return
       end
 
-      mark_posted!(tx_row, confirm) if tx_row
+      mark_legacy_posted!(tx_row, confirm) if tx_row
 
       Rails.logger.info("[FOAF Shadow] Mirrored payment: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
-    rescue StandardError => e
-      Rails.logger.warn("[FOAF Shadow] Payment mirror failed: #{e.message}")
     end
 
-    private
+    def mirror_shared_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
+      from_address = Foaf::Signer.address_for(from_user)
+      to_address = Foaf::Signer.address_for(to_user)
+      idempotency_key = shared_idempotency_key(tx_row)
 
-    # Confirm response shape: { status, transfer, operation, totalFees }.
-    # `operation` is FOAF's Operation#id. Stash it alongside posted_at so
-    # the retry worker knows to skip this row.
-    def mark_posted!(tx_row, confirm_response)
+      lookup = if tx_row&.foaf_pending_transfer_id
+        @client.pending_transfer(
+          pending_transfer_id: tx_row.foaf_pending_transfer_id
+        )
+      else
+        @client.pending_transfer_by_idempotency_key(
+          idempotency_key: idempotency_key
+        )
+      end
+
+      if write_succeeded?(lookup)
+        return resolve_shared_pending(
+          lookup.fetch("data"),
+          amount: amount,
+          from_address: from_address,
+          to_address: to_address,
+          idempotency_key: idempotency_key,
+          tx_row: tx_row
+        )
+      end
+
+      unless lookup["status"] == 404
+        record_write_result!(tx_row, "ambiguous_create", lookup)
+        return
+      end
+
+      created = @client.create_pending_transfer(
+        network_address: @network_address,
+        from_address: from_address,
+        to_address: to_address,
+        value: amount.to_f,
+        extra_data: extra_data,
+        idempotency_key: idempotency_key
+      )
+
+      if write_succeeded?(created)
+        return resolve_shared_pending(
+          created.fetch("data"),
+          amount: amount,
+          from_address: from_address,
+          to_address: to_address,
+          idempotency_key: idempotency_key,
+          tx_row: tx_row
+        )
+      end
+
+      if created["outcome"] == "ambiguous"
+        record_write_result!(tx_row, "ambiguous_create", created)
+        return reconcile_ambiguous_create(
+          amount: amount,
+          from_address: from_address,
+          to_address: to_address,
+          idempotency_key: idempotency_key,
+          tx_row: tx_row
+        )
+      end
+
+      record_write_result!(tx_row, "rejected", created)
+      nil
+    end
+
+    def reconcile_ambiguous_create(amount:, from_address:, to_address:, idempotency_key:, tx_row:)
+      lookup = @client.pending_transfer_by_idempotency_key(
+        idempotency_key: idempotency_key
+      )
+      return unless write_succeeded?(lookup)
+
+      resolve_shared_pending(
+        lookup.fetch("data"),
+        amount: amount,
+        from_address: from_address,
+        to_address: to_address,
+        idempotency_key: idempotency_key,
+        tx_row: tx_row
+      )
+    end
+
+    def resolve_shared_pending(pending, amount:, from_address:, to_address:, idempotency_key:, tx_row:)
+      unless pending_matches?(
+        pending,
+        amount: amount,
+        from_address: from_address,
+        to_address: to_address,
+        idempotency_key: idempotency_key
+      )
+        record_write_result!(
+          tx_row,
+          "rejected",
+          "ok" => false,
+          "status" => 409,
+          "outcome" => "rejected",
+          "body" => pending.to_json,
+          "error" => "Reconciled pending transfer does not match the intended write"
+        )
+        return
+      end
+
+      pending_id = pending.fetch("id")
+      case pending["status"]
+      when "confirmed"
+        operation_id = pending["operation"]
+        if operation_id
+          mark_posted!(tx_row, pending, pending_transfer_id: pending_id)
+          return pending
+        end
+
+        record_write_result!(
+          tx_row,
+          "ambiguous_confirm",
+          "ok" => false,
+          "status" => 200,
+          "outcome" => "ambiguous",
+          "body" => pending.to_json,
+          "error" => "Confirmed transfer has no operation id",
+          pending_transfer_id: pending_id
+        )
+        return
+      when "rejected", "cancelled"
+        record_write_result!(
+          tx_row,
+          "rejected",
+          "ok" => false,
+          "status" => 409,
+          "outcome" => "rejected",
+          "body" => pending.to_json,
+          "error" => "Pending transfer is #{pending["status"]}",
+          pending_transfer_id: pending_id
+        )
+        return
+      end
+
+      record_write_result!(
+        tx_row,
+        "pending",
+        { "ok" => true, "status" => 200, "outcome" => "success", "body" => pending.to_json },
+        pending_transfer_id: pending_id
+      )
+
+      confirmed = @client.confirm_transfer(
+        pending_transfer_id: pending_id,
+        signer_address: to_address
+      )
+      if write_succeeded?(confirmed)
+        mark_posted!(
+          tx_row,
+          confirmed.fetch("data"),
+          pending_transfer_id: pending_id
+        )
+        return confirmed.fetch("data")
+      end
+
+      if confirmed["outcome"] == "ambiguous" || confirmed["status"] == 409
+        record_write_result!(
+          tx_row,
+          "ambiguous_confirm",
+          confirmed,
+          pending_transfer_id: pending_id
+        )
+        return reconcile_ambiguous_confirm(
+          pending_transfer_id: pending_id,
+          amount: amount,
+          from_address: from_address,
+          to_address: to_address,
+          idempotency_key: idempotency_key,
+          tx_row: tx_row
+        )
+      end
+
+      record_write_result!(
+        tx_row,
+        "rejected",
+        confirmed,
+        pending_transfer_id: pending_id
+      )
+      nil
+    end
+
+    def reconcile_ambiguous_confirm(pending_transfer_id:, amount:, from_address:, to_address:, idempotency_key:, tx_row:)
+      lookup = @client.pending_transfer(
+        pending_transfer_id: pending_transfer_id
+      )
+      unless write_succeeded?(lookup)
+        record_write_result!(
+          tx_row,
+          "ambiguous_confirm",
+          lookup,
+          pending_transfer_id: pending_transfer_id
+        )
+        return
+      end
+
+      resolve_reconciled_confirm(
+        lookup.fetch("data"),
+        amount: amount,
+        from_address: from_address,
+        to_address: to_address,
+        idempotency_key: idempotency_key,
+        tx_row: tx_row
+      )
+    end
+
+    # A reconciliation read must not issue another confirm in the same call:
+    # "pending" proves no apply yet but the original response may still be in
+    # flight. The replay worker will read again before an idempotent retry.
+    def resolve_reconciled_confirm(pending, amount:, from_address:, to_address:, idempotency_key:, tx_row:)
+      unless pending_matches?(
+        pending,
+        amount: amount,
+        from_address: from_address,
+        to_address: to_address,
+        idempotency_key: idempotency_key
+      )
+        return record_write_result!(
+          tx_row,
+          "rejected",
+          "ok" => false,
+          "status" => 409,
+          "outcome" => "rejected",
+          "body" => pending.to_json,
+          "error" => "Reconciled pending transfer does not match the intended write"
+        )
+      end
+
+      if pending["status"] == "confirmed" && pending["operation"]
+        return mark_posted!(
+          tx_row,
+          pending,
+          pending_transfer_id: pending.fetch("id")
+        )
+      end
+
+      state = %w[rejected cancelled].include?(pending["status"]) ? "rejected" : "ambiguous_confirm"
+      record_write_result!(
+        tx_row,
+        state,
+        "ok" => false,
+        "status" => 200,
+        "outcome" => state == "rejected" ? "rejected" : "ambiguous",
+        "body" => pending.to_json,
+        "error" => "Reconciled transfer status is #{pending["status"]}",
+        pending_transfer_id: pending.fetch("id")
+      )
+    end
+
+    def pending_matches?(pending, amount:, from_address:, to_address:, idempotency_key:)
+      pending["idempotencyKey"] == idempotency_key &&
+        pending["from"].to_s.casecmp?(from_address.to_s) &&
+        pending["to"].to_s.casecmp?(to_address.to_s) &&
+        BigDecimal(pending["value"].to_s) == BigDecimal(amount.to_s)
+    rescue ArgumentError
+      false
+    end
+
+    def shared_idempotency_key(tx_row)
+      if tx_row
+        "growoperative:trustline_transaction:#{tx_row.id}"
+      else
+        "growoperative:adhoc:#{SecureRandom.uuid}"
+      end
+    end
+
+    def write_succeeded?(result)
+      if Foaf::Config.shared_writes?
+        result.is_a?(Hash) && result["outcome"] == "success"
+      else
+        result.present?
+      end
+    end
+
+    def mark_legacy_posted!(tx_row, confirm_response)
       tx_row.update!(
         foaf_operation_id: confirm_response["operation"],
         foaf_posted_at: Time.current
       )
     rescue StandardError => e
       Rails.logger.warn("[FOAF Shadow] Failed to mark tx #{tx_row.id} posted: #{e.message}")
+    end
+
+    def record_write_result!(tx_row, state, result, pending_transfer_id: nil)
+      return unless tx_row
+
+      tx_row.update!(
+        foaf_pending_transfer_id: pending_transfer_id || tx_row.foaf_pending_transfer_id,
+        foaf_write_state: state,
+        foaf_write_error: result.slice("status", "outcome", "body", "error").to_json
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Failed to record tx #{tx_row.id} state=#{state}: #{e.message}")
+    end
+
+    # Confirm response shape: { status, transfer, operation, totalFees }.
+    # `operation` is FOAF's Operation#id. Stash it alongside posted_at so
+    # the retry worker knows to skip this row.
+    def mark_posted!(tx_row, confirm_response, pending_transfer_id: nil)
+      operation_id = confirm_response["operation"] ||
+                     confirm_response.dig("transfer", "operation")
+      raise "FOAF confirm response has no operation id" unless operation_id
+
+      return confirm_response unless tx_row
+
+      tx_row.update!(
+        foaf_operation_id: operation_id,
+        foaf_pending_transfer_id: pending_transfer_id || tx_row.foaf_pending_transfer_id,
+        foaf_posted_at: Time.current,
+        foaf_write_state: "posted",
+        foaf_write_error: nil
+      )
+      confirm_response
+    rescue StandardError => e
+      Rails.logger.warn("[FOAF Shadow] Failed to mark tx #{tx_row&.id || "adhoc"} posted: #{e.message}")
+      nil
     end
 
     public
