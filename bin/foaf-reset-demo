@@ -2,10 +2,11 @@
 #
 # Reset the deployed demo to a clean trade-test baseline.
 #
-# Loads growoperative_demo from a dev_clean_* snapshot (which contains
-# DROP TABLE IF EXISTS per table, so it cleanly replaces state), then
-# wipes foaf_testnet so the FOAF side also starts empty. Ledger hooks
-# will populate FOAF as the test creates trades.
+# Empties the allowlisted growoperative_demo schema, loads a dev_clean_*
+# snapshot, then wipes foaf_testnet so the FOAF side also starts empty.
+# Emptying the schema first is required because an older snapshot cannot
+# contain DROP statements for tables introduced by newer migrations.
+# Ledger hooks will populate FOAF as the test creates trades.
 #
 # Uses the buddy user — no MySQL root credential needed. buddy has
 # ALL PRIVILEGES on growoperative_demo, which is enough for full
@@ -152,15 +153,40 @@ echo "  Auth DB:  ${AUTH_DB_NAME}  (@ ${AUTH_DB_HOST}, as ${AUTH_DB_USER})"
 echo "  FOAF DB:  foaf_testnet     (via ${FOAF_CONTAINER})"
 echo
 
-# --- Step 1: load snapshot into app DB -------------------------------------
-# Snapshot has DROP TABLE IF EXISTS per table, so this cleanly replaces state.
+# --- Step 1: rebuild app schema from snapshot ------------------------------
+# Drop every existing base table first. Snapshot-local DROP statements cannot
+# remove tables that were introduced after the snapshot was created; leaving
+# one behind while schema_migrations is restored from the older snapshot makes
+# the next migration fail with "table already exists".
+#
+# APP_DB_NAME has already passed the exact growoperative_demo allowlist above.
 # We pipe the dump through foaf-testnet's mysql client (the rails-box host
 # doesn't have one installed, but the foaf-testnet image does).
-echo "[1/5] Loading ${APP_SNAPSHOT} into ${APP_DB_NAME}..."
+echo "[1/5] Rebuilding ${APP_DB_NAME} from ${APP_SNAPSHOT}..."
 # --skip-ssl: MySQL 8's self-signed cert fails MariaDB client's TLS handshake,
 # but the connection is over private VPC so TLS is not needed for security.
 # (foaf-testnet's mysql client is MariaDB 11.8 from Debian default-mysql-client;
 # its SSL-disable flag is --skip-ssl, not --ssl-mode=DISABLED like upstream MySQL.)
+docker exec -i "${FOAF_CONTAINER}" \
+  sh -c "mysql --skip-ssl -h ${APP_DB_HOST} -u ${APP_DB_USER} -p'${APP_DB_PASS}' ${APP_DB_NAME}" \
+  <<SQL 2>&1 | { grep -v "Using a password" || true; }
+SET FOREIGN_KEY_CHECKS=0;
+SET SESSION group_concat_max_len = 1000000;
+SELECT GROUP_CONCAT(CONCAT('\`', REPLACE(TABLE_NAME, '\`', '\`\`'), '\`') SEPARATOR ',')
+  INTO @demo_tables
+  FROM information_schema.tables
+  WHERE TABLE_SCHEMA = '${APP_DB_NAME}'
+    AND TABLE_TYPE = 'BASE TABLE';
+SET @drop_sql = IF(
+  @demo_tables IS NULL,
+  'SELECT 1',
+  CONCAT('DROP TABLE IF EXISTS ', @demo_tables)
+);
+PREPARE drop_demo_tables FROM @drop_sql;
+EXECUTE drop_demo_tables;
+DEALLOCATE PREPARE drop_demo_tables;
+SET FOREIGN_KEY_CHECKS=1;
+SQL
 docker exec -i "${FOAF_CONTAINER}" \
   sh -c "mysql --skip-ssl -h ${APP_DB_HOST} -u ${APP_DB_USER} -p'${APP_DB_PASS}' ${APP_DB_NAME}" \
   < "${APP_SNAPSHOT_PATH}" \
