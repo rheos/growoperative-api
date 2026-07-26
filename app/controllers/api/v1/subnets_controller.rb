@@ -28,9 +28,22 @@ module Api::V1
       relationships = Relationship.where(user_id: member_ids, friend_id: member_ids)
       rel_edges = relationships.map { |r| { source_id: r.user_id, target_id: r.friend_id, type: 'relationship' } }
 
-      trustlines = Trustline.where(user_a_id: member_ids, user_b_id: member_ids)
+      trustlines = Trustline
+        .where(user_a_id: member_ids, user_b_id: member_ids)
+        .includes(:user_a, :user_b)
+        .to_a
+      balances = Foaf::GraphBalanceReader.fetch(trustlines)
+      if balances.nil?
+        return render json: { errors: ['Graph balance data unavailable — FOAF is unreachable'] },
+                      status: :service_unavailable
+      end
       trust_edges = trustlines.map do |t|
-        { source_id: t.user_a_id, target_id: t.user_b_id, type: 'trustline', balance: t.current_balance.to_f }
+        {
+          source_id: t.user_a_id,
+          target_id: t.user_b_id,
+          type: 'trustline',
+          balance: balances.fetch(t.id)
+        }
       end
 
       render json: {
