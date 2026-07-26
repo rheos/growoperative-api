@@ -24,6 +24,7 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     DatabaseCleaner.clean_with(:truncation)
     allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(true)
     allow(Foaf::LedgerHooks).to receive(:after_trustline_save)
+    allow(balance_reader).to receive(:fetch)
   end
 
   after do
@@ -115,6 +116,8 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     )
     allow(capacity_reader).to receive(:fetch).and_return(
       capacity("3"),
+      capacity("3"),
+      capacity("3"),
       capacity("4")
     )
     allow(balance_reader).to receive(:fetch).and_return([
@@ -130,6 +133,20 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     ensure_capacity(amount: "3.45")
 
     expect(trustline.reload.credit_limit_for(buyer)).to eq(BigDecimal("4.45"))
+  end
+
+  it "polls read-only capacity after publishing a new limit" do
+    allow(capacity_reader).to receive(:fetch).and_return(
+      capacity("0", error: "FOAF capacity unavailable"),
+      capacity("0"),
+      capacity("25")
+    )
+
+    trustline = ensure_capacity
+
+    expect(trustline).to be_persisted
+    expect(capacity_reader).to have_received(:fetch).exactly(3).times
+    expect(balance_reader).not_to have_received(:fetch)
   end
 
   it "creates relationship metadata, retains its durable limit snapshot, and verifies FOAF" do
@@ -169,6 +186,8 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     )
     allow(capacity_reader).to receive(:fetch).and_return(
       capacity("5"),
+      capacity("24.99"),
+      capacity("24.99"),
       capacity("24.99")
     )
     allow(balance_reader).to receive(:fetch).and_return([
