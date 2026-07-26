@@ -144,18 +144,18 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # - available_credit: Total credit available for spending
   # - recent_transactions: Last 5 transactions initiated by user
   def summary
-    summary_data = {
-      total_trustlines: current_user.active_trustlines.count,
-      total_credit_owed: current_user.total_credit_owed.to_f,
-      total_credit_owed_to_me: current_user.total_credit_owed_to_me.to_f,
-      net_credit_position: current_user.net_credit_position.to_f,
-      available_credit: current_user.available_credit_total.to_f,
+    foaf_summary = Foaf::BalanceSummary.fetch(current_user)
+    return render_foaf_unavailable if foaf_summary.nil?
+
+    summary_data = foaf_summary.transform_values do |value|
+      value.is_a?(BigDecimal) ? value.to_f : value
+    end.merge(
       recent_transactions: current_user.initiated_trustline_transactions
                                       .includes(:initiated_by, :order)
                                       .recent
                                       .limit(5)
                                       .map { |tx| serialize_transaction(tx) }
-    }
+    )
     
     render json: summary_data
   end
