@@ -59,7 +59,7 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     )
     allow(capacity_reader).to receive(:fetch).and_return(capacity("25"))
     expect(balance_reader).not_to receive(:fetch)
-    expect(trustline).not_to receive(:available_credit_for)
+    expect(trustline).not_to receive(:notional_available_credit_for)
 
     expect(ensure_capacity).to eq(trustline)
     expect(Foaf::LedgerHooks).not_to have_received(:after_trustline_save)
