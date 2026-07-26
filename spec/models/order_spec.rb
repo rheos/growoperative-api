@@ -97,6 +97,44 @@ RSpec.describe Order, type: :model do
     end
   end
 
+  describe '#execute_credit_payment!' do
+    it 'uses FOAF-verified capacity and bypasses the Rails notional capacity gate' do
+      data = create_test_data
+      result = create_order_with_request(
+        data[:buyer],
+        data[:seller],
+        data[:inventory],
+        price: 6,
+        quantity: 2
+      )
+      trustline = Trustline.create!(
+        user_a: data[:buyer],
+        user_b: data[:seller],
+        credit_limit_a_to_b: 1,
+        credit_limit_b_to_a: 1,
+        current_balance: 500,
+        is_active: true
+      )
+      allow(Foaf::OrderSettlementCapacity).to receive(:ensure!).and_return(trustline)
+      tx_row = instance_double(TrustlineTransaction)
+      expect(Trustline).to receive(:execute_payment_path).with(
+        [data[:buyer], data[:seller]],
+        12,
+        description: "Settlement for Order test",
+        order: result[:order],
+        capacity_verified_by_foaf: true
+      ).and_return([tx_row])
+
+      result[:order].send(:execute_credit_payment!)
+
+      expect(Foaf::OrderSettlementCapacity).to have_received(:ensure!).with(
+        from_user: data[:buyer],
+        to_user: data[:seller],
+        amount: 12
+      )
+    end
+  end
+
   describe '#apply_action ship' do
     it 'ships all item requests and updates order status atomically' do
       data = create_test_data
