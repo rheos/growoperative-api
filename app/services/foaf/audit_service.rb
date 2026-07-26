@@ -94,18 +94,20 @@ module Foaf
       user_b = User.find(trustline.user_b_id)
 
       unless user_a.foaf_address.present? && user_b.foaf_address.present?
-        return { rows: [], warning: "One or both users have no FOAF address" }
+        return { error: "Running balance unavailable — one or both users have no FOAF address" }
       end
 
       client = Foaf::Client.new
       networks = client.networks
-      return { error: "No FOAF network found" } unless networks&.any?
+      return { error: "Running balance unavailable — no FOAF network found" } unless networks&.any?
       network_address = networks.first["address"]
 
       events = client.user_events(
         network_address: network_address,
         user_address: user_a.foaf_address,
-      ) || []
+      )
+      return { error: "Running balance unavailable — FOAF user events request failed" } if events.nil?
+
       relevant = events.select { |e| e["counterParty"] == user_b.foaf_address }
 
       rows = []
@@ -124,7 +126,9 @@ module Foaf
         network_address: network_address,
         user_address: user_a.foaf_address,
         counter_party_address: user_b.foaf_address,
-      ) || []
+      )
+      return { error: "Running balance unavailable — FOAF trustline events request failed" } if tl_events.nil?
+
       tl_events.each do |e|
         next unless e["type"] == "BalanceUpdate"
         parent = e["parentOp"]

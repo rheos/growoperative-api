@@ -147,5 +147,29 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
       expect(row[:transaction][:transaction_type]).to eq('settlement')
       expect(row[:transaction][:initiated_by_name]).to eq(canonical_user_b.user_name)
     end
+
+    it 'returns an error instead of a false-empty history when user events fail' do
+      allow(fake_client).to receive(:user_events).and_return(nil)
+
+      expect(Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)).to eq(
+        error: 'Running balance unavailable — FOAF user events request failed'
+      )
+    end
+
+    it 'returns an error instead of a partial history when trustline events fail' do
+      allow(fake_client).to receive(:trustline_events).and_return(nil)
+
+      expect(Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)).to eq(
+        error: 'Running balance unavailable — FOAF trustline events request failed'
+      )
+    end
+
+    it 'returns an error instead of a false-empty history when an identity is missing' do
+      canonical_user_b.update!(foaf_address: nil)
+
+      expect(Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)).to eq(
+        error: 'Running balance unavailable — one or both users have no FOAF address'
+      )
+    end
   end
 end
