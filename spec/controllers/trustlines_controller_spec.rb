@@ -173,6 +173,30 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
     end
 
     it 'raises the debtor-side limit to cover the debt when consent is given' do
+      allow(Foaf::BalanceReader).to receive(:fetch).with(bruce).and_return(
+        [{
+          trustline: trustline,
+          counterparty: alex,
+          viewer_balance: 0.0,
+          my_credit_limit: 100.0,
+          their_credit_limit: 100.0
+        }],
+        [{
+          trustline: trustline,
+          counterparty: alex,
+          viewer_balance: 0.0,
+          my_credit_limit: 675.0,
+          their_credit_limit: 100.0
+        }],
+        [{
+          trustline: trustline,
+          counterparty: alex,
+          viewer_balance: 675.0,
+          my_credit_limit: 675.0,
+          their_credit_limit: 100.0
+        }]
+      )
+
       post :record_debt, params: { id: trustline.id, amount: 675, raise_limit_to: 675 }
 
       expect(response).to have_http_status(:accepted)
