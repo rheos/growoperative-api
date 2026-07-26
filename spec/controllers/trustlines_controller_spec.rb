@@ -94,6 +94,7 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
         'net_credit_position' => 15.0,
         'available_credit' => 175.0
       )
+      expect(JSON.parse(response.body)).not_to have_key('recent_transactions')
     end
 
     it 'returns 503 and never calls Rails balance aggregates when FOAF is unavailable' do
