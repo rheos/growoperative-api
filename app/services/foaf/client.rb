@@ -21,9 +21,9 @@ module Foaf
     # === KEYPAIR ===
 
     def generate_keypair
-      compare_read(:generate_keypair, legacy: -> { post("/api/v1/keypair") }) do
-        @shared_client.generate_keypair
-      end
+      return write_disabled_result(:generate_keypair) unless Foaf::Config.shared_writes?
+
+      @shared_client.generate_keypair
     end
 
     # === NETWORKS ===
@@ -38,13 +38,14 @@ module Foaf
 
     def update_trustline(network_address:, creditor_address:, debtor_address:,
                          creditline_given:, creditline_received:)
+      return write_disabled_result(:update_trustline) unless Foaf::Config.shared_writes?
+
       body = {
         creditor_address: creditor_address,
         debtor_address: debtor_address,
         creditline_given: creditline_given,
         creditline_received: creditline_received
       }
-      return post("/api/v1/networks/#{network_address}/trustlines/update", body) unless Foaf::Config.shared_writes?
 
       shared_write(:update_trustline) do
         @shared_client.update_trustline(
@@ -88,6 +89,8 @@ module Foaf
 
     def create_pending_transfer(network_address:, from_address:, to_address:,
                                 value:, extra_data: nil, idempotency_key: nil)
+      return write_disabled_result(:create_pending_transfer) unless Foaf::Config.shared_writes?
+
       body = {
         network_address: network_address,
         from_address: from_address,
@@ -95,8 +98,6 @@ module Foaf
         value: value,
         extra_data: extra_data
       }
-      return post("/api/v1/pending_transfers", body) unless Foaf::Config.shared_writes?
-
       shared_write(:create_pending_transfer) do
         @shared_client.create_pending_transfer(
           **body,
@@ -106,9 +107,7 @@ module Foaf
     end
 
     def confirm_transfer(pending_transfer_id:, signer_address: nil)
-      unless Foaf::Config.shared_writes?
-        return put("/api/v1/pending_transfers/#{pending_transfer_id}/confirm")
-      end
+      return write_disabled_result(:confirm_transfer) unless Foaf::Config.shared_writes?
 
       shared_write(:confirm_transfer) do
         @shared_client.confirm_transfer(
@@ -133,10 +132,7 @@ module Foaf
     end
 
     def reject_transfer(pending_transfer_id:, signer_address: nil, reason: nil)
-      unless Foaf::Config.shared_writes?
-        body = reason.nil? ? {} : { reason: reason }
-        return put("/api/v1/pending_transfers/#{pending_transfer_id}/reject", body)
-      end
+      return write_disabled_result(:reject_transfer) unless Foaf::Config.shared_writes?
 
       shared_write(:reject_transfer) do
         @shared_client.reject_transfer(
@@ -221,6 +217,16 @@ module Foaf
     end
 
     private
+
+    def write_disabled_result(name)
+      {
+        "ok" => false,
+        "status" => 0,
+        "outcome" => "disabled",
+        "body" => nil,
+        "error" => "FOAF_SHARED_WRITES is disabled; #{name} was not sent and must remain in its caller-owned buffer"
+      }
+    end
 
     def shared_write(name)
       classify_result(name, yield)
@@ -324,18 +330,6 @@ module Foaf
       parse_response(response)
     rescue StandardError => e
       log_error("POST #{path}", e)
-      nil
-    end
-
-    def put(path, body = {})
-      uri = URI("#{@base_url}#{path}")
-      http = Net::HTTP.new(uri.host, uri.port)
-      request = Net::HTTP::Put.new(uri.path, "Content-Type" => "application/json")
-      request.body = body.to_json
-      response = http.request(request)
-      parse_response(response)
-    rescue StandardError => e
-      log_error("PUT #{path}", e)
       nil
     end
 
