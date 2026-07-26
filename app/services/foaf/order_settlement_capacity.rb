@@ -50,7 +50,10 @@ module Foaf
 
       state = fetch_foaf_state!(trustline)
       shortfall = @amount - capacity.capacity
-      expand_limit!(trustline, decimal(state.fetch(:my_credit_limit)) + shortfall)
+      expand_limit!(
+        trustline,
+        decimal(state.fetch(:my_credit_limit)) + capacity_unit(shortfall)
+      )
       publish_limit!(trustline)
 
       verified = fetch_capacity!
@@ -106,6 +109,13 @@ module Foaf
 
     def decimal(value)
       BigDecimal(value.to_s)
+    end
+
+    # FOAF v0.1 reports max-capacity-path-info capacity in whole major units.
+    # Round only the protocol-reported shortfall upward so a fractional order
+    # does not remain perpetually just above the verification result.
+    def capacity_unit(shortfall)
+      BigDecimal(shortfall.ceil.to_s)
     end
   end
 end
