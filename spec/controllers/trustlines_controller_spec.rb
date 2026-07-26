@@ -117,10 +117,10 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
 
     it 'returns 503 and never calls Rails balance aggregates when FOAF is unavailable' do
       allow(Foaf::BalanceSummary).to receive(:fetch).with(viewer).and_return(nil)
-      expect(viewer).not_to receive(:total_credit_owed)
-      expect(viewer).not_to receive(:total_credit_owed_to_me)
-      expect(viewer).not_to receive(:net_credit_position)
-      expect(viewer).not_to receive(:available_credit_total)
+      expect(viewer).not_to receive(:notional_total_credit_owed)
+      expect(viewer).not_to receive(:notional_total_credit_owed_to_me)
+      expect(viewer).not_to receive(:notional_net_credit_position)
+      expect(viewer).not_to receive(:notional_available_credit_total)
 
       get :summary
 
@@ -271,7 +271,7 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       allow(Foaf::DirectCapacityReader).to receive(:fetch)
         .with(from_user: payer, to_user: payee)
         .and_return(result)
-      expect_any_instance_of(Trustline).not_to receive(:can_handle_payment?)
+      expect_any_instance_of(Trustline).not_to receive(:notional_can_handle_payment?)
 
       post :payment, params: { id: payment_trustline.id, amount: 2 }
 

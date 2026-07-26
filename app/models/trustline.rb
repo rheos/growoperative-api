@@ -1,15 +1,16 @@
-# Trustline Model - Core Mutual Credit System Implementation
+# Trustline Model - Relationship Metadata and Durable Write Buffer
 #
 # A Trustline represents a bidirectional credit relationship between two users.
-# This is the foundation of the mutual credit system where users can extend
-# credit limits to each other and make payments through the network.
+# FOAF owns authoritative limits, balances, capacity, paths, and balance math.
+# Rails retains the relationship row, limit metadata, and a notional counter
+# used to retain/replay writes that have not yet been reconciled with FOAF.
 #
 # Key Concepts:
 # - Each trustline has two credit limits (A→B and B→A)
-# - Current balance tracks net position between users
+# - current_balance is a notional pre-credloop write-buffer counter
 # - Positive balance means user_a owes user_b
 # - Negative balance means user_b owes user_a
-# - Users can make payments up to their available credit limit
+# - Live capacity decisions are made from FOAF state, never this counter
 #
 # Example:
 #   Alice ←→ Bob trustline with limits: Alice $1000, Bob $500
@@ -86,12 +87,12 @@ class Trustline < ApplicationRecord
     raise ArgumentError, "User #{user.id} is not part of this trustline"
   end
   
-  # Calculates how much credit a user has available to spend
-  # Takes into account their credit limit and current balance
+  # Calculates notional credit from the Rails failure-buffer counters.
+  # This is not protocol capacity; live capacity decisions come from FOAF.
   # @param user [User] - The user whose available credit to calculate
   # @return [BigDecimal] - Available credit amount
   # @raise [ArgumentError] - If user is not part of this trustline
-  def available_credit_for(user)
+  def notional_available_credit_for(user)
     if user.id == user_a_id
       # User A can borrow up to credit_limit_a_to_b
       # Positive balance means A owes B, so less available credit
@@ -105,11 +106,12 @@ class Trustline < ApplicationRecord
     end
   end
   
-  # Returns the current balance from a specific user's perspective
+  # Returns the Rails notional balance from a specific user's perspective.
+  # FOAF remains the authoritative balance source.
   # @param user [User] - The user whose perspective to show
   # @return [BigDecimal] - Balance (positive = user owes, negative = user is owed)
   # @raise [ArgumentError] - If user is not part of this trustline
-  def balance_for(user)
+  def notional_balance_for(user)
     if user.id == user_a_id
       current_balance  # Positive = A owes B, Negative = B owes A
     elsif user.id == user_b_id
@@ -119,17 +121,18 @@ class Trustline < ApplicationRecord
     end
   end
   
-  # Checks if this trustline can handle a payment of specified amount
+  # Checks the notional Rails counters only. Live write paths must pass
+  # force_capacity after checking authoritative FOAF state.
   # @param amount [Numeric] - The payment amount to check
   # @param from_user [User] - The user making the payment
   # @return [Boolean] - Whether the payment can be processed
-  def can_handle_payment?(amount, from_user)
+  def notional_can_handle_payment?(amount, from_user)
     return false unless is_active?
-    available_credit_for(from_user) >= amount
+    notional_available_credit_for(from_user) >= amount
   end
   
-  # Processes a payment through this trustline with full transaction recording
-  # This is the core payment processing method that updates balances atomically
+  # Records a payment in the durable Rails buffer and updates its notional
+  # pre-credloop counter atomically. FOAF performs authoritative balance math.
   # @param amount [Numeric] - The payment amount
   # @param from_user [User] - The user making the payment
   # @param to_user [User] - The user receiving the payment
@@ -140,7 +143,7 @@ class Trustline < ApplicationRecord
   # @raise [ArgumentError] - If users are invalid or insufficient credit
   def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil, force_capacity: false, operation: "payment")
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
-    raise ArgumentError, "Insufficient credit" unless force_capacity || can_handle_payment?(amount, from_user)
+    raise ArgumentError, "Insufficient credit" unless force_capacity || notional_can_handle_payment?(amount, from_user)
 
     transaction do
       # Calculate new balance based on payment direction
