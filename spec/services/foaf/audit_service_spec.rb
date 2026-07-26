@@ -53,6 +53,54 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
 
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
 
+  describe '.reconcile_trustline' do
+    it 'reports explicit notional, FOAF, and signed credloop balances' do
+      trustline.update!(current_balance: 20)
+      allow(fake_client).to receive(:user_trustlines).and_return([{
+        'counterParty' => canonical_user_b.foaf_address,
+        'balance' => -15,
+        'given' => 100,
+        'received' => 100,
+      }])
+
+      result = Foaf::AuditService.reconcile_trustline(trustline)
+
+      expect(result).to include(
+        notional_balance: 20.0,
+        foaf_balance: 15,
+        credloop_delta: 5.0,
+        match: false
+      )
+      expect(result[:discrepancies]).to include(
+        field: 'balance',
+        app: 20.0,
+        foaf: 15,
+        notional_balance: 20.0,
+        foaf_balance: 15,
+        credloop_delta: 5.0
+      )
+    end
+
+    it 'reports a zero delta when the balances match exactly' do
+      trustline.update!(current_balance: 20)
+      allow(fake_client).to receive(:user_trustlines).and_return([{
+        'counterParty' => canonical_user_b.foaf_address,
+        'balance' => -20,
+        'given' => 100,
+        'received' => 100,
+      }])
+
+      result = Foaf::AuditService.reconcile_trustline(trustline)
+
+      expect(result).to include(
+        notional_balance: 20.0,
+        foaf_balance: 20,
+        credloop_delta: 0.0,
+        match: true
+      )
+    end
+  end
+
   describe '.events_for_trustline (viewer perspective)' do
     it 'returns canonical balances for the user_a viewer (no flip)' do
       result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)

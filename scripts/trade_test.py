@@ -754,19 +754,24 @@ def _users_with_inventory() -> set[int]:
 
 
 def credloop_differences(reconcile: dict) -> list[dict]:
-    """Return trustlines where FOAF cancelled part of the notional app balance."""
+    """Return trustlines where FOAF cancelled part of the notional Rails balance."""
     diffs = []
     for trustline in reconcile.get("trustlines", []):
         app = trustline.get("app") or {}
         foaf = trustline.get("foaf") or {}
-        app_bal = abs(float(app["balance"]))
-        foaf_bal = abs(float(foaf["balance"]))
-        if app_bal > foaf_bal + 0.01:
+        notional_balance = trustline.get("notional_balance", app.get("balance"))
+        foaf_balance = trustline.get("foaf_balance", foaf.get("balance"))
+        if notional_balance is None or foaf_balance is None:
+            continue
+        notional_magnitude = abs(float(notional_balance))
+        foaf_magnitude = abs(float(foaf_balance))
+        if notional_magnitude > foaf_magnitude + 0.01:
             diffs.append({
                 "pair": f"{trustline['user_a']}↔{trustline['user_b']}",
-                "app": app_bal,
-                "foaf": foaf_bal,
-                "cancelled": app_bal - foaf_bal,
+                "notional": notional_magnitude,
+                "foaf": foaf_magnitude,
+                "credloop_delta": trustline.get("credloop_delta"),
+                "cancelled": notional_magnitude - foaf_magnitude,
             })
     return diffs
 
@@ -776,9 +781,10 @@ def check_credloop_fired(
     attempts: int = 15,
     interval: float = 2,
 ) -> int:
-    """Infer credloop cancellations from the app-side/FOAF reconciliation:
-    any trustline where app_balance > foaf_balance reflects FOAF having
-    cancelled part of the balance through a loop. Sum of diffs / 2 = total
+    """Infer credloop cancellations from the notional/FOAF reconciliation:
+    any trustline where the notional magnitude exceeds the FOAF magnitude
+    reflects FOAF having cancelled part of the balance through a loop.
+    Sum of diffs / 2 = total
     cancelled (each loop cancels two edges at min; we use the conservative
     max diff as a lower bound).
 
@@ -806,7 +812,7 @@ def check_credloop_fired(
             info(f"credloops cancelled ${total:.2f} across {len(diffs)} trustline(s):")
             for diff in diffs:
                 info(
-                    f"  {diff['pair']}: app=${diff['app']:.2f} "
+                    f"  {diff['pair']}: notional=${diff['notional']:.2f} "
                     f"foaf=${diff['foaf']:.2f}  cancelled ${diff['cancelled']:.2f}"
                 )
             return len(diffs)

@@ -58,7 +58,13 @@ RSpec.describe Foaf::Publisher, type: :model, skip_hooks: true do
     }])
 
     expect(described_class.new.reconcile_trustline(trustline)).to eq(
-      balance: { local: 25.0, foaf: -25.0 },
+      balance: {
+        local: 25.0,
+        foaf: -25.0,
+        notional_balance: 25.0,
+        foaf_balance: -25.0,
+        credloop_delta: 50.0
+      },
       given: { local: 40.0, foaf: 100.0 },
       received: { local: 100.0, foaf: 40.0 }
     )
