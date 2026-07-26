@@ -133,6 +133,39 @@ RSpec.describe Order, type: :model do
         amount: 12
       )
     end
+
+    it 'logs the underlying FOAF settlement failure without recording a payment' do
+      data = create_test_data
+      result = create_order_with_request(
+        data[:buyer],
+        data[:seller],
+        data[:inventory],
+        price: 6,
+        quantity: 2
+      )
+      result[:order].update!(
+        order_status: :signed,
+        settlement_type: "credit",
+        settlement_status: "agreed"
+      )
+      allow(Foaf::OrderSettlementCapacity).to receive(:ensure!)
+        .and_raise(Foaf::OrderSettlementCapacity::Error, "FOAF state unavailable")
+      allow(Rails.logger).to receive(:warn)
+
+      applied = result[:order].apply_action(
+        { action_name: "execute_credit" },
+        data[:buyer].id.to_s
+      )
+
+      expect(applied).to eq(false)
+      expect(result[:order].errors.full_messages).to include(
+        "FOAF state unavailable"
+      )
+      expect(Rails.logger).to have_received(:warn).with(
+        /\[Order credit settlement\].*FOAF state unavailable/
+      )
+      expect(TrustlineTransaction.where(order_id: result[:order].id)).to be_empty
+    end
   end
 
   describe '#apply_action ship' do

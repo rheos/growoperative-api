@@ -172,6 +172,9 @@ class Order < ApplicationRecord
       begin
         execute_credit_payment!
       rescue => e
+        Rails.logger.warn(
+          "[Order credit settlement] order=#{id} #{e.class}: #{e.message}"
+        )
         errors.add(:base, e.message)
         return false
       end
@@ -197,6 +200,9 @@ class Order < ApplicationRecord
         begin
           execute_credit_payment!
         rescue => e
+          Rails.logger.warn(
+            "[Order credit settlement] order=#{id} #{e.class}: #{e.message}"
+          )
           errors.add(:base, e.message)
           return false
         end
