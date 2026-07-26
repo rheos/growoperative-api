@@ -57,6 +57,24 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       body = JSON.parse(response.body)
       expect(body.dig(0, 'other_user', 'name')).to eq('Alex')
     end
+
+    it 'returns 503 without reading Rails balances when FOAF is unavailable' do
+      viewer = User.create!(
+        user_name: 'foaf-unavailable-viewer',
+        email: 'foaf-unavailable-viewer@example.com',
+        password: 'password123',
+        foaf_address: '0x0000000000000000000000000000000000000a02'
+      )
+      allow(controller).to receive(:authenticate!).and_return(true)
+      allow(controller).to receive(:authenticate_user!).and_return(true)
+      allow(controller).to receive(:current_user).and_return(viewer)
+      allow(Foaf::BalanceReader).to receive(:fetch).with(viewer).and_return(nil)
+      expect(viewer).not_to receive(:trustlines)
+
+      get :index
+
+      expect(response).to have_http_status(:service_unavailable)
+    end
   end
 
   describe 'GET #summary' do
