@@ -19,6 +19,37 @@ module Foaf
       ).build
     end
 
+    def self.write_state(tx_row)
+      tx_row.reload
+      return "posted" if tx_row.foaf_posted_at.present?
+
+      tx_row.foaf_write_state.presence || "buffered"
+    end
+
+    def self.operation_payload(tx_row)
+      state = write_state(tx_row)
+      {
+        buffer_id: tx_row.id,
+        idempotency_key: "growoperative:trustline_transaction:#{tx_row.id}",
+        foaf_operation_id: tx_row.foaf_operation_id,
+        pending_transfer_id: tx_row.foaf_pending_transfer_id,
+        transaction_type: tx_row.transaction_type,
+        direction: tx_row.foaf_direction,
+        write_state: state,
+        write_error: parsed_write_error(tx_row),
+        posted_at: tx_row.foaf_posted_at
+      }
+    end
+
+    def self.parsed_write_error(tx_row)
+      return if tx_row.foaf_write_error.blank?
+
+      JSON.parse(tx_row.foaf_write_error)
+    rescue JSON::ParserError
+      { "error" => tx_row.foaf_write_error }
+    end
+    private_class_method :parsed_write_error
+
     def initialize(tx_row:, viewer:, message:, serializer:)
       @tx_row = tx_row
       @viewer = viewer
@@ -27,13 +58,12 @@ module Foaf
     end
 
     def build
-      @tx_row.reload
-      state = write_state
+      state = self.class.write_state(@tx_row)
       foaf_state, refetch_error = refetch_foaf_state
 
       body = {
         message: response_message(state),
-        operation: operation_payload(state),
+        operation: self.class.operation_payload(@tx_row),
         foaf_state: foaf_state
       }
       body[:refetch_error] = refetch_error if refetch_error
@@ -42,34 +72,6 @@ module Foaf
     end
 
     private
-
-    def write_state
-      return "posted" if @tx_row.foaf_posted_at.present?
-
-      @tx_row.foaf_write_state.presence || "buffered"
-    end
-
-    def operation_payload(state)
-      {
-        buffer_id: @tx_row.id,
-        idempotency_key: "growoperative:trustline_transaction:#{@tx_row.id}",
-        foaf_operation_id: @tx_row.foaf_operation_id,
-        pending_transfer_id: @tx_row.foaf_pending_transfer_id,
-        transaction_type: @tx_row.transaction_type,
-        direction: @tx_row.foaf_direction,
-        write_state: state,
-        write_error: parsed_write_error,
-        posted_at: @tx_row.foaf_posted_at
-      }
-    end
-
-    def parsed_write_error
-      return if @tx_row.foaf_write_error.blank?
-
-      JSON.parse(@tx_row.foaf_write_error)
-    rescue JSON::ParserError
-      { "error" => @tx_row.foaf_write_error }
-    end
 
     def refetch_foaf_state
       rows = Foaf::BalanceReader.fetch(@viewer)
