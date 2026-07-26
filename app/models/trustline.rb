@@ -270,48 +270,6 @@ class Trustline < ApplicationRecord
   
   # === PAYMENT ROUTING METHODS FOR MULTI-HOP PAYMENTS ===
   
-  # Finds a payment path between two users through the trustline network
-  # Uses breadth-first search to find shortest path that can handle the amount
-  # @param from_user [User] - Starting user
-  # @param to_user [User] - Destination user
-  # @param amount [Numeric] - Payment amount to route
-  # @param max_hops [Integer] - Maximum number of hops allowed (default: 5)
-  # @return [Array<User>, nil] - Array of users in path, or nil if no path found
-  def self.find_payment_path(from_user, to_user, amount, max_hops: 5)
-    return nil if from_user == to_user
-    
-    # Breadth-first search for shortest viable path
-    queue = [[from_user]]
-    visited = Set.new([from_user.id])
-    
-    while queue.any? && queue.first.length <= max_hops
-      current_path = queue.shift
-      current_user = current_path.last
-      
-      # Find all active trustlines for current user
-      trustlines = Trustline.active.for_user(current_user)
-      
-      trustlines.each do |trustline|
-        next_user = trustline.other_user(current_user)
-        # Skip if this hop can't handle the payment amount
-        next unless trustline.can_handle_payment?(amount, current_user)
-        # Skip if we've already visited this user (prevent cycles)
-        next if visited.include?(next_user.id)
-        
-        new_path = current_path + [next_user]
-        
-        # Found target - return the complete path
-        return new_path if next_user == to_user
-        
-        # Add to queue for further exploration
-        queue << new_path
-        visited << next_user.id
-      end
-    end
-    
-    nil # No viable path found within constraints
-  end
-  
   # Executes a multi-hop payment along a predetermined path
   # All payments are processed atomically - if any fails, all are rolled back
   # @param path [Array<User>] - Array of users representing the payment path
@@ -320,27 +278,29 @@ class Trustline < ApplicationRecord
   # @param originating_request [ItemRequest] - Optional item request
   # @return [Boolean] - Success status
   # @raise [StandardError] - If path is invalid or any payment fails
-  def self.execute_payment_path(path, amount, description: nil, originating_request: nil, order: nil)
+  def self.execute_payment_path(path, amount, description: nil, originating_request: nil, order: nil, capacity_verified_by_foaf: false)
     raise ArgumentError, "Path must have at least 2 users" if path.length < 2
-    
+
+    tx_rows = []
     transaction do
       # Process payment for each consecutive pair in the path
       path.each_cons(2) do |from_user, to_user|
         trustline = Trustline.between_users(from_user, to_user).first
         raise "No trustline found between #{from_user.user_name} and #{to_user.user_name}" unless trustline
         
-        trustline.process_payment!(
+        tx_rows << trustline.process_payment!(
           amount,
           from_user,
           to_user,
           description: description,
           originating_request: originating_request,
-          order: order
+          order: order,
+          force_capacity: capacity_verified_by_foaf
         )
       end
     end
-    
-    true
+
+    tx_rows
   end
   
   private

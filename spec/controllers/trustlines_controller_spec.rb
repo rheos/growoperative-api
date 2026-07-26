@@ -285,4 +285,174 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       )
     end
   end
+
+  describe "FOAF path endpoints" do
+    let(:path_sender) do
+      User.create!(
+        user_name: "controller-path-sender",
+        email: "controller-path-sender@example.com",
+        password: "password123",
+        foaf_address: "0x0000000000000000000000000000000000000f21"
+      )
+    end
+    let(:path_relay) do
+      User.create!(
+        user_name: "controller-path-relay",
+        email: "controller-path-relay@example.com",
+        password: "password123",
+        foaf_address: "0x0000000000000000000000000000000000000f22"
+      )
+    end
+    let(:path_receiver) do
+      User.create!(
+        user_name: "controller-path-receiver",
+        email: "controller-path-receiver@example.com",
+        password: "password123",
+        foaf_address: "0x0000000000000000000000000000000000000f23"
+      )
+    end
+
+    before do
+      allow(controller).to receive(:authenticate!).and_return(true)
+      allow(controller).to receive(:authenticate_user!).and_return(true)
+      allow(controller).to receive(:current_user).and_return(path_sender)
+    end
+
+    it "returns the FOAF path and protocol-calculated capacity" do
+      result = Foaf::PaymentPathReader::Result.new(
+        path: [path_sender, path_relay, path_receiver],
+        capacity: BigDecimal("20")
+      )
+      allow(Foaf::PaymentPathReader).to receive(:fetch).and_return(result)
+
+      post :find_path, params: {
+        to_user_id: path_receiver.id,
+        amount: 12,
+        max_hops: 3
+      }
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["path_found"]).to be(true)
+      expect(body["path"].map { |user| user["id"] }).to eq(
+        [path_sender.id, path_relay.id, path_receiver.id]
+      )
+      expect(body["capacity"]).to eq(20.0)
+    end
+
+    it "executes the FOAF-verified path without Rails capacity checks" do
+      path = [path_sender, path_relay, path_receiver]
+      tx_row = instance_double(TrustlineTransaction)
+      result = Foaf::PaymentPathReader::Result.new(
+        path: path,
+        capacity: BigDecimal("20")
+      )
+      allow(Foaf::PaymentPathReader).to receive(:fetch).and_return(result)
+      expect(Trustline).to receive(:execute_payment_path).with(
+        path,
+        12.0,
+        description: "routed",
+        originating_request: nil,
+        capacity_verified_by_foaf: true
+      ).and_return([tx_row])
+      allow(Foaf::WriteReceipt).to receive(:operation_payload)
+        .with(tx_row)
+        .and_return(
+          buffer_id: 41,
+          write_state: "posted",
+          foaf_operation_id: 81
+        )
+      allow(Foaf::BalanceReader).to receive(:fetch).with(path_sender).and_return([])
+
+      post :execute_path_payment, params: {
+        to_user_id: path_receiver.id,
+        amount: 12,
+        description: "routed",
+        max_hops: 3
+      }
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["message"]).to eq(
+        "Path payment executed successfully"
+      )
+      expect(JSON.parse(response.body).dig("operations", 0, "write_state"))
+        .to eq("posted")
+    end
+
+    it "returns 202 with per-hop state when any path write is ambiguous" do
+      path = [path_sender, path_relay, path_receiver]
+      tx_rows = [
+        instance_double(TrustlineTransaction),
+        instance_double(TrustlineTransaction)
+      ]
+      result = Foaf::PaymentPathReader::Result.new(
+        path: path,
+        capacity: BigDecimal("20")
+      )
+      allow(Foaf::PaymentPathReader).to receive(:fetch).and_return(result)
+      allow(Trustline).to receive(:execute_payment_path).and_return(tx_rows)
+      allow(Foaf::WriteReceipt).to receive(:operation_payload)
+        .with(tx_rows[0])
+        .and_return(buffer_id: 41, write_state: "posted")
+      allow(Foaf::WriteReceipt).to receive(:operation_payload)
+        .with(tx_rows[1])
+        .and_return(buffer_id: 42, write_state: "ambiguous_confirm")
+      allow(Foaf::BalanceReader).to receive(:fetch).with(path_sender).and_return([])
+
+      post :execute_path_payment, params: {
+        to_user_id: path_receiver.id,
+        amount: 12
+      }
+
+      expect(response).to have_http_status(:accepted)
+      expect(JSON.parse(response.body)["message"]).to eq(
+        "Path payment buffered pending FOAF reconciliation"
+      )
+    end
+
+    it "returns 422 with per-hop state when any path write is rejected" do
+      path = [path_sender, path_relay, path_receiver]
+      tx_row = instance_double(TrustlineTransaction)
+      result = Foaf::PaymentPathReader::Result.new(
+        path: path,
+        capacity: BigDecimal("20")
+      )
+      allow(Foaf::PaymentPathReader).to receive(:fetch).and_return(result)
+      allow(Trustline).to receive(:execute_payment_path).and_return([tx_row])
+      allow(Foaf::WriteReceipt).to receive(:operation_payload)
+        .with(tx_row)
+        .and_return(buffer_id: 41, write_state: "rejected")
+      allow(Foaf::BalanceReader).to receive(:fetch).with(path_sender).and_return([])
+
+      post :execute_path_payment, params: {
+        to_user_id: path_receiver.id,
+        amount: 12
+      }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["message"]).to eq(
+        "FOAF rejected one or more path writes"
+      )
+    end
+
+    it "returns 503 rather than using Rails BFS when FOAF pathfinding fails" do
+      result = Foaf::PaymentPathReader::Result.new(
+        path: nil,
+        capacity: BigDecimal("0"),
+        error: "FOAF path unavailable"
+      )
+      allow(Foaf::PaymentPathReader).to receive(:fetch).and_return(result)
+      expect(Trustline).not_to receive(:execute_payment_path)
+
+      post :execute_path_payment, params: {
+        to_user_id: path_receiver.id,
+        amount: 12
+      }
+
+      expect(response).to have_http_status(:service_unavailable)
+      expect(JSON.parse(response.body)["path_error"]).to eq(
+        "FOAF path unavailable"
+      )
+    end
+  end
 end
