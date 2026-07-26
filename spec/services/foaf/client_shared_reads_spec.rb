@@ -9,6 +9,30 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     described_class.new(base_url: 'https://foaf.test')
   end
 
+  it 'generates identities only through the gem client' do
+    allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
+    keypair = {
+      'address' => '0xaddress',
+      'publicKey' => 'public',
+      'privateKey' => 'private'
+    }
+    expect(client).not_to receive(:post)
+    expect(shared_client).to receive(:generate_keypair).and_return(keypair)
+
+    expect(client.generate_keypair).to eq(keypair)
+  end
+
+  it 'does not generate identities while shared writes are disabled' do
+    allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
+    expect(shared_client).not_to receive(:generate_keypair)
+    expect(client).not_to receive(:post)
+
+    expect(client.generate_keypair).to include(
+      'ok' => false,
+      'outcome' => 'disabled'
+    )
+  end
+
   it 'parallel-runs a read and returns the package result when enabled' do
     allow(Foaf::Config).to receive(:shared_reads?).and_return(true)
     allow(client).to receive(:get).with('/api/v1/networks').and_return([{ 'source' => 'legacy' }])
@@ -53,20 +77,12 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     ).to eq("capacity" => "10", "path" => %w[sender receiver])
   end
 
-  it 'keeps mutating trustline calls on the legacy implementation when shared writes are disabled' do
+  it 'buffers trustline mutations without calling any transport when shared writes are disabled' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     expect(shared_client).not_to receive(:update_trustline)
-    expect(client).to receive(:post).with(
-      '/api/v1/networks/network/trustlines/update',
-      {
-        creditor_address: 'creditor',
-        debtor_address: 'debtor',
-        creditline_given: '10',
-        creditline_received: '20'
-      }
-    ).and_return('legacy-write')
+    expect(client).not_to receive(:post)
 
-    expect(
+    result =
       client.update_trustline(
         network_address: 'network',
         creditor_address: 'creditor',
@@ -74,7 +90,13 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
         creditline_given: '10',
         creditline_received: '20'
       )
-    ).to eq('legacy-write')
+
+    expect(result).to include(
+      'ok' => false,
+      'status' => 0,
+      'outcome' => 'disabled',
+      'error' => /FOAF_SHARED_WRITES is disabled/
+    )
   end
 
   it 'routes trustline updates through the shared client and preserves the strict result' do
@@ -113,7 +135,6 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
   it 'routes all pending-transfer mutations through the shared client' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
     expect(client).not_to receive(:post)
-    expect(client).not_to receive(:put)
 
     expect(shared_client).to receive(:create_pending_transfer).with(
       network_address: 'network',
@@ -177,54 +198,40 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     )
   end
 
-  it 'keeps all pending-transfer mutations on the legacy transport when shared writes are disabled' do
+  it 'buffers all pending-transfer mutations without calling any transport when shared writes are disabled' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     expect(shared_client).not_to receive(:create_pending_transfer)
     expect(shared_client).not_to receive(:confirm_transfer)
     expect(shared_client).not_to receive(:reject_transfer)
+    expect(client).not_to receive(:post)
 
-    expect(client).to receive(:post).with(
-      '/api/v1/pending_transfers',
-      {
-        network_address: 'network',
-        from_address: 'sender',
-        to_address: 'receiver',
-        value: '3.25',
-        extra_data: nil
-      }
-    ).and_return('legacy-pending')
-    expect(client).to receive(:put).with(
-      '/api/v1/pending_transfers/41/confirm'
-    ).and_return('legacy-confirmed')
-    expect(client).to receive(:put).with(
-      '/api/v1/pending_transfers/42/reject',
-      { reason: 'declined' }
-    ).and_return('legacy-rejected')
-
-    expect(
+    results = [
       client.create_pending_transfer(
         network_address: 'network',
         from_address: 'sender',
         to_address: 'receiver',
         value: '3.25'
-      )
-    ).to eq('legacy-pending')
-    expect(
+      ),
       client.confirm_transfer(
         pending_transfer_id: 41,
         signer_address: 'receiver'
-      )
-    ).to eq('legacy-confirmed')
-    expect(
+      ),
       client.reject_transfer(
         pending_transfer_id: 42,
         signer_address: 'receiver',
         reason: 'declined'
       )
-    ).to eq('legacy-rejected')
+    ]
+
+    expect(results).to all(include(
+      'ok' => false,
+      'status' => 0,
+      'outcome' => 'disabled',
+      'error' => /FOAF_SHARED_WRITES is disabled/
+    ))
   end
 
-  it 'does not retry a failed shared mutation through the legacy transport' do
+  it 'does not issue a second mutation when the gem result is ambiguous' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(true)
     allow(Rails.logger).to receive(:warn)
     expect(client).not_to receive(:post)
