@@ -36,6 +36,8 @@ module Foaf
     # FOAF uses two-stage accept — we send both sides so it completes immediately.
     def publish_trustline_update(trustline, _current_user = nil, outbox_entry: nil)
       return unless Foaf::Config.foaf_write_enabled?
+      return unless Foaf::Config.shared_writes?
+
       if outbox_entry
         outbox_entry.reload
         return if outbox_entry.foaf_posted_at.present? ||
@@ -135,11 +137,12 @@ module Foaf
     # without affecting the local Rails commit. The proper warn-and-expand UX
     # is tracked in project_settlement_vs_extension memory.
     #
-    # When shared writes are enabled, tx_row supplies a deterministic
-    # idempotency key and retains the pending-transfer/reconciliation state.
-    # When they are disabled this executes the unchanged legacy write path.
+    # tx_row supplies a deterministic idempotency key and retains the
+    # pending-transfer/reconciliation state. With shared writes disabled the
+    # durable row remains unposted for ReplayWorker after the flag is restored.
     def publish_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
       return unless Foaf::Config.foaf_write_enabled?
+      return unless Foaf::Config.shared_writes?
       return unless ensure_network!
 
       ensure_identity!(from_user)
@@ -156,17 +159,7 @@ module Foaf
         mirrored_at: (tx_row&.created_at || Time.current).iso8601
       }.merge(metadata || {}).compact.to_json
 
-      if Foaf::Config.shared_writes?
-        return publish_shared_payment(
-          amount: amount,
-          from_user: from_user,
-          to_user: to_user,
-          extra_data: extra_data,
-          tx_row: tx_row
-        )
-      end
-
-      publish_legacy_payment(
+      publish_shared_payment(
         amount: amount,
         from_user: from_user,
         to_user: to_user,
@@ -178,36 +171,6 @@ module Foaf
     end
 
     private
-
-    def publish_legacy_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
-      result = @client.create_pending_transfer(
-        network_address: @network_address,
-        from_address: Foaf::Signer.address_for(from_user),
-        to_address: Foaf::Signer.address_for(to_user),
-        value: amount.to_f,
-        extra_data: extra_data
-      )
-
-      unless result && result["id"]
-        Rails.logger.warn("[FOAF Publisher] Create pending transfer failed: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
-        return
-      end
-
-      # Auto-confirm since the app already processed the payment
-      confirm = @client.confirm_transfer(
-        pending_transfer_id: result["id"],
-        signer_address: Foaf::Signer.address_for(to_user)
-      )
-
-      unless confirm
-        Rails.logger.warn("[FOAF Publisher] Confirm transfer failed: PT##{result["id"]} #{from_user.user_name} -> #{to_user.user_name}")
-        return
-      end
-
-      mark_legacy_posted!(tx_row, confirm) if tx_row
-
-      Rails.logger.info("[FOAF Publisher] Published payment: #{from_user.user_name} -> #{to_user.user_name} ($#{amount})")
-    end
 
     def publish_shared_payment(amount:, from_user:, to_user:, extra_data:, tx_row:)
       from_address = Foaf::Signer.address_for(from_user)
@@ -476,16 +439,11 @@ module Foaf
     end
 
     def write_succeeded?(result)
-      if Foaf::Config.shared_writes?
-        result.is_a?(Hash) && result["outcome"] == "success"
-      else
-        result.present?
-      end
+      result.is_a?(Hash) && result["outcome"] == "success"
     end
 
     def trustline_failure_state(result, stage)
-      if Foaf::Config.shared_writes? &&
-          result.is_a?(Hash) &&
+      if result.is_a?(Hash) &&
           result["outcome"] == "rejected"
         "rejected"
       else
@@ -544,15 +502,6 @@ module Foaf
         "posted: #{e.message}"
       )
       false
-    end
-
-    def mark_legacy_posted!(tx_row, confirm_response)
-      tx_row.update!(
-        foaf_operation_id: confirm_response["operation"],
-        foaf_posted_at: Time.current
-      )
-    rescue StandardError => e
-      Rails.logger.warn("[FOAF Publisher] Failed to mark tx #{tx_row.id} posted: #{e.message}")
     end
 
     def record_write_result!(tx_row, state, result, pending_transfer_id: nil)
