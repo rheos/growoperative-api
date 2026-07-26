@@ -324,15 +324,31 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     to_user = User.find(params[:to_user_id])
     amount = params[:amount].to_f
     max_hops = params[:max_hops] || 5
-    
-    path = Trustline.find_payment_path(current_user, to_user, amount, max_hops: max_hops)
-    
-    if path
+
+    if amount <= 0
+      return render json: { errors: ["Amount must be greater than zero"] }, status: :unprocessable_content
+    end
+
+    result = Foaf::PaymentPathReader.fetch(
+      from_user: current_user,
+      to_user: to_user,
+      amount: amount,
+      max_hops: max_hops
+    )
+    unless result.available?
+      return render json: {
+        errors: ["Payment path unavailable — FOAF is unreachable"],
+        path_error: result.error
+      }, status: :service_unavailable
+    end
+
+    if result.found?
       render json: {
         path_found: true,
-        path: path.map { |user| { id: user.id, name: display_name_for(user) } },
-        path_length: path.length - 1,  # Number of hops
-        estimated_cost: amount  # In a real system, might include fees
+        path: result.path.map { |user| { id: user.id, name: display_name_for(user) } },
+        path_length: result.path.length - 1,
+        capacity: result.capacity.to_f,
+        estimated_cost: amount
       }
     else
       render json: {
@@ -365,25 +381,41 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     amount = params[:amount].to_f
     description = params[:description]
     max_hops = params[:max_hops] || 5
-    
-    path = Trustline.find_payment_path(current_user, to_user, amount, max_hops: max_hops)
-    
-    if path
+
+    if amount <= 0
+      return render json: { errors: ["Amount must be greater than zero"] }, status: :unprocessable_content
+    end
+
+    path_result = Foaf::PaymentPathReader.fetch(
+      from_user: current_user,
+      to_user: to_user,
+      amount: amount,
+      max_hops: max_hops
+    )
+    unless path_result.available?
+      return render json: {
+        errors: ["Payment path unavailable — FOAF is unreachable"],
+        path_error: path_result.error
+      }, status: :service_unavailable
+    end
+
+    if path_result.found?
       begin
         result = Trustline.execute_payment_path(
-          path, 
+          path_result.path,
           amount, 
           description: description,
           originating_request: params[:originating_request_id] ?
-                              ItemRequest.find(params[:originating_request_id]) : nil
+                              ItemRequest.find(params[:originating_request_id]) : nil,
+          capacity_verified_by_foaf: true
         )
         
         if result
-          render json: {
-            message: 'Path payment executed successfully',
-            path: path.map { |user| { id: user.id, name: display_name_for(user) } },
+          render_path_write_receipt(
+            result,
+            path: path_result.path,
             amount: amount
-          }
+          )
         else
           render json: { errors: ['Path payment execution failed'] }, status: :unprocessable_content
         end
@@ -435,6 +467,31 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       serializer: method(:serialize_balance_row)
     )
     render json: receipt.body, status: receipt.status
+  end
+
+  def render_path_write_receipt(tx_rows, path:, amount:)
+    operations = tx_rows.map { |tx_row| Foaf::WriteReceipt.operation_payload(tx_row) }
+    states = operations.map { |operation| operation[:write_state] }
+
+    status, message = if states.include?("rejected")
+      [:unprocessable_content, "FOAF rejected one or more path writes"]
+    elsif states.all? { |state| state == "posted" }
+      [:ok, "Path payment executed successfully"]
+    else
+      [:accepted, "Path payment buffered pending FOAF reconciliation"]
+    end
+
+    rows = Foaf::BalanceReader.fetch(current_user)
+    body = {
+      message: message,
+      path: path.map { |user| { id: user.id, name: display_name_for(user) } },
+      amount: amount,
+      operations: operations,
+      foaf_state: rows&.map { |row| serialize_balance_row(row) }
+    }
+    body[:refetch_error] = "Balance data unavailable — FOAF refetch failed" if rows.nil?
+
+    render json: body, status: status
   end
 
   # Serializes a Foaf::BalanceReader row — balance/limits come from FOAF, the
