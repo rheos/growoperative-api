@@ -217,44 +217,26 @@ class Order < ApplicationRecord
       .sum('item_requests.price * request_contracts.quantity')
   end
 
-  # Ensure a trustline exists between the two parties with enough credit,
-  # then execute the payment. Both parties agreed on credit so the limit
-  # should auto-increase if needed — the agreement IS the authorization.
+  # Ensure FOAF reports enough direct capacity between the parties, then
+  # execute the payment. Both parties agreed on credit, so the durable
+  # limit-update outbox may publish the exact reported shortfall first.
   def execute_credit_payment!
     amount = settlement_amount
     from_user = User.find(self.user_id)
     to_user = User.find(self.friend_id)
 
-    trustline = Trustline.between_users(from_user, to_user).first
-    if trustline.nil?
-      trustline = Trustline.create!(
-        user_a: from_user,
-        user_b: to_user,
-        credit_limit_a_to_b: amount,
-        credit_limit_b_to_a: 0,
-        current_balance: 0,
-        is_active: true
-      )
-    else
-      available = trustline.available_credit_for(from_user)
-      if available < amount
-        shortfall = amount - available
-        if from_user.id == trustline.user_a_id
-          trustline.update!(credit_limit_a_to_b: trustline.credit_limit_a_to_b + shortfall)
-        else
-          trustline.update!(credit_limit_b_to_a: trustline.credit_limit_b_to_a + shortfall)
-        end
-      end
-    end
-
-    # Publish trustline creation/update to FOAF
-    Foaf::LedgerHooks.after_trustline_save(trustline, from_user)
+    trustline = Foaf::OrderSettlementCapacity.ensure!(
+      from_user: from_user,
+      to_user: to_user,
+      amount: amount
+    )
 
     Trustline.execute_payment_path(
       [from_user, to_user],
       amount,
       description: "Settlement for #{self.order_label}",
-      order: self
+      order: self,
+      capacity_verified_by_foaf: true
     )
     # Payment is published by process_payment! inside execute_payment_path
   end
