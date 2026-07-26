@@ -43,7 +43,7 @@ class PendingPayment < ApplicationRecord
                    end
 
     transaction do
-      new_balance = trustline.settle_payment!(
+      tx_row = trustline.settle_payment!(
         amount,
         payer,
         payee,
@@ -57,7 +57,7 @@ class PendingPayment < ApplicationRecord
         resolved_at: Time.current
       )
 
-      new_balance
+      tx_row
     end
   end
 

@@ -136,7 +136,7 @@ class Trustline < ApplicationRecord
   # @param description [String] - Optional payment description
   # @param originating_request [ItemRequest] - Optional item request that triggered this
   # @param order [Order] - Optional order associated with this payment
-  # @return [BigDecimal] - New balance after payment
+  # @return [TrustlineTransaction] - Durable write-buffer operation
   # @raise [ArgumentError] - If users are invalid or insufficient credit
   def process_payment!(amount, from_user, to_user, description: nil, originating_request: nil, order: nil, force_capacity: false, operation: "payment")
     raise ArgumentError, "Invalid users for this trustline" unless involves_users?(from_user, to_user)
@@ -180,7 +180,7 @@ class Trustline < ApplicationRecord
                                        description: description, order: order,
                                        operation: operation, tx_row: tx_row)
 
-      new_balance
+      tx_row.reload
     end
   end
 
@@ -231,7 +231,7 @@ class Trustline < ApplicationRecord
                                           metadata: path_info,
                                           operation: operation, tx_row: tx_row)
 
-      new_balance
+      tx_row.reload
     end
   end
 
