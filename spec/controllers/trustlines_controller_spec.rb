@@ -59,6 +59,56 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
     end
   end
 
+  describe 'GET #summary' do
+    let(:viewer) do
+      User.create!(
+        user_name: 'summary-viewer',
+        email: 'summary-viewer@example.com',
+        password: 'password123',
+        foaf_address: '0x0000000000000000000000000000000000000d01'
+      )
+    end
+
+    before do
+      allow(controller).to receive(:authenticate!).and_return(true)
+      allow(controller).to receive(:authenticate_user!).and_return(true)
+      allow(controller).to receive(:current_user).and_return(viewer)
+    end
+
+    it 'serves all balance aggregates from the single FOAF-backed summary' do
+      expect(Foaf::BalanceSummary).to receive(:fetch).once.with(viewer).and_return(
+        total_trustlines: 2,
+        total_credit_owed: 30.to_d,
+        total_credit_owed_to_me: 45.to_d,
+        net_credit_position: 15.to_d,
+        available_credit: 175.to_d
+      )
+
+      get :summary
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to include(
+        'total_trustlines' => 2,
+        'total_credit_owed' => 30.0,
+        'total_credit_owed_to_me' => 45.0,
+        'net_credit_position' => 15.0,
+        'available_credit' => 175.0
+      )
+    end
+
+    it 'returns 503 and never calls Rails balance aggregates when FOAF is unavailable' do
+      allow(Foaf::BalanceSummary).to receive(:fetch).with(viewer).and_return(nil)
+      expect(viewer).not_to receive(:total_credit_owed)
+      expect(viewer).not_to receive(:total_credit_owed_to_me)
+      expect(viewer).not_to receive(:net_credit_position)
+      expect(viewer).not_to receive(:available_credit_total)
+
+      get :summary
+
+      expect(response).to have_http_status(:service_unavailable)
+    end
+  end
+
   describe 'POST #record_debt' do
     let(:bruce) do
       User.create!(
