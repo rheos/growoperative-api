@@ -142,20 +142,13 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # - total_credit_owed_to_me: Amount others owe to user
   # - net_credit_position: Net position (positive = creditor)
   # - available_credit: Total credit available for spending
-  # - recent_transactions: Last 5 transactions initiated by user
   def summary
     foaf_summary = Foaf::BalanceSummary.fetch(current_user)
     return render_foaf_unavailable if foaf_summary.nil?
 
     summary_data = foaf_summary.transform_values do |value|
       value.is_a?(BigDecimal) ? value.to_f : value
-    end.merge(
-      recent_transactions: current_user.initiated_trustline_transactions
-                                      .includes(:initiated_by, :order)
-                                      .recent
-                                      .limit(5)
-                                      .map { |tx| serialize_transaction(tx) }
-    )
+    end
     
     render json: summary_data
   end
@@ -487,27 +480,6 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     }
   end
   
-  # Serializes transaction object for API responses
-  # @param transaction [TrustlineTransaction] - The transaction to serialize
-  # @return [Hash] - JSON-ready hash with transaction data
-  def serialize_transaction(transaction)
-    {
-      id: transaction.id,
-      amount: transaction.amount.to_f,
-      description: transaction.description,
-      transaction_type: transaction.transaction_type,
-      created_at: transaction.created_at,
-      balance_after: transaction.balance_after.to_f,
-      is_reversed: transaction.is_reversed,
-      initiated_by_id: transaction.initiated_by_id,
-      initiated_by_name: transaction.initiated_by && display_name_for(transaction.initiated_by),
-      order_id: transaction.order_id,
-      order_label: transaction.order&.order_label,
-      originating_request_id: transaction.originating_request_id,
-      path_info: transaction.path_info
-    }
-  end
-
   def display_name_for(user)
     return nil unless user
     return user.user_name if user.id == current_user.id
