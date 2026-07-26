@@ -12,6 +12,9 @@ module Foaf
   class OrderSettlementCapacity
     class Error < StandardError; end
 
+    PUBLISHED_READ_ATTEMPTS = 3
+    PUBLISHED_READ_DELAY = 0.1
+
     def self.ensure!(
       from_user:,
       to_user:,
@@ -40,12 +43,17 @@ module Foaf
       raise Error, "Settlement amount must be positive" unless @amount.positive?
 
       trustline = Trustline.between_users(@from_user, @to_user).first
-      if trustline.nil?
+      published = trustline.nil?
+      if published
         trustline = create_trustline!
         publish_limit!(trustline)
       end
 
-      capacity = fetch_capacity!
+      capacity = if published
+        await_published_capacity!
+      else
+        fetch_capacity!
+      end
       return trustline if capacity.sufficient_for?(@amount)
 
       state = fetch_foaf_state!(trustline)
@@ -56,7 +64,7 @@ module Foaf
       )
       publish_limit!(trustline)
 
-      verified = fetch_capacity!
+      verified = await_published_capacity!
       unless verified.sufficient_for?(@amount)
         raise Error,
               "FOAF capacity remained insufficient after the durable limit update"
@@ -86,13 +94,19 @@ module Foaf
     end
 
     def fetch_foaf_state!(trustline)
-      rows = @balance_reader.fetch(@from_user)
-      raise Error, "FOAF trustline state unavailable" if rows.nil?
+      last_error = "FOAF trustline state unavailable"
 
-      row = rows.find { |candidate| candidate[:trustline].id == trustline.id }
-      raise Error, "Trustline was not returned by FOAF" unless row
+      PUBLISHED_READ_ATTEMPTS.times do |attempt|
+        rows = @balance_reader.fetch(@from_user)
+        if rows
+          row = rows.find { |candidate| candidate[:trustline].id == trustline.id }
+          return row if row
+          last_error = "Trustline was not returned by FOAF"
+        end
+        wait_before_retry(attempt)
+      end
 
-      row
+      raise Error, last_error
     end
 
     def expand_limit!(trustline, new_limit)
@@ -105,6 +119,32 @@ module Foaf
 
     def publish_limit!(trustline)
       Foaf::LedgerHooks.after_trustline_save(trustline, @from_user)
+    end
+
+    # A successful limit response can become visible to the following read a
+    # fraction later. Poll only the read; never retry the money operation.
+    def await_published_capacity!
+      last_result = nil
+
+      PUBLISHED_READ_ATTEMPTS.times do |attempt|
+        result = @capacity_reader.fetch(
+          from_user: @from_user,
+          to_user: @to_user
+        )
+        last_result = result
+        return result if result.available? && result.sufficient_for?(@amount)
+        wait_before_retry(attempt)
+      end
+
+      raise Error, last_result.error unless last_result&.available?
+
+      last_result
+    end
+
+    def wait_before_retry(attempt)
+      return if attempt == PUBLISHED_READ_ATTEMPTS - 1
+
+      sleep(PUBLISHED_READ_DELAY)
     end
 
     def decimal(value)
