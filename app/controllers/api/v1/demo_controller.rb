@@ -19,9 +19,22 @@ class Api::V1::DemoController < Api::V1::ApiController
     end
 
     # Edges from trustlines between demo users
-    trustlines = Trustline.where(user_a_id: demo_ids, user_b_id: demo_ids)
+    trustlines = Trustline
+      .where(user_a_id: demo_ids, user_b_id: demo_ids)
+      .includes(:user_a, :user_b)
+      .to_a
+    balances = Foaf::GraphBalanceReader.fetch(trustlines)
+    if balances.nil?
+      return render json: { errors: ['Graph balance data unavailable — FOAF is unreachable'] },
+                    status: :service_unavailable
+    end
     trust_edges = trustlines.map do |t|
-      { source_id: t.user_a_id, target_id: t.user_b_id, type: 'trustline', balance: t.current_balance.to_f }
+      {
+        source_id: t.user_a_id,
+        target_id: t.user_b_id,
+        type: 'trustline',
+        balance: balances.fetch(t.id)
+      }
     end
 
     # The map uses multi_role to decide whether to show per-node role badges and
