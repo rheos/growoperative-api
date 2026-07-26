@@ -129,5 +129,45 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       edge_pairs = body['edges'].select { |e| e['type'] == 'relationship' }.map { |e| [e['source_id'], e['target_id']] }
       expect(edge_pairs).to contain_exactly([seed.id, inside.id])
     end
+
+    it 'uses FOAF balances for trustline edges' do
+      seed = User.create!(
+        user_name: 'sg_foaf_seed',
+        password: password,
+        foaf_address: "0x#{'ab' * 20}"
+      )
+      member = User.create!(
+        user_name: 'sg_foaf_member',
+        password: password,
+        foaf_address: "0x#{'cd' * 20}"
+      )
+      subnet = create(:subnet, seed_user: seed)
+      seed.subnet_memberships.create!(subnet: subnet, is_primary: true)
+      member.subnet_memberships.create!(subnet: subnet, is_primary: true)
+      trustline = Trustline.create!(
+        user_a: seed,
+        user_b: member,
+        credit_limit_a_to_b: 100,
+        credit_limit_b_to_a: 100,
+        current_balance: 999
+      )
+      expect(Foaf::GraphBalanceReader).to receive(:fetch).once.and_return(trustline.id => -14.5)
+
+      get "/v1/subnets/#{subnet.id}/graph", headers: super_headers
+
+      edge = JSON.parse(response.body)['edges'].find { |item| item['type'] == 'trustline' }
+      expect(response).to have_http_status(200)
+      expect(edge['balance']).to eq(-14.5)
+    end
+
+    it 'returns 503 instead of Rails graph balances when FOAF is unavailable' do
+      subnet = create(:subnet, seed_user: superuser)
+      superuser.subnet_memberships.create!(subnet: subnet, is_primary: true)
+      allow(Foaf::GraphBalanceReader).to receive(:fetch).and_return(nil)
+
+      get "/v1/subnets/#{subnet.id}/graph", headers: super_headers
+
+      expect(response).to have_http_status(:service_unavailable)
+    end
   end
 end
