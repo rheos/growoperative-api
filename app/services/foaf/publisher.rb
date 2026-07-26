@@ -614,7 +614,7 @@ module Foaf
 
       # Map raw FOAF state into the app's canonical user_a perspective. This is
       # the same mapping used by Foaf::AuditService.
-      local_balance = trustline.balance_for(user_a).to_f
+      local_balance = trustline.notional_balance_for(user_a).to_f
       foaf_balance = -foaf_tl["balance"].to_f
       discrepancies[:balance] = { local: local_balance, foaf: foaf_balance } if local_balance != foaf_balance
 
