@@ -163,8 +163,23 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     amount = params[:amount].to_f
     description = params[:description]
     to_user = @trustline.other_user(current_user)
-    
-    if @trustline.can_handle_payment?(amount, current_user)
+
+    if amount <= 0
+      return render json: { errors: ["Amount must be greater than zero"] }, status: :unprocessable_content
+    end
+
+    capacity = Foaf::DirectCapacityReader.fetch(
+      from_user: current_user,
+      to_user: to_user
+    )
+    unless capacity.available?
+      return render json: {
+        errors: ["Payment capacity unavailable — FOAF is unreachable"],
+        capacity_error: capacity.error
+      }, status: :service_unavailable
+    end
+
+    if capacity.sufficient_for?(amount)
       begin
         tx_row = @trustline.process_payment!(
           amount,
@@ -172,7 +187,8 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
           to_user,
           description: description,
           originating_request: params[:originating_request_id] ? 
-                              ItemRequest.find(params[:originating_request_id]) : nil
+                              ItemRequest.find(params[:originating_request_id]) : nil,
+          force_capacity: true
         )
         
         render_write_receipt(

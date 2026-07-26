@@ -66,6 +66,24 @@ module Foaf
       end
     end
 
+    def max_capacity_path_info(network_address:, from_address:, to_address:)
+      body = {
+        address: network_address,
+        from: from_address,
+        to: to_address
+      }
+      compare_read(
+        :max_capacity_path_info,
+        legacy: -> { post("/api/v1/networks/#{network_address}/max-capacity-path-info", body) }
+      ) do
+        @shared_client.max_capacity_path_info(
+          network_address: network_address,
+          from_address: from_address,
+          to_address: to_address
+        )
+      end
+    end
+
     # === TRANSFERS ===
 
     def create_pending_transfer(network_address:, from_address:, to_address:,
