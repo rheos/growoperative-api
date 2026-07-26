@@ -64,7 +64,7 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     expect(Foaf::LedgerHooks).not_to have_received(:after_trustline_save)
   end
 
-  it "expands the FOAF-reported limit by the FOAF-reported shortfall and verifies again" do
+  it "expands by the whole-unit FOAF shortfall and verifies again" do
     trustline = Trustline.create!(
       user_a: buyer,
       user_b: seller,
@@ -74,7 +74,7 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
       is_active: true
     )
     allow(capacity_reader).to receive(:fetch).and_return(
-      capacity("7.5"),
+      capacity("7"),
       capacity("25")
     )
     allow(balance_reader).to receive(:fetch).with(buyer).and_return([
@@ -90,7 +90,7 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     ensure_capacity
 
     trustline.reload
-    expected_limit = BigDecimal("57.5")
+    expected_limit = BigDecimal("58")
     actual_limit = trustline.credit_limit_for(buyer)
     expect(actual_limit).to eq(expected_limit)
     expect(Foaf::LedgerHooks).to have_received(:after_trustline_save)
@@ -102,6 +102,34 @@ RSpec.describe Foaf::OrderSettlementCapacity, skip_hooks: true do
     expect(entry.credit_limit_b_to_a).to eq(
       buyer.id == trustline.user_b_id ? expected_limit : BigDecimal("5")
     )
+  end
+
+  it "rounds a fractional protocol-reported shortfall up to the next capacity unit" do
+    trustline = Trustline.create!(
+      user_a: buyer,
+      user_b: seller,
+      credit_limit_a_to_b: BigDecimal("3.45"),
+      credit_limit_b_to_a: 0,
+      current_balance: 0,
+      is_active: true
+    )
+    allow(capacity_reader).to receive(:fetch).and_return(
+      capacity("3"),
+      capacity("4")
+    )
+    allow(balance_reader).to receive(:fetch).and_return([
+      {
+        trustline: trustline,
+        counterparty: seller,
+        viewer_balance: 0,
+        my_credit_limit: BigDecimal("3.45"),
+        their_credit_limit: 0
+      }
+    ])
+
+    ensure_capacity(amount: "3.45")
+
+    expect(trustline.reload.credit_limit_for(buyer)).to eq(BigDecimal("4.45"))
   end
 
   it "creates relationship metadata, retains its durable limit snapshot, and verifies FOAF" do
