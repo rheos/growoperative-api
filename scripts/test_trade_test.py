@@ -19,15 +19,22 @@ class FakeResponse:
         return self.payload
 
 
-def reconcile(app_balance, foaf_balance):
+def reconcile(notional_balance, foaf_balance, *, explicit=True):
+    trustline = {
+        "user_a": "alice",
+        "user_b": "bob",
+        "app": {"balance": notional_balance},
+        "foaf": {"balance": foaf_balance},
+    }
+    if explicit:
+        trustline.update({
+            "notional_balance": notional_balance,
+            "foaf_balance": foaf_balance,
+            "credloop_delta": notional_balance - foaf_balance,
+        })
     return {
         "summary": {"matches": 0},
-        "trustlines": [{
-            "user_a": "alice",
-            "user_b": "bob",
-            "app": {"balance": app_balance},
-            "foaf": {"balance": foaf_balance},
-        }],
+        "trustlines": [trustline],
     }
 
 
@@ -52,6 +59,11 @@ class CredloopAssertionTest(unittest.TestCase):
 
         with self.assertRaisesRegex(trade_test.SetupError, "Expected at least 1"):
             trade_test.check_credloop_fired(attempts=2, interval=0)
+
+    def test_legacy_nested_balance_fields_remain_accepted(self):
+        diffs = trade_test.credloop_differences(reconcile(10, 4, explicit=False))
+
+        self.assertEqual(6, diffs[0]["cancelled"])
 
 
 class PublisherHealthTest(unittest.TestCase):
