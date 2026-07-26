@@ -13,15 +13,19 @@ module Foaf
     def reconcile_trustline(trustline)
       user_a = User.find(trustline.user_a_id)
       user_b = User.find(trustline.user_b_id)
+      notional_balance = trustline.notional_balance_for(user_a).to_f
 
       row = {
         trustline_id: trustline.id,
         user_a: user_a.user_name,
         user_b: user_b.user_name,
+        notional_balance: notional_balance,
+        foaf_balance: nil,
+        credloop_delta: nil,
         app: {
           credit_limit_a_to_b: trustline.credit_limit_a_to_b.to_f,
           credit_limit_b_to_a: trustline.credit_limit_b_to_a.to_f,
-          balance: trustline.current_balance.to_f,
+          balance: notional_balance,
         },
         foaf: nil,
         match: nil,
@@ -64,6 +68,10 @@ module Foaf
       foaf_limit_a_to_b = foaf_tl["received"]
       foaf_limit_b_to_a = foaf_tl["given"]
       foaf_balance = -foaf_tl["balance"]
+      credloop_delta = row[:notional_balance] - foaf_balance
+
+      row[:foaf_balance] = foaf_balance
+      row[:credloop_delta] = credloop_delta
 
       row[:foaf] = {
         credit_limit_a_to_b: foaf_limit_a_to_b,
@@ -78,12 +86,35 @@ module Foaf
       if trustline.credit_limit_b_to_a.to_f != foaf_limit_b_to_a
         row[:discrepancies] << { field: "credit_limit_b_to_a", app: trustline.credit_limit_b_to_a.to_f, foaf: foaf_limit_b_to_a }
       end
-      if trustline.current_balance.to_f != foaf_balance
-        row[:discrepancies] << { field: "balance", app: trustline.current_balance.to_f, foaf: foaf_balance }
+      if notional_balance != foaf_balance
+        row[:discrepancies] << {
+          field: "balance",
+          app: notional_balance,
+          foaf: foaf_balance,
+          notional_balance: row[:notional_balance],
+          foaf_balance: foaf_balance,
+          credloop_delta: credloop_delta,
+        }
       end
 
       row[:match] = row[:discrepancies].empty?
       row
+    end
+
+    # Bulk reconciliation with one canonical response builder, shared by the
+    # authenticated and debug endpoints so diagnostic field names cannot drift.
+    def reconcile_trustlines(trustlines)
+      rows = trustlines.map { |trustline| reconcile_trustline(trustline) }
+
+      {
+        summary: {
+          total: rows.size,
+          matches: rows.count { |row| row[:match] == true },
+          discrepancies: rows.count { |row| row[:match] == false },
+          unlinked: rows.count { |row| row[:match].nil? },
+        },
+        trustlines: rows,
+      }
     end
 
     # Returns AuditLedgerRow-shaped event log for one trustline.
