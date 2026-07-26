@@ -196,4 +196,93 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       expect(trustline.current_balance.to_f).to eq(675.0)
     end
   end
+
+  describe "POST #payment" do
+    let(:payer) do
+      User.create!(
+        user_name: "foaf-capacity-payer",
+        email: "foaf-capacity-payer@example.com",
+        password: "password123",
+        foaf_address: "0x0000000000000000000000000000000000000f11"
+      )
+    end
+    let(:payee) do
+      User.create!(
+        user_name: "foaf-capacity-payee",
+        email: "foaf-capacity-payee@example.com",
+        password: "password123",
+        foaf_address: "0x0000000000000000000000000000000000000f12"
+      )
+    end
+    let!(:payment_trustline) do
+      Trustline.create!(
+        user_a: payer,
+        user_b: payee,
+        credit_limit_a_to_b: 5,
+        credit_limit_b_to_a: 5,
+        current_balance: 5
+      )
+    end
+
+    before do
+      allow(controller).to receive(:authenticate!).and_return(true)
+      allow(controller).to receive(:authenticate_user!).and_return(true)
+      allow(controller).to receive(:current_user).and_return(payer)
+      allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(false)
+      allow(Foaf::BalanceReader).to receive(:fetch).with(payer).and_return([
+        {
+          trustline: payment_trustline,
+          counterparty: payee,
+          viewer_balance: 7.0,
+          my_credit_limit: 20.0,
+          their_credit_limit: 5.0
+        }
+      ])
+    end
+
+    it "admits from FOAF capacity and bypasses the Rails capacity helper" do
+      result = Foaf::DirectCapacityReader::Result.new(
+        capacity: BigDecimal("20")
+      )
+      allow(Foaf::DirectCapacityReader).to receive(:fetch)
+        .with(from_user: payer, to_user: payee)
+        .and_return(result)
+      expect_any_instance_of(Trustline).not_to receive(:can_handle_payment?)
+
+      post :payment, params: { id: payment_trustline.id, amount: 2 }
+
+      expect(response).to have_http_status(:accepted)
+      expect(payment_trustline.reload.current_balance.to_f).to eq(7.0)
+      expect(JSON.parse(response.body).dig("operation", "write_state")).to eq("buffered")
+    end
+
+    it "rejects when FOAF reports insufficient direct capacity" do
+      result = Foaf::DirectCapacityReader::Result.new(
+        capacity: BigDecimal("1")
+      )
+      allow(Foaf::DirectCapacityReader).to receive(:fetch).and_return(result)
+
+      expect do
+        post :payment, params: { id: payment_trustline.id, amount: 2 }
+      end.not_to change(TrustlineTransaction, :count)
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["errors"]).to eq(["Insufficient credit limit"])
+    end
+
+    it "returns 503 instead of falling back when FOAF capacity is unavailable" do
+      result = Foaf::DirectCapacityReader::Result.new(
+        capacity: BigDecimal("0"),
+        error: "FOAF capacity unavailable"
+      )
+      allow(Foaf::DirectCapacityReader).to receive(:fetch).and_return(result)
+
+      post :payment, params: { id: payment_trustline.id, amount: 2 }
+
+      expect(response).to have_http_status(:service_unavailable)
+      expect(JSON.parse(response.body)["capacity_error"]).to eq(
+        "FOAF capacity unavailable"
+      )
+    end
+  end
 end
