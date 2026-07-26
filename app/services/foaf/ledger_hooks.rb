@@ -22,8 +22,8 @@ module Foaf
 
       outbox_entry = FoafOutboxEntry.latest_trustline_update_for(trustline)
       return unless outbox_entry
-      return if Foaf::Config.shared_writes? &&
-                outbox_entry.foaf_write_state == "rejected"
+      return unless Foaf::Config.shared_writes?
+      return if outbox_entry.foaf_write_state == "rejected"
 
       publisher.publish_trustline_update(
         trustline,
@@ -39,6 +39,7 @@ module Foaf
     # tx_row is left unposted for Foaf::ReplayWorker to pick up.
     def after_payment(trustline, amount, from_user, to_user, description: nil, order: nil, operation: "payment", metadata: nil, tx_row: nil)
       return unless Foaf::Config.foaf_write_enabled?
+      return unless Foaf::Config.shared_writes?
 
       publisher.publish_payment(trustline, amount, from_user, to_user,
                                 description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
@@ -53,6 +54,7 @@ module Foaf
     # apply to repayment.
     def after_settlement(trustline, amount, payer, payee, description: nil, order: nil, operation: "settlement", metadata: nil, tx_row: nil)
       return unless Foaf::Config.foaf_write_enabled?
+      return unless Foaf::Config.shared_writes?
 
       publisher.publish_settlement(trustline, amount, payer, payee,
                                    description: description, order: order, operation: operation, metadata: metadata, tx_row: tx_row)
