@@ -33,17 +33,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # docs/claude/plans/todo/21-retire-rails-trustline-balances.md for the cutover.
   def index
     rows = Foaf::BalanceReader.fetch(current_user)
-    return render json: rows.map { |row| serialize_balance_row(row) } unless rows.nil?
+    return render_foaf_unavailable if rows.nil?
 
-    # FOAF is authoritative for balances, so a real-production FOAF outage must
-    # fail loud rather than silently serve possibly-diverged Rails balances. But
-    # envs that run NO FOAF service (local dev; the beta backend) should fall back
-    # to Rails' own trustline data so the screen is usable instead of 503ing.
-    # Gate: any non-production env, OR an env that explicitly opts in via
-    # FOAF_BALANCE_FALLBACK=true (beta runs RAILS_ENV=production but has no FOAF).
-    fallback_allowed = !Rails.env.production? || ENV['FOAF_BALANCE_FALLBACK'] == 'true'
-    return render_foaf_unavailable unless fallback_allowed
-    render json: current_user.trustlines.active.map { |tl| serialize_trustline(tl) }
+    render json: rows.map { |row| serialize_balance_row(row) }
   end
 
   # Shows details of a specific trustline
