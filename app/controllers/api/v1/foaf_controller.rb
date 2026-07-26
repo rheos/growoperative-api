@@ -45,7 +45,12 @@ class Api::V1::FoafController < Api::V1::ApiController
       return render json: { error: "FOAF publishing is not enabled" }, status: 400
     end
 
-    render json: Foaf::AuditService.events_for_trustline(@trustline, viewer: current_user)
+    result = Foaf::AuditService.events_for_trustline(@trustline, viewer: current_user)
+    if result[:error]
+      return render json: result, status: :service_unavailable
+    end
+
+    render json: result
   end
 
   private
