@@ -155,10 +155,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # - description: Optional payment description
   # - originating_request_id: Optional ItemRequest that triggered payment
   #
-  # Returns:
-  # - message: Success confirmation
-  # - new_balance: Updated trustline balance
-  # - trustline: Updated trustline object
+  # Returns an operation receipt plus a FOAF-backed trustline refetch.
   #
   # Errors: Insufficient credit, invalid amount, or processing failure
   def payment
@@ -169,7 +166,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     
     if @trustline.can_handle_payment?(amount, current_user)
       begin
-        new_balance = @trustline.process_payment!(
+        tx_row = @trustline.process_payment!(
           amount,
           current_user,
           to_user,
@@ -178,11 +175,10 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
                               ItemRequest.find(params[:originating_request_id]) : nil
         )
         
-        render json: {
-          message: 'Payment processed successfully',
-          new_balance: new_balance,
-          trustline: serialize_trustline(@trustline.reload)
-        }
+        render_write_receipt(
+          tx_row,
+          message: "Payment processed successfully"
+        )
       rescue => e
         render json: { errors: [e.message] }, status: :unprocessable_content
       end
@@ -232,7 +228,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     # No credit-limit check: voluntary self-adverse declaration. The user is
     # accepting the obligation themselves, so the limit doesn't apply.
     begin
-      new_balance = @trustline.process_payment!(
+      tx_row = @trustline.process_payment!(
         amount,
         current_user,
         to_user,
@@ -242,13 +238,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements
-      @trustline.trustline_transactions.last.update!(transaction_type: 'adjustment')
+      tx_row.update!(transaction_type: "adjustment")
 
-      render json: {
-        message: 'Debt recorded',
-        new_balance: new_balance,
-        trustline: serialize_trustline(@trustline.reload)
-      }
+      render_write_receipt(tx_row, message: "Debt recorded")
     rescue => e
       render json: { errors: [e.message] }, status: :unprocessable_content
     end
@@ -278,7 +270,7 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     # Settlement direction: from_user's debt to current_user decreases.
     # No credit-limit check needed — settlement only reduces debt.
     begin
-      new_balance = @trustline.settle_payment!(
+      tx_row = @trustline.settle_payment!(
         amount,
         from_user,
         current_user,
@@ -287,13 +279,9 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
       )
 
       # Mark as adjustment so audit trail distinguishes from order settlements
-      @trustline.trustline_transactions.last.update!(transaction_type: 'adjustment')
+      tx_row.update!(transaction_type: "adjustment")
 
-      render json: {
-        message: 'Receipt recorded',
-        new_balance: new_balance,
-        trustline: serialize_trustline(@trustline.reload)
-      }
+      render_write_receipt(tx_row, message: "Receipt recorded")
     rescue => e
       render json: { errors: [e.message] }, status: :unprocessable_content
     end
@@ -421,6 +409,16 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
 
   def render_foaf_unavailable
     render json: { errors: ['Balance data unavailable — FOAF is unreachable'] }, status: :service_unavailable
+  end
+
+  def render_write_receipt(tx_row, message:)
+    receipt = Foaf::WriteReceipt.build(
+      tx_row: tx_row,
+      viewer: current_user,
+      message: message,
+      serializer: method(:serialize_balance_row)
+    )
+    render json: receipt.body, status: receipt.status
   end
 
   # Serializes a Foaf::BalanceReader row — balance/limits come from FOAF, the

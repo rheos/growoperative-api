@@ -161,12 +161,26 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
       allow(controller).to receive(:current_user).and_return(bruce)
       # Isolate the Rails behaviour — FOAF mirroring is exercised elsewhere.
       allow(Foaf::Config).to receive(:foaf_write_enabled?).and_return(false)
+      allow(Foaf::BalanceReader).to receive(:fetch).with(bruce).and_return([
+        {
+          trustline: trustline,
+          counterparty: alex,
+          viewer_balance: 675.0,
+          my_credit_limit: 675.0,
+          their_credit_limit: 100.0
+        }
+      ])
     end
 
     it 'raises the debtor-side limit to cover the debt when consent is given' do
       post :record_debt, params: { id: trustline.id, amount: 675, raise_limit_to: 675 }
 
-      expect(response).to have_http_status(:ok)
+      expect(response).to have_http_status(:accepted)
+      body = JSON.parse(response.body)
+      expect(body).not_to have_key("new_balance")
+      expect(body).not_to have_key("trustline")
+      expect(body.dig("operation", "write_state")).to eq("buffered")
+      expect(body.dig("foaf_state", "current_balance")).to eq(675.0)
       trustline.reload
       # bruce is user_a, so the cap on what he can owe is credit_limit_a_to_b.
       expect(trustline.credit_limit_a_to_b.to_f).to eq(675.0)
@@ -176,7 +190,7 @@ RSpec.describe Api::V1::TrustlinesController, type: :controller, skip_hooks: tru
     it 'records the debt but leaves the limit untouched without consent' do
       post :record_debt, params: { id: trustline.id, amount: 675 }
 
-      expect(response).to have_http_status(:ok)
+      expect(response).to have_http_status(:accepted)
       trustline.reload
       expect(trustline.credit_limit_a_to_b.to_f).to eq(100.0)
       expect(trustline.current_balance.to_f).to eq(675.0)
