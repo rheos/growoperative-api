@@ -78,12 +78,17 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     )
 
     if @trustline.persisted?
+      outbox_entry = FoafOutboxEntry.latest_trustline_update_for(@trustline)
       Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
       if !already_existed && @other_user
         Notifications.publish!(event: :trustline_created, actor: current_user,
                                recipients: [@other_user], resource: @trustline)
       end
-      render json: serialize_trustline(@trustline), status: :created
+      render_limit_write_receipt(
+        outbox_entry,
+        message: "Trustline created",
+        success_status: :created
+      )
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_content
     end
@@ -101,8 +106,13 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
   # Returns: Updated trustline object or validation errors
   def update
     if @trustline.update(trustline_params)
+      outbox_entry = FoafOutboxEntry.latest_trustline_update_for(@trustline)
       Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
-      render json: serialize_trustline(@trustline)
+      render_limit_write_receipt(
+        outbox_entry,
+        message: "Trustline updated",
+        success_status: :ok
+      )
     else
       render json: { errors: @trustline.errors.full_messages }, status: :unprocessable_content
     end
@@ -231,14 +241,32 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     # explicitly consented to raising their own limit to cover the debt, bump
     # the current user's credit-limit side and mirror it to FOAF *first* so the
     # subsequent debt transfer fits within the (now larger) creditline.
+    foaf_row = foaf_balance_row(@trustline)
+    return render_foaf_unavailable unless foaf_row
+
     raise_to = params[:raise_limit_to].to_f
-    if raise_to > @trustline.credit_limit_for(current_user).to_f
+    if raise_to > foaf_row[:my_credit_limit].to_f
       if current_user.id == @trustline.user_a_id
         @trustline.update!(credit_limit_a_to_b: raise_to)
       else
         @trustline.update!(credit_limit_b_to_a: raise_to)
       end
+      outbox_entry = FoafOutboxEntry.latest_trustline_update_for(@trustline)
       Foaf::LedgerHooks.after_trustline_save(@trustline, current_user)
+
+      refreshed_row = foaf_balance_row(@trustline)
+      unless refreshed_row &&
+             refreshed_row[:my_credit_limit].to_f >= raise_to
+        operation = Foaf::LimitWriteReceipt.build(
+          entry: outbox_entry,
+          trustline: @trustline,
+          viewer: current_user,
+          message: "Credit limit updated",
+          success_status: :ok,
+          serializer: method(:serialize_balance_row)
+        )
+        return render json: operation.body, status: operation.status
+      end
     end
 
     # No credit-limit check: voluntary self-adverse declaration. The user is
@@ -469,6 +497,25 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     render json: receipt.body, status: receipt.status
   end
 
+  def render_limit_write_receipt(outbox_entry, message:, success_status:)
+    receipt = Foaf::LimitWriteReceipt.build(
+      entry: outbox_entry,
+      trustline: @trustline,
+      viewer: current_user,
+      message: message,
+      success_status: success_status,
+      serializer: method(:serialize_balance_row)
+    )
+    render json: receipt.body, status: receipt.status
+  end
+
+  def foaf_balance_row(trustline)
+    rows = Foaf::BalanceReader.fetch(current_user)
+    return if rows.nil?
+
+    rows.find { |row| row[:trustline].id == trustline.id }
+  end
+
   def render_path_write_receipt(tx_rows, path:, amount:)
     operations = tx_rows.map { |tx_row| Foaf::WriteReceipt.operation_payload(tx_row) }
     states = operations.map { |operation| operation[:write_state] }
@@ -520,29 +567,6 @@ class Api::V1::TrustlinesController < Api::V1::ApiController
     }
   end
 
-  # Serializes trustline object from current user's perspective
-  # @param trustline [Trustline] - The trustline to serialize
-  # @return [Hash] - JSON-ready hash with trustline data
-  def serialize_trustline(trustline)
-    other_user = trustline.other_user(current_user)
-    
-    {
-      id: trustline.id,
-      other_user: {
-        id: other_user.id,
-        name: display_name_for(other_user)
-      },
-      my_credit_limit: trustline.credit_limit_for(current_user).to_f,
-      their_credit_limit: trustline.credit_limit_for(other_user).to_f,
-      my_available_credit: trustline.available_credit_for(current_user).to_f,
-      current_balance: trustline.balance_for(current_user).to_f,
-      is_active: trustline.is_active,
-      established_date: trustline.established_date,
-      last_activity: trustline.last_activity,
-      notes: trustline.notes
-    }
-  end
-  
   def display_name_for(user)
     return nil unless user
     return user.user_name if user.id == current_user.id
