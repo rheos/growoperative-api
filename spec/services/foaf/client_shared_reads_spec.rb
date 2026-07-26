@@ -28,6 +28,31 @@ RSpec.describe Foaf::Client, type: :model, skip_hooks: true do
     expect(client.networks).to eq([{ 'source' => 'legacy' }])
   end
 
+  it 'parallel-runs max-capacity path reads with the upstream address workaround' do
+    allow(Foaf::Config).to receive(:shared_reads?).and_return(true)
+    body = {
+      address: "network",
+      from: "sender",
+      to: "receiver"
+    }
+    allow(client).to receive(:post)
+      .with("/api/v1/networks/network/max-capacity-path-info", body)
+      .and_return("capacity" => "10", "path" => %w[sender receiver])
+    expect(shared_client).to receive(:max_capacity_path_info).with(
+      network_address: "network",
+      from_address: "sender",
+      to_address: "receiver"
+    ).and_return("capacity" => "10", "path" => %w[sender receiver])
+
+    expect(
+      client.max_capacity_path_info(
+        network_address: "network",
+        from_address: "sender",
+        to_address: "receiver"
+      )
+    ).to eq("capacity" => "10", "path" => %w[sender receiver])
+  end
+
   it 'keeps mutating trustline calls on the legacy implementation when shared writes are disabled' do
     allow(Foaf::Config).to receive(:shared_writes?).and_return(false)
     expect(shared_client).not_to receive(:update_trustline)
