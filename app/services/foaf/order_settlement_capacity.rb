@@ -119,6 +119,10 @@ module Foaf
 
     def publish_limit!(trustline)
       Foaf::LedgerHooks.after_trustline_save(trustline, @from_user)
+      # Publisher may generate missing identities through freshly loaded User
+      # records. Refresh the instances passed to the following capacity read.
+      @from_user.reload
+      @to_user.reload
     end
 
     # A successful limit response can become visible to the following read a
