@@ -15,17 +15,7 @@ class Api::V1::FoafController < Api::V1::ApiController
 
     tls = Trustline.where(is_active: true)
       .where("user_a_id = :id OR user_b_id = :id", id: current_user.id)
-    rows = tls.map { |tl| Foaf::AuditService.reconcile_trustline(tl) }
-
-    render json: {
-      summary: {
-        total: rows.size,
-        matches: rows.count { |r| r[:match] == true },
-        discrepancies: rows.count { |r| r[:match] == false },
-        unlinked: rows.count { |r| r[:match].nil? },
-      },
-      trustlines: rows,
-    }
+    render json: Foaf::AuditService.reconcile_trustlines(tls)
   end
 
   # GET /v1/foaf/trustlines/:id
