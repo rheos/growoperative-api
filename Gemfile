@@ -16,7 +16,7 @@ gem 'jwt'
 gem 'jsonapi-serializer'
 gem "foaf_client",
     git: "https://github.com/rheos/foaf-client.git",
-    tag: "v0.1.2",
+    tag: "v0.2.0",
     glob: "gem/*.gemspec"
 
 
