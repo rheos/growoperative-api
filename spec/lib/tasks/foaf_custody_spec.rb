@@ -14,11 +14,12 @@ end
 
 # Seam under test: the foaf_custody:migrate_keys rake task — its state-machine
 # transitions (pending -> migrated, pending -> error), idempotency on re-run
-# (already-migrated skipped; already-adopted custodian returns "noop" then still
-# nulls), and the no-key-in-logs guarantee. The custodian HTTP is stubbed at the
-# task's single injectable adapter seam (`custody_http_adapter`) — no live
-# custodian, no new HTTP-mock gem (mirrors the gem's RemoteSignatureProvider,
-# which injects its adapter the same way).
+# (already-migrated skipped; error users retried; already-adopted custodian
+# returns "noop" then still nulls), and the no-key-in-logs guarantee. The
+# custodian HTTP is stubbed at the task's single injectable adapter seam
+# (`FoafCustodyMigration.custody_http_adapter`) — no live custodian, no new
+# HTTP-mock gem (mirrors the gem's RemoteSignatureProvider, which injects its
+# adapter the same way).
 RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
   # A real key so derive-address parity and the probe-sign verify path exercise
   # the genuine Eth signing/recovery, not a mock of it.
@@ -108,7 +109,7 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
       # Key does not derive the stored address -> parity fails at step (a).
       user = create_user(state: "pending", address: "0x" + ("a" * 40))
       adapter = fake_adapter(migrate_status: "adopted")
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       run_task("migrate_keys")
 
@@ -124,7 +125,7 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
     it "nulls both key and seed and sets custody_state=migrated" do
       user = create_user(state: "pending")
       adapter = fake_adapter(migrate_status: "adopted")
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       run_task("migrate_keys")
 
@@ -139,7 +140,7 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
     it "still nulls both columns and transitions to migrated" do
       user = create_user(state: "pending")
       adapter = fake_adapter(migrate_status: "noop")
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       run_task("migrate_keys")
 
@@ -156,7 +157,7 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
       # Custodian adopts, but the signature it returns recovers to a DIFFERENT
       # address -> verify_by_address fails at step (c).
       adapter = fake_adapter(migrate_status: "adopted", sign: :bad)
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       run_task("migrate_keys")
 
@@ -175,7 +176,7 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
       # no-HTTP assertion below.
       already = create_user(state: "migrated")
       adapter = fake_adapter(migrate_status: "adopted")
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       run_task("migrate_keys")
 
@@ -185,11 +186,31 @@ RSpec.describe "foaf_custody:migrate_keys", type: :task, skip_hooks: true do
     end
   end
 
+  describe "error user retried on re-run (self-heal, W-error)" do
+    it "reprocesses an error user (custodian called) and transitions error -> migrated with both columns nulled" do
+      # A user parked in "error" by a prior transient failure still holds its
+      # key (the error path never nulls it). On re-run it must be picked up
+      # again, not stranded — the migrate scope includes "error", not just
+      # "pending". Narrowing the scope back to ["pending"] makes this fail.
+      user = create_user(state: "error")
+      adapter = fake_adapter(migrate_status: "adopted")
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
+
+      run_task("migrate_keys")
+
+      expect(adapter).to have_received(:request).at_least(:once)
+      user.reload
+      expect(user.custody_state).to eq("migrated")
+      expect(user.foaf_private_key).to be_nil
+      expect(user.foaf_seed_phrase).to be_nil
+    end
+  end
+
   describe "no key material in logs (EC 7 / AC 9)" do
     it "never emits the private key to any captured log or stdout" do
       create_user(state: "pending")
       adapter = fake_adapter(migrate_status: "adopted")
-      allow_any_instance_of(Object).to receive(:custody_http_adapter).and_return(adapter)
+      allow(FoafCustodyMigration).to receive(:custody_http_adapter).and_return(adapter)
 
       logged = []
       allow(Rails.logger).to receive(:info)  { |m| logged << m.to_s }

@@ -49,7 +49,14 @@ namespace :foaf_custody do
     errored  = 0
     would    = 0
 
-    scope = User.where(custody_state: "pending").where.not(foaf_private_key: nil)
+    # Include "error" users so a row parked by a transient custodian 5xx, network
+    # blip, or probe-sign hiccup self-heals on re-run (Prompt 9 re-run contract).
+    # This is safe because the state machine is idempotent and an "error" user
+    # still holds its key (the error path never nulls it): retrying re-runs
+    # parity -> migrate -> verify -> null cleanly, and if the custodian already
+    # adopted the key on a prior partial run the migrate POST returns "noop" and
+    # the null still completes. "migrated" users stay EXCLUDED — they're done.
+    scope = User.where(custody_state: %w[pending error]).where.not(foaf_private_key: nil)
 
     scope.find_each do |user|
       # Read the secret into a local var. From here it is passed by reference
@@ -73,8 +80,8 @@ namespace :foaf_custody do
       end
 
       # Step (b) — hand the key to the custodian (idempotent: adopted|noop).
-      adapter = custody_http_adapter
-      status = post_migrate(auth_url, token, user.foaf_id, priv_key, user.foaf_address, http_adapter: adapter)
+      adapter = FoafCustodyMigration.custody_http_adapter
+      status = FoafCustodyMigration.post_migrate(auth_url, token, user.foaf_id, priv_key, user.foaf_address, http_adapter: adapter)
       unless %w[adopted noop].include?(status)
         user.update_columns(custody_state: "error")
         errored += 1
@@ -84,7 +91,7 @@ namespace :foaf_custody do
 
       # Step (c) — probe-sign through the custodian and verify via the real
       # verify_by_address path (personal_recover -> public_key_to_address).
-      unless custodian_holds_key?(auth_url, token, user.foaf_id, user.foaf_address, http_adapter: adapter)
+      unless FoafCustodyMigration.custodian_holds_key?(auth_url, token, user.foaf_id, user.foaf_address, http_adapter: adapter)
         user.update_columns(custody_state: "error")
         errored += 1
         Rails.logger.warn("[foaf_custody] probe-sign verify failed foaf_id=#{user.foaf_id} — skipped")
@@ -100,7 +107,7 @@ namespace :foaf_custody do
     end
 
     if dry_run
-      puts "DRY_RUN complete — would migrate #{would} pending user(s). No HTTP calls made."
+      puts "DRY_RUN complete — would migrate #{would} pending/error user(s). No HTTP calls made."
     else
       puts "migrate_keys complete — migrated=#{migrated} errors=#{errored}"
     end
@@ -108,7 +115,7 @@ namespace :foaf_custody do
 
   desc "Diff current users.foaf_address against the latest snapshot CSV; exit 1 if any address changed (AC 6)"
   task diff_addresses: :environment do
-    path = latest_snapshot_path
+    path = FoafCustodyMigration.latest_snapshot_path
     raise "No snapshot CSV found in tmp/ — run foaf_custody:snapshot first" if path.nil?
 
     puts "Diffing against snapshot: #{path}"
@@ -152,97 +159,103 @@ namespace :foaf_custody do
 end
 
 # --- Helpers -----------------------------------------------------------------
-# Defined at file scope (rake convention). Both use Foaf::NetHttpAdapter for
-# TLS HTTP. The adapter is injectable so specs can drive the state machine
+# Namespaced in a module (not top-level defs) so they don't become private
+# methods on Object — no global-namespace collision, and specs stub the module
+# method directly instead of allow_any_instance_of(Object). Called from the rake
+# task bodies as FoafCustodyMigration.<helper>(...). All use Foaf::NetHttpAdapter
+# for TLS HTTP; the adapter is injectable so specs can drive the state machine
 # without a live custodian; production uses the default gem adapter.
+module FoafCustodyMigration
+  module_function
 
-# POST the adopted key to the custodian migrate endpoint. Returns the custodian
-# "status" string ("adopted" | "noop" | other). priv_key is a parameter value
-# only — it is JSON-encoded, never interpolated into a log or exception here.
-def post_migrate(auth_url, service_token, foaf_id, priv_key, expected_address, http_adapter: nil)
-  http = http_adapter || Foaf::NetHttpAdapter.new
-  uri  = URI.parse("#{auth_url}/v1/internal/custodian/migrate")
-  body = JSON.generate(
-    foaf_id: foaf_id,
-    adopted_private_key: priv_key,
-    expected_address: expected_address
-  )
+  # POST the adopted key to the custodian migrate endpoint. Returns the custodian
+  # "status" string ("adopted" | "noop" | other). priv_key is a parameter value
+  # only — it is JSON-encoded, never interpolated into a log or exception here.
+  def post_migrate(auth_url, service_token, foaf_id, priv_key, expected_address, http_adapter: nil)
+    http = http_adapter || Foaf::NetHttpAdapter.new
+    uri  = URI.parse("#{auth_url}/v1/internal/custodian/migrate")
+    body = JSON.generate(
+      foaf_id: foaf_id,
+      adopted_private_key: priv_key,
+      expected_address: expected_address
+    )
 
-  response = http.request(
-    method: :post,
-    uri: uri,
-    headers: custodian_headers(service_token),
-    body: body
-  )
+    response = http.request(
+      method: :post,
+      uri: uri,
+      headers: custodian_headers(service_token),
+      body: body
+    )
 
-  return "http_#{response.status}" unless response.status.to_i.between?(200, 299)
+    return "http_#{response.status}" unless response.status.to_i.between?(200, 299)
 
-  JSON.parse(response.body.to_s).fetch("status", "unknown")
-rescue JSON::ParserError
-  "invalid_json"
-rescue StandardError => e
-  "unreachable_#{e.class}"
-end
+    JSON.parse(response.body.to_s).fetch("status", "unknown")
+  rescue JSON::ParserError
+    "invalid_json"
+  rescue StandardError => e
+    "unreachable_#{e.class}"
+  end
 
-# Ask the custodian to sign a per-user probe, then verify the signature recovers
-# to the user's foaf_address (the real verify_by_address path). Returns a Hash:
-# { "signature" => ... } on success, or a status string on failure.
-def probe_sign(auth_url, service_token, foaf_id, expected_address, http_adapter: nil)
-  http = http_adapter || Foaf::NetHttpAdapter.new
-  uri  = URI.parse("#{auth_url}/v1/internal/custodian/sign")
-  body = JSON.generate(foaf_id: foaf_id, exact_body: "<probe-#{foaf_id}>")
+  # Ask the custodian to sign a per-user probe, then verify the signature recovers
+  # to the user's foaf_address (the real verify_by_address path). Returns a Hash:
+  # { "signature" => ... } on success, or a status string on failure.
+  def probe_sign(auth_url, service_token, foaf_id, expected_address, http_adapter: nil)
+    http = http_adapter || Foaf::NetHttpAdapter.new
+    uri  = URI.parse("#{auth_url}/v1/internal/custodian/sign")
+    body = JSON.generate(foaf_id: foaf_id, exact_body: "<probe-#{foaf_id}>")
 
-  response = http.request(
-    method: :post,
-    uri: uri,
-    headers: custodian_headers(service_token),
-    body: body
-  )
+    response = http.request(
+      method: :post,
+      uri: uri,
+      headers: custodian_headers(service_token),
+      body: body
+    )
 
-  return "http_#{response.status}" unless response.status.to_i.between?(200, 299)
+    return "http_#{response.status}" unless response.status.to_i.between?(200, 299)
 
-  JSON.parse(response.body.to_s)
-rescue JSON::ParserError
-  "invalid_json"
-rescue StandardError => e
-  "unreachable_#{e.class}"
-end
+    JSON.parse(response.body.to_s)
+  rescue JSON::ParserError
+    "invalid_json"
+  rescue StandardError => e
+    "unreachable_#{e.class}"
+  end
 
-# True when the custodian returns a signature that recovers to expected_address.
-def custodian_holds_key?(auth_url, service_token, foaf_id, expected_address, http_adapter: nil)
-  result = probe_sign(auth_url, service_token, foaf_id, expected_address, http_adapter: http_adapter)
-  return false unless result.is_a?(Hash)
+  # True when the custodian returns a signature that recovers to expected_address.
+  def custodian_holds_key?(auth_url, service_token, foaf_id, expected_address, http_adapter: nil)
+    result = probe_sign(auth_url, service_token, foaf_id, expected_address, http_adapter: http_adapter)
+    return false unless result.is_a?(Hash)
 
-  signature = result["signature"] || result[:signature]
-  return false if signature.to_s.empty?
+    signature = result["signature"] || result[:signature]
+    return false if signature.to_s.empty?
 
-  exact_body = "<probe-#{foaf_id}>"
-  recovered_public_key = Eth::Signature.personal_recover(exact_body, signature)
-  recovered_address = Eth::Util.public_key_to_address(
-    Eth::Util.hex_to_bin(recovered_public_key)
-  ).to_s
+    exact_body = "<probe-#{foaf_id}>"
+    recovered_public_key = Eth::Signature.personal_recover(exact_body, signature)
+    recovered_address = Eth::Util.public_key_to_address(
+      Eth::Util.hex_to_bin(recovered_public_key)
+    ).to_s
 
-  recovered_address.downcase == expected_address.to_s.downcase
-rescue StandardError
-  false
-end
+    recovered_address.downcase == expected_address.to_s.downcase
+  rescue StandardError
+    false
+  end
 
-def custodian_headers(service_token)
-  {
-    "Accept" => "application/json",
-    "Content-Type" => "application/json",
-    "Authorization" => "Bearer #{service_token}"
-  }
-end
+  def custodian_headers(service_token)
+    {
+      "Accept" => "application/json",
+      "Content-Type" => "application/json",
+      "Authorization" => "Bearer #{service_token}"
+    }
+  end
 
-# Single HTTP seam for the migrate_keys state machine. Production returns the
-# gem's real TLS adapter; specs stub this one method to inject a fake and drive
-# adopted/noop/reject/verify-fail without a live custodian.
-def custody_http_adapter
-  Foaf::NetHttpAdapter.new
-end
+  # Single HTTP seam for the migrate_keys state machine. Production returns the
+  # gem's real TLS adapter; specs stub this one method to inject a fake and drive
+  # adopted/noop/reject/verify-fail without a live custodian.
+  def custody_http_adapter
+    Foaf::NetHttpAdapter.new
+  end
 
-# Latest tmp/foaf_address_snapshot_*.csv by filename (timestamps sort lexically).
-def latest_snapshot_path
-  Dir.glob(Rails.root.join("tmp", "foaf_address_snapshot_*.csv")).max
+  # Latest tmp/foaf_address_snapshot_*.csv by filename (timestamps sort lexically).
+  def latest_snapshot_path
+    Dir.glob(Rails.root.join("tmp", "foaf_address_snapshot_*.csv")).max
+  end
 end
