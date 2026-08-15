@@ -44,6 +44,45 @@ class Api::V1::ApiController < ApplicationController
     @current_user = user
   end
 
+  # Decoded FOAF JWT claims for the current request (string keys), or nil when
+  # unauthenticated. Reuses the already-verified payload so no token is decoded
+  # twice. auth.foaf.io RS256 tokens are the source of the `foaf_address` claim;
+  # legacy HS256 bridge tokens carry no address and read as blank (see Task B).
+  def current_foaf_claims
+    current_jwt_payload
+  end
+
+  # Single read/display resolver for the current user's own FOAF ledger address
+  # (Phase 5, one-address-per-identity, Prompt 7). Reads-first / shadow-only:
+  #
+  #   * Behind FOAF_SHARED_READS, prefer the address carried on the verified JWT
+  #     claim and shadow-diff it against users.foaf_address, logging any mismatch
+  #     (Task A). Zero mismatches on demo confirms the invariant before any key
+  #     move. No signing source changes and no key moves in this phase.
+  #   * A token that carries no foaf_address claim while the user already has an
+  #     address on file is stale (issued before the address was minted/populated).
+  #     Log it (Task B). Reads are NOT blocked here; the mutation block is Phase 7.
+  #   * With the flag off, behavior is unchanged: return the DB address.
+  #
+  # This is a shadow read only. Ledger operations still use users.foaf_address
+  # until the key move lands (Prompt 9).
+  def current_foaf_address
+    db_address = current_user&.foaf_address
+    return db_address unless Foaf::Config.shared_reads? && current_foaf_claims.present?
+
+    claim_address = current_foaf_claims["foaf_address"] # string key (W3)
+
+    if claim_address.blank? && db_address.present?
+      Rails.logger.warn("[FOAF_SHARED_READS] stale token for foaf_id=#{current_user&.foaf_id} — no foaf_address claim")
+    elsif claim_address.present? && claim_address.downcase != db_address.to_s.downcase
+      Rails.logger.warn("[FOAF_SHARED_READS] address mismatch for foaf_id=#{current_user&.foaf_id}: claim=#{claim_address} db=#{db_address}")
+    end
+
+    # Reads-first/shadow-only: prefer the claim for display, but ledger
+    # operations still resolve users.foaf_address until the Phase 6 key move.
+    claim_address.presence || db_address
+  end
+
   def clear_legacy_jwt_cookie!
     clear_jwt_cookie!
   end
@@ -75,6 +114,11 @@ class Api::V1::ApiController < ApplicationController
       email_verified_at: (user.respond_to?(:email_verified_at) ? user.email_verified_at&.iso8601 : nil),
       pending_email: (user.respond_to?(:pending_email) ? user.pending_email : nil),
       avatar_url: user.avatar_url,
+      # FOAF ledger address for display. Behind FOAF_SHARED_READS this resolves
+      # from the JWT claim (shadow-diffed against the DB); otherwise from the DB.
+      # Resolver only shadow-diffs the *current* user's own address, so fall back
+      # to the passed user's DB address for any non-current-user identity payload.
+      foaf_address: (user == current_user ? current_foaf_address : user.foaf_address),
       created_at: user.created_at&.iso8601,
       updated_at: user.updated_at&.iso8601,
     }
