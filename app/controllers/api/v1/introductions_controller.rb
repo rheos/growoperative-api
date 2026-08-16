@@ -112,23 +112,25 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
     # W1 — cross-introduction same-pair race. `introduction.with_lock` (below) serializes only on
     # THIS introduction row. Two DIFFERENT introductions (different introducers, SAME {B,C} pair)
     # could complete concurrently, lock different introduction rows, and both `find_or_create_by!`
-    # → two accepted Relationship rows in a table with no pair-unique index. Close it with a MySQL
+    # → two accepted Relationship rows in a table with no pair-unique index. Close it with a PG
     # advisory lock keyed on the sorted pair, acquired BEFORE `with_lock` and released AFTER the
     # transaction COMMITS (in the ensure). Bracketing the commit is the whole point: a concurrent
     # same-pair session can only take the lock once ours is released post-commit, so its txn begins
     # after ours committed and its `find_or_create_by!` SEES our row instead of inserting a second.
     # (Releasing inside the txn would let the other session read before our INSERT is visible.)
-    # GET_LOCK names are MySQL server-scoped → the `go:intro:rel:` prefix keeps them collision-safe
-    # (≤64 chars). Acquiring on every accept is fine — cheap, short hold, only contends on genuine
-    # same-pair concurrency.
-    low_id, high_id = [introduction.introducee_a_id, introduction.introducee_b_id].minmax
-    lock_name = "go:intro:rel:#{low_id}:#{high_id}"
+    # pg_try_advisory_lock(low_id, high_id): two-int session-scoped lock on the sorted pair.
+    # SHARED with connection_requests_controller on the same key, so concurrent introduction-accept
+    # and connect-request on the same pair serialize correctly.
+    # Capture the acquire key in IMMUTABLE locals used ONLY for acquire + release. Do NOT reuse these
+    # names inside the block — the ensure below must unlock the exact key we locked, even though a
+    # later `low_id`/`high_id` (the Relationship pair) is computed for a different purpose. (W2 fix:
+    # previously the release reused `low_id`/`high_id` which got reassigned to [b.id, c.id] inside the
+    # block, so the ensure could unlock the wrong key and leak the acquired lock.)
+    lock_lo, lock_hi = [introduction.introducee_a_id, introduction.introducee_b_id].minmax
     conn = ActiveRecord::Base.connection
-    got = conn.select_value("SELECT GET_LOCK(#{conn.quote(lock_name)}, 5)")
-    if got.to_i != 1
-      # Timeout (0) or error (NULL) — essentially unreachable since completion is sub-second. The
-      # advisory lock brackets the entire with_lock, so on failure accept_for! never ran either;
-      # the user simply retries the accept. Fail closed with a retryable error.
+    got = conn.select_value("SELECT pg_try_advisory_lock(#{lock_lo}, #{lock_hi})")
+    unless got
+      # Lock not acquired — another session holds it. Fail closed with a retryable error.
       return render json: { message: "Couldn't complete right now, please try again." }, status: :service_unavailable
     end
 
@@ -151,8 +153,8 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
           # If a prior Relationship already exists between B and C, find_or_create_by! matches on
           # (user_id, friend_id) and returns that row as-is (its status is ignored by the match), so
           # we may need to upgrade it.
-          low_id, high_id = [b.id, c.id].minmax
-          rel = Relationship.find_or_create_by!(user_id: low_id, friend_id: high_id) do |r|
+          rel_lo, rel_hi = [b.id, c.id].minmax
+          rel = Relationship.find_or_create_by!(user_id: rel_lo, friend_id: rel_hi) do |r|
             r.status = :accepted
             r.action_user_id = introduction.introducer_id
           end
@@ -169,9 +171,12 @@ class Api::V1::IntroductionsController < Api::V1::ApiController
         end
       end
     ensure
-      # Always release. RELEASE_LOCK on a lock this session holds returns 1. Runs after the
-      # with_lock transaction commits (or after an early `return`/raise inside the block).
-      conn.execute("SELECT RELEASE_LOCK(#{conn.quote(lock_name)})")
+      # Always release the EXACT key we acquired (lock_lo/lock_hi — never the block's rel_lo/rel_hi).
+      # pg_advisory_unlock on a lock this session holds returns true. Runs after the with_lock
+      # transaction commits (or after an early `return`/raise inside the block). Assert the release
+      # succeeded so a leaked lock (wrong key or double-release) is loud, not silent.
+      released = conn.select_value("SELECT pg_advisory_unlock(#{lock_lo}, #{lock_hi})")
+      Rails.logger.warn("[introductions] advisory unlock returned false for (#{lock_lo},#{lock_hi}) — possible lock leak") unless released
     end
 
     # --- After the lock block commits (advisory pair lock released; no row lock held across network calls) ---

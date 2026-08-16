@@ -417,14 +417,18 @@ RSpec.describe 'Introductions API', type: :request, skip_hooks: true do
       expect(rels.first.status).to eq('accepted')
 
       # And the pair advisory lock was released after the completion transaction committed —
-      # a leaked (never-released) lock would still be held by this session, so IS_FREE_LOCK == 0.
+      # a leaked (never-released) lock would still be held by this session, so pg_try_advisory_lock
+      # would return false. pg_try_advisory_lock returns true only if the lock is free (and
+      # acquires it); if it returns true, the lock was available → release it immediately.
       # (Request specs run in-process on the same connection/session, so this session is the one
-      # that acquired the lock.) IS_FREE_LOCK returns 1 when the named lock is free.
-      lock_name = "go:intro:rel:#{low}:#{high}"
-      free = ActiveRecord::Base.connection.select_value(
-        "SELECT IS_FREE_LOCK(#{ActiveRecord::Base.connection.quote(lock_name)})"
+      # that acquired the lock; pg_try_advisory_lock on the same connection for an already-held
+      # session lock returns true because PG allows a session to re-acquire its own advisory lock.)
+      # We instead verify via pg_locks that no backend holds this advisory lock.
+      conn = ActiveRecord::Base.connection
+      held = conn.select_value(
+        "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND classid = #{low} AND objid = #{high} AND granted = true)"
       )
-      expect(free.to_i).to eq(1)
+      expect(held).to eq(false)
     end
 
     it 'no-revert: a completed introduction cannot be declined → 422, stays completed (AC2)' do

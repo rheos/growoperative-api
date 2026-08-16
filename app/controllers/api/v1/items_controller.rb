@@ -12,7 +12,7 @@ module Api::V1
       range_degree = (params[:range_degree] || ENV['range_degree'] || 0).to_i
       
       # EXCLUDE CONSUMERS FROM HERE && REQUEST CHAIN
-      relationships = Relationship.where("(user_id=#{current_user.id} AND friend_actions_state < 2 AND (actions_state = 0 || actions_state = 2)) OR (friend_id=#{current_user.id} AND actions_state < 2 AND (friend_actions_state = 0 || friend_actions_state = 2))")
+      relationships = Relationship.where("(user_id=#{current_user.id} AND friend_actions_state < 2 AND (actions_state = 0 OR actions_state = 2)) OR (friend_id=#{current_user.id} AND actions_state < 2 AND (friend_actions_state = 0 OR friend_actions_state = 2))")
 
       if (!current_user.is_producer? && relationships.count > 0 && range_degree > 0) || (params[:dashboard_type] == 'consumer')
         users = relationships.pluck(:user_id, :friend_id).flatten!.uniq
@@ -32,7 +32,7 @@ module Api::V1
           @items = Inventory.where("(inventories.user_id IN (?) AND inventories.quantity > 0 AND inventories.status = 1 AND inventories.user_id != #{current_user.id}) OR (inventories.user_id IN (?) AND inventories.status = 2 AND inventories.user_id != #{current_user.id} AND (
             (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id
             AND (request_contracts.status = 0 OR request_contracts.status = 3)
-            AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE (item_requests.status = 1) AND item_requests.sent = 0 AND item_requests.user_id = #{current_user.id}) > 0)
+            AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE item_requests.status = 1 AND item_requests.sent = false AND item_requests.user_id = #{current_user.id}))
           ))", users, users).uniq
 
           # if params[:dashboard_type] == 'consumer'
