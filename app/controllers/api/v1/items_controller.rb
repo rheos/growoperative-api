@@ -33,7 +33,7 @@ module Api::V1
             (SELECT COUNT(id) FROM request_contracts WHERE request_contracts.inventory_id = inventories.id
             AND (request_contracts.status = 0 OR request_contracts.status = 3)
             AND request_contracts.id IN (SELECT request_contract_id FROM item_requests WHERE item_requests.status = 1 AND item_requests.sent = false AND item_requests.user_id = #{current_user.id}))
-          ))", users, users).uniq
+          ) > 0)", users, users).uniq
 
           # if params[:dashboard_type] == 'consumer'
           #   @items = @items.select{ |item| item.generate_options.length > 0}
