@@ -19,7 +19,7 @@ module Api::V1
           request_contracts.unit AS unit,
           inventories.item_id,
           inventories.user_id AS inventory_owner_id,
-          IF(request_contracts.user_id = item_requests.user_id, 1, 0) AS need_sign
+          CASE WHEN request_contracts.user_id = item_requests.user_id THEN 1 ELSE 0 END AS need_sign
         ")
         .where("
           (item_requests.user_id=#{current_user.id} OR item_requests.friend_id=#{current_user.id}) AND
