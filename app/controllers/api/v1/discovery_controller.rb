@@ -108,11 +108,19 @@ module Api::V1
       # real users never see demo users.
       base = current_user.demo? ? base.where(id: User.demo.select(:id)) : base.where.not(id: User.demo.select(:id))
 
-      # Centroid-to-centroid great-circle distance, in km. Sanitized SQL so
-      # the origin coordinates can never be an injection vector.
-      # ST_Distance_Sphere(POINT(lng, lat), ...) — longitude first, latitude second.
+      # Centroid-to-centroid great-circle distance, in km. Raw haversine formula in plain SQL —
+      # no PostGIS extension required (works on Neon as-is). Sanitized SQL so the origin
+      # coordinates can never be an injection vector.
+      # Haversine: 6371 * 2 * asin(sqrt(sin²(Δlat/2) + cos(lat1)*cos(lat2)*sin²(Δlng/2)))
+      # Args (in order of ? placeholders): origin_lat, origin_lat, origin_lng
       sql_dist = ActiveRecord::Base.sanitize_sql_array(
-        ['ST_Distance_Sphere(POINT(longitude, latitude), POINT(?, ?)) / 1000.0', origin_lng, origin_lat]
+        [
+          '6371.0 * 2 * asin(sqrt(' \
+            'power(sin(radians(latitude - ?) / 2), 2) + ' \
+            'cos(radians(?)) * cos(radians(latitude)) * power(sin(radians(longitude - ?) / 2), 2)' \
+          '))',
+          origin_lat, origin_lat, origin_lng
+        ]
       )
 
       members = base

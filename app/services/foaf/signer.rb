@@ -6,6 +6,12 @@
 # IMPORTANT: This entire module is swappable.
 
 module Foaf
+  # Raised when signing cannot proceed and there is no safe path forward:
+  # a migrated user reaches the legacy branch with a nulled local key, or a
+  # pending user has no local key. There is NO silent nil-signature fallback
+  # (EC 5). Custodian-side failures surface as Foaf::Custodian::SigningError.
+  class SigningError < StandardError; end
+
   module Signer
     module_function
 
@@ -42,15 +48,46 @@ module Foaf
       end
     end
 
-    # Sign a payload with the user's private key.
+    # Sign a payload for a user.
+    #
+    # Routing (spec R3 / EC 4 — never mix sources for one user):
+    #   custody_state == "migrated" -> ALWAYS the shared custodian, even if
+    #     FOAF_SHARED_WRITES is false. The local key is nulled post-migration;
+    #     the flag gates the START of the cutover, not the continuity after it.
+    #   custody_state != "migrated" -> the legacy local-key path.
+    #
+    # EC 5 fail-fast: no silent nil-signature. A pending user with no local key
+    # raises Foaf::SigningError; a custodian failure raises
+    # Foaf::Custodian::SigningError. Neither is swallowed, neither falls back.
+    #
+    # The (user, payload) signature is unchanged so all call sites keep working
+    # (FR 13); only the path taken for migrated users differs.
     def sign(user, payload)
-      ensure_keypair!(user)
-      return nil unless user.foaf_private_key.present?
+      if user.custody_state == "migrated"
+        sign_via_custodian(user, payload)
+      else
+        # Legacy path: local key in DB (only for custody_state != "migrated").
+        if user.foaf_private_key.blank?
+          raise Foaf::SigningError,
+                "no local key and custodian not enabled for user #{user.foaf_id}"
+        end
 
-      Foaf::LedgerSigner.sign(user.foaf_private_key, payload)
-    rescue StandardError => e
-      Rails.logger.warn("[FOAF Signer] Signing failed: #{e.message}")
-      nil
+        ensure_keypair!(user)
+        Foaf::LedgerSigner.sign(user.foaf_private_key, payload)
+      end
+    end
+
+    # Route signing to the shared FOAF custodian over HTTPS. The custodian
+    # resolves the key from foaf_id (one address per identity); signer_address
+    # is forwarded but ignored server-side. Raises Foaf::Custodian::SigningError
+    # on a non-2xx or network failure — there is no local-key fallback (EC 5).
+    def sign_via_custodian(user, payload)
+      provider = Foaf::Custodian::RemoteSignatureProvider.new(
+        base_url: ENV.fetch("FOAF_AUTH_URL"),
+        service_token: ENV.fetch("FOAF_AUTH_SERVICE_TOKEN_GROWOP"),
+        foaf_id: user.foaf_id
+      )
+      provider.call(user.foaf_address, payload)
     end
   end
 end

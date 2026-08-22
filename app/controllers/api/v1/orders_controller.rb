@@ -38,7 +38,7 @@ module Api::V1
         render json: { orders: orders || [] }, status: 200
       else
         item = Inventory.find(order_params[:user_id])
-        request = ItemRequest.joins(:request_contract).where("item_requests.status = 1 AND request_contracts.inventory_id = #{item.id} && item_requests.friend_id = #{order_params[:friend_id]}")
+        request = ItemRequest.joins(:request_contract).where("item_requests.status = 1 AND request_contracts.inventory_id = #{item.id} AND item_requests.friend_id = #{order_params[:friend_id]}")
 
         if request.first.nil?
           render :json=> {error: 'Unable to create order! This requests are finished'}, :status=>422

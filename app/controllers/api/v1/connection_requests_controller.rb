@@ -57,12 +57,14 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
     end
 
     low_id, high_id = [me.id, friend_id].minmax
-    lock_name = "go:intro:rel:#{low_id}:#{high_id}"
+    # Dedicated immutable lock key for acquire + release, decoupled from the Relationship pair
+    # (low_id/high_id) so a future edit that reassigns those cannot leak the acquired lock (W2).
+    lock_lo, lock_hi = low_id, high_id
     conn = ActiveRecord::Base.connection
-    got  = conn.select_value("SELECT GET_LOCK(#{conn.quote(lock_name)}, 5)")
-    if got.to_i != 1
-      # Timeout (0) or error (NULL) — essentially unreachable since the write is sub-second.
-      # Fail closed with a retryable error; the user simply retries.
+    got  = conn.select_value("SELECT pg_try_advisory_lock(#{lock_lo}, #{lock_hi})")
+    unless got
+      # Lock not acquired — another session holds it. Fail closed with a retryable error;
+      # the user simply retries.
       return render json: { message: "Couldn't complete right now, please try again." },
                     status: :service_unavailable
     end
@@ -103,8 +105,10 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
       render json: { id: result.id, status: result.status },
              status: (was_created ? :created : :ok)
     ensure
-      # Always release — runs after the transaction commits, or on any early return/raise above.
-      conn.execute("SELECT RELEASE_LOCK(#{conn.quote(lock_name)})")
+      # Always release the EXACT acquired key (lock_lo/lock_hi) — runs after the transaction commits,
+      # or on any early return/raise above. Assert the release so a leaked lock is loud, not silent.
+      released = conn.select_value("SELECT pg_advisory_unlock(#{lock_lo}, #{lock_hi})")
+      Rails.logger.warn("[connection_requests] advisory unlock returned false for (#{lock_lo},#{lock_hi}) — possible lock leak") unless released
     end
   end
 

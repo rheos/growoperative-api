@@ -26,7 +26,7 @@ class ItemRequest < ApplicationRecord
   #attribs
   enum status: [ :pending, :accepted, :completed, :cancelled, :reserved ]
 
-  scope :with_inventory_data, -> { joins("INNER JOIN `request_contracts` ON `request_contracts`.`id` = `item_requests`.`request_contract_id` INNER JOIN `inventories` ON `inventories`.`id` = `request_contracts`.`inventory_id`") }
+  scope :with_inventory_data, -> { joins("INNER JOIN request_contracts ON request_contracts.id = item_requests.request_contract_id INNER JOIN inventories ON inventories.id = request_contracts.inventory_id") }
 
   # "Accept all" fires concurrent accepts that contend on the same source
   # inventory row and the same seller User row (locked in find_or_create_pending),
