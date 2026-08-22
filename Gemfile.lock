@@ -1,10 +1,10 @@
 GIT
   remote: https://github.com/rheos/foaf-client.git
-  revision: 443cf6af221992474e5c766e956d4e6155a67ead
-  tag: v0.1.2
+  revision: 4ab116bf5704115fb9945ca3cb533a637c995746
+  tag: v0.2.0
   glob: gem/*.gemspec
   specs:
-    foaf_client (0.1.2)
+    foaf_client (0.2.0)
       eth (~> 0.5)
       jwt (>= 2.7, < 3)
 
@@ -277,8 +277,6 @@ GEM
     msgpack (1.8.0)
     multi_json (1.15.0)
     mutex_m (0.3.0)
-    mysql2 (0.5.7)
-      bigdecimal
     net-imap (0.6.6)
       date
       net-protocol
@@ -294,6 +292,7 @@ GEM
     observer (0.1.2)
     openssl (3.3.3)
     orm_adapter (0.5.0)
+    pg (1.6.3-x86_64-linux)
     pkg-config (1.6.5)
     pp (0.6.4)
       prettyprint
@@ -476,8 +475,8 @@ DEPENDENCIES
   jsonapi-serializer
   jwt
   listen (~> 3.8)
-  mysql2 (~> 0.5, >= 0.5.6)
   nokogiri (>= 1.15)
+  pg (~> 1.5)
   pry-byebug (~> 3.10)
   pry-rails (~> 0.3)
   pry-stack_explorer (~> 0.4)
