@@ -49,6 +49,15 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
       transfer(value: 30.0, block: 102, ts: 1_000_100),
     ])
     allow(fake_client).to receive(:trustline_events).and_return([])
+    # Authoritative FOAF balance for the default 2-event scenario: canonical
+    # -80 => user_a owes user_b 80, matching the events' sum-from-zero. Reconcile
+    # specs override this per-example.
+    allow(fake_client).to receive(:user_trustlines).and_return([{
+      'counterParty' => canonical_user_b.foaf_address,
+      'balance' => -80,
+      'given' => 100,
+      'received' => 100,
+    }])
   end
 
   after(:each) { DatabaseCleaner.clean_with(:truncation) }
@@ -137,6 +146,33 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
       b_amounts = from_b[:rows].map { |r| r[:transaction][:amount] }
       expect(a_amounts).to eq([30.0, 50.0])
       expect(b_amounts).to eq([30.0, 50.0])
+    end
+
+    it 'anchors the newest row to the FOAF balance even when the event feed is truncated' do
+      # FOAF caps /users/:addr/events at the 100 most recent events. Simulate the
+      # oldest transfer having fallen off the feed: only the +30 event comes back,
+      # but FOAF's authoritative balance is still +80. The running column must
+      # reconcile to the balance (80), not the truncated sum-from-zero (30) — this
+      # is the regression: previously it rendered 30 and drifted as events aged.
+      allow(fake_client).to receive(:user_events).and_return([
+        transfer(value: 30.0, block: 102, ts: 1_000_100),
+      ])
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      newest = result[:rows].first
+
+      expect(newest[:transaction][:balance_after]).to eq(80.0)
+      expect(newest[:balance_before]).to eq(50.0)
+    end
+
+    it 'falls back to summing from zero when the FOAF balance is unavailable' do
+      allow(fake_client).to receive(:user_trustlines).and_return(nil)
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      newest, oldest = result[:rows]
+
+      expect(oldest[:transaction][:balance_after]).to eq(50.0)
+      expect(newest[:transaction][:balance_after]).to eq(80.0)
     end
 
     it 'attributes mirrored settlement transfers to the actual payer' do
