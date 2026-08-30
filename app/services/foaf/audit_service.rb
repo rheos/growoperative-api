@@ -169,22 +169,57 @@ module Foaf
 
       rows.sort_by! { |r| [r[:transaction][:created_at], r[:transaction][:id]] }
 
-      running = 0.0
-      rows.each do |row|
+      # Per-row balance delta in canonical (user_a) sign: a "sent" transfer moves
+      # the balance up, "received" down; zero-amount rows (limit updates) are
+      # balance-neutral. Computed up front because the balance walk below mutates
+      # the rows and drops :_direction.
+      deltas = rows.map do |row|
         tx = row[:transaction]
-        row[:balance_before] = running
-        # Zero-amount rows (trustline limit updates) are balance-neutral.
-        # Anything with a real amount — including record_debt / record_receipt
-        # adjustments — moves the balance by `value` in the transfer's direction.
-        if tx[:amount].to_f == 0
-          tx[:balance_after] = running
-        else
-          delta = tx[:_direction] == "sent" ? tx[:amount] : -tx[:amount]
-          running += delta
-          tx[:balance_after] = running
-        end
-        tx.delete(:_direction)
+        tx[:amount].to_f == 0 ? 0.0 : (tx[:_direction] == "sent" ? tx[:amount].to_f : -tx[:amount].to_f)
       end
+
+      # Anchor the running balance to FOAF's authoritative trustline balance and
+      # walk backward from the newest row, instead of summing the event feed from
+      # zero. FOAF's /users/:addr/events feed is capped at the 100 most recent
+      # events, so once a user accrues >100 events the oldest silently fall off
+      # and a sum-from-zero drifts by whatever was truncated (and re-skews as new
+      # events push more off the window). Anchoring to the single authoritative
+      # balance keeps the newest row equal to what the card shows and is immune to
+      # feed truncation.
+      anchor = foaf_canonical_balance(client, network_address, user_a, user_b)
+
+      if anchor
+        running = anchor
+        (rows.length - 1).downto(0) do |i|
+          tx = rows[i][:transaction]
+          tx[:balance_after] = running
+          rows[i][:balance_before] = running - deltas[i]
+          running -= deltas[i]
+        end
+
+        # Truncation signal: a complete feed sums from zero to the anchor. A gap
+        # means FOAF truncated the event feed — the displayed column is still
+        # correct (it's anchored), but surface the cap instead of hiding it.
+        zero_sum = deltas.sum
+        if (zero_sum - anchor).abs > 0.005
+          Rails.logger.warn(
+            "[Foaf::AuditService] events_for_trustline: FOAF event feed truncated for " \
+            "trustline #{trustline.id} — anchored=#{anchor} sum_from_zero=#{zero_sum} " \
+            "missing=#{(anchor - zero_sum).round(2)} across #{rows.length} returned rows"
+          )
+        end
+      else
+        # FOAF balance unavailable — fall back to summing from zero so a history
+        # still renders (prior behavior; may skew if the feed was truncated).
+        running = 0.0
+        rows.each_with_index do |row, i|
+          row[:balance_before] = running
+          running += deltas[i]
+          row[:transaction][:balance_after] = running
+        end
+      end
+
+      rows.each { |row| row[:transaction].delete(:_direction) }
 
       # Flip canonical (user_a perspective) balances to viewer-perspective —
       # same convention as Trustline#notional_balance_for. Storage stays canonical;
@@ -201,6 +236,23 @@ module Foaf
     end
 
     private
+
+    # FOAF's authoritative balance for this edge, in canonical (user_a) sign
+    # (positive = user_a owes user_b), matching Trustline#notional_balance_for.
+    # Same read path as reconcile_trustline / Foaf::BalanceReader. Returns nil if
+    # FOAF is unreachable or the trustline isn't found, so callers can fall back.
+    def foaf_canonical_balance(client, network_address, user_a, user_b)
+      foaf_tls = client.user_trustlines(
+        network_address: network_address,
+        user_address: user_a.foaf_address,
+      )
+      return nil unless foaf_tls
+
+      foaf_tl = foaf_tls.find { |ft| ft["counterParty"] == user_b.foaf_address }
+      return nil unless foaf_tl
+
+      -foaf_tl["balance"].to_f
+    end
 
     def parse_extra_data(data)
       return {} if data.blank?
