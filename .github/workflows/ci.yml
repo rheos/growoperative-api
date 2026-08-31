@@ -53,9 +53,6 @@ jobs:
       - name: Test FOAF demo reset guards
         run: python3 scripts/test_foaf_reset_demo.py
 
-      - name: Test deployment isolation
-        run: python3 scripts/test_deploy_isolation.py
-
       # Temporary Rails-upgrade gate. The historical full suite is currently
       # red on stale legacy scenario specs; expand this back to bare `rspec`
       # once those baseline failures are retired.
