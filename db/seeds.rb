@@ -24,6 +24,12 @@ def generate_global_setting
   degree = GlobalSetting.find_or_initialize_by(setting: "RangeDegree")
   degree.value = 4
   degree.save
+  GlobalSetting.find_or_create_by!(setting: "MinimumIosBuildNumber") { |s| s.value = 0 }
+  GlobalSetting.find_or_create_by!(setting: "MinimumAndroidVersionCode") { |s| s.value = 0 }
+  GlobalSetting.find_or_create_by!(setting: "RequiredUpdateMessage") do |s|
+    s.value = 0
+    s.string_value = "This version of GrowOperative is no longer compatible. Please update to continue."
+  end
 end
 generate_global_setting
 
