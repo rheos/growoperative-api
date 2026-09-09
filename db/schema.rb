@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 201811070122202) do
+ActiveRecord::Schema[7.1].define(version: 2026_09_09_000000) do
   create_table "audit_logs", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.string "action", null: false
     t.string "status", default: "succeeded", null: false
@@ -581,6 +581,9 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.datetime "location_updated_at", precision: nil
     t.integer "discovery_radius_km"
     t.string "custody_state", default: "pending"
+    t.text "about"
+    t.string "area_label"
+    t.text "offering"
     t.index ["custody_state"], name: "index_users_on_custody_state"
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["disabled_at"], name: "index_users_on_disabled_at"
