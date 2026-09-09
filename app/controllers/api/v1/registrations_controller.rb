@@ -13,6 +13,10 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
     # then link the local row via the returned foaf_id.
     attrs = sign_up_params
     user = User.new(attrs)
+    # Open registration creates a new root in the invitation chain. The
+    # database default is the terminal chain depth (3), which would let this
+    # user register but prevent anyone they invite from joining.
+    user.depth = 0 if user.invited_code.blank?
     unless user.valid?
       warden.custom_failure!
       return render json: user.errors, status: 422
@@ -52,6 +56,9 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       Rails.logger.error("local User.save failed after auth.foaf.io signup created foaf_id=#{foaf_id}: #{user.errors.full_messages}")
       return render json: user.errors, status: 422
     end
+    # Invite-less members start as independent brokers; only their social graph
+    # and subnet start empty.
+    user.user_groups.find_or_create_by!(group_label: 'broker') if user.invited_code.blank?
 
     clear_legacy_jwt_cookie!
     render json: UserSerializer.new(user).serializable_hash.merge(
@@ -80,6 +87,9 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
       permitted[:invited_code] = permitted[:invite_code]
     end
     permitted.delete(:invite_code)
+    # Empty strings are truthy in Ruby. Persisting one would make
+    # User#set_relationship try to dereference a non-existent invitation.
+    permitted[:invited_code] = permitted[:invited_code].presence
     # User model has a single :name column — combine first/last if present.
     if permitted[:name].blank? && (permitted[:first_name].present? || permitted[:last_name].present?)
       permitted[:name] = [permitted[:first_name], permitted[:last_name]].compact.reject(&:empty?).join(" ")
@@ -91,6 +101,10 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
 
   def invitation_limit
     code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
+    # Open registration: a missing code creates an unconnected account. Any
+    # supplied code still follows the existing strict validation below.
+    return if code.blank?
+
     invitation = Invitation.find_by_code(code)
 
     if invitation.nil?
@@ -120,6 +134,8 @@ class Api::V1::RegistrationsController < Api::V1::ApiController
 
   def check_chain_limit
     code = params[:invited_code] || params.dig(:user, :invite_code) || params.dig(:user, :invited_code)
+    return if code.blank?
+
     global_setting = GlobalSetting.find_by(setting: "ChainLimit")
     invited_user = Invitation.find_by_code(code)&.user
 
