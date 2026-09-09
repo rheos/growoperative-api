@@ -20,6 +20,7 @@ Rails.application.routes.draw do
       post 'signup' => 'registrations#create'
       resource :sessions, only: %i[show create destroy]
       get 'profile' => 'users#app_profile'
+      get 'app_version_policy' => 'app_version_policy#show'
 
       # Job 49 — OAuth provider login. Thin proxy to foaf-auth's
       # /v1/oauth/* surface; the app talks only to railsbackend for
@@ -224,6 +225,8 @@ Rails.application.routes.draw do
       get  'admin/users'                         => 'admin/users#index'
       get  'admin/users/:foaf_id'                => 'admin/users#show'
       post 'admin/users/:foaf_id/reset_password' => 'admin/users#reset_password'
+      get   'admin/app_version_policy' => 'app_version_policy#admin_show'
+      patch 'admin/app_version_policy' => 'app_version_policy#update'
 
       get 'site_config' => 'site_configs#show'
       resources :subnets, only: [:index] do

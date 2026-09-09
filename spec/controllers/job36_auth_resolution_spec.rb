@@ -117,6 +117,21 @@ RSpec.describe 'Job 36 auth.foaf.io token resolution', type: :request do
     expect(user.user_groups.pluck(:group_label)).to include('consumer')
   end
 
+  it 'creates an unconnected root profile at depth zero when onboarding has no invite' do
+    foaf_id = SecureRandom.uuid
+
+    post '/v1/onboarding',
+      params: {},
+      env: auth_headers(rs256_token(sub: foaf_id, overrides: { user_name: 'job36_open_root' }))
+
+    expect(response).to have_http_status(:ok)
+    user = User.find_by!(foaf_id: foaf_id)
+    expect(user.depth).to eq(0)
+    expect(user.user_groups.pluck(:group_label)).to eq(['broker'])
+    expect(user.subnet_memberships).to be_empty
+    expect(Relationship.where('user_id = ? OR friend_id = ?', user.id, user.id)).to be_empty
+  end
+
   it 'rejects a token whose local profile is deleted' do
     user = User.create!(user_name: 'job36_deleted', password: password, password_confirmation: password)
     user.update!(deleted_at: Time.current)
