@@ -273,6 +273,24 @@ RSpec.describe 'Discovery API', type: :request, skip_hooks: true do
       expect(member['role']).not_to be_nil
     end
 
+    # Enriched profiles (Plan 30): the member card carries the recognition
+    # fields so a stranger is more than a handle + avatar.
+    it 'includes the enriched profile fields (about, area_label, offering) on a member card' do
+      locate!(caller, 45.0, -73.0)
+      target.update!(about: 'Grows heirloom tomatoes.', area_label: 'Crawford Bay, BC', offering: 'Tomatoes, honey, eggs.')
+      locate!(target, 45.01, -73.01)
+      opt_in!(target)
+
+      get '/v1/discovery/nearby', headers: auth_headers(caller)
+
+      member = body['members'].find { |m| m['id'] == target.id }
+      expect(member).to include(
+        'about' => 'Grows heirloom tomatoes.',
+        'area_label' => 'Crawford Bay, BC',
+        'offering' => 'Tomatoes, honey, eggs.'
+      )
+    end
+
     it 'never includes the caller in their own results (self-exclusion)' do
       locate!(caller, 45.0, -73.0)
       opt_in!(caller)
