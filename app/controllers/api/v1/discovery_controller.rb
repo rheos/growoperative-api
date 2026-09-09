@@ -85,8 +85,12 @@ module Api::V1
       origin_lat = current_user.latitude.to_f
       origin_lng = current_user.longitude.to_f
       radius_km  = (current_user.discovery_radius_km || 5).to_i
+      # Freshness window: hide members whose last location share is older than
+      # this. Tunable at runtime via the DiscoveryStalenessDays GlobalSetting;
+      # defaults to 90 days when unset. (Was 30, which silently hid every
+      # opted-in member once nothing refreshed their location — see issue #42.)
       staleness  = GlobalSetting.find_by(setting: 'DiscoveryStalenessDays')&.value.to_i
-      staleness  = 30 if staleness.nil? || staleness.zero?
+      staleness  = 90 if staleness.nil? || staleness.zero?
       cutoff     = staleness.days.ago
 
       # Bounding-box prefilter — rides the composite [latitude, longitude]
