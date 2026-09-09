@@ -198,7 +198,7 @@ class Api::V1::ApiController < ApplicationController
     sub if sub.is_a?(String) && sub.present?
   end
 
-  def ensure_local_user_for_current_identity!
+  def ensure_local_user_for_current_identity!(initial_depth: nil, initial_group_label: nil)
     return current_user if current_user
     return unless profileless_onboarding_request?
 
@@ -209,17 +209,25 @@ class Api::V1::ApiController < ApplicationController
     email = current_jwt_payload['email'].to_s.downcase.presence
     email_available = email && !User.default_scoped.where.not(foaf_id: foaf_id).exists?(email: email)
 
+    created = false
     User.find_or_create_by!(foaf_id: foaf_id) do |user|
+      created = true
       user.user_name = handle
       user.email = email if email_available
       user.first_name = current_jwt_payload['first_name'].presence
       user.last_name = current_jwt_payload['last_name'].presence
       user.display_name = current_jwt_payload['display_name'].presence || user.user_name
       user.name = [user.first_name, user.last_name].compact.join(' ').presence || user.display_name
+      user.depth = initial_depth unless initial_depth.nil?
       password = SecureRandom.hex(32)
       user.password = password
       user.password_confirmation = password
-    end.tap { |user| @current_user = user unless user.auth_inactive? }
+    end.tap do |user|
+      if created && initial_group_label.present?
+        user.user_groups.find_or_create_by!(group_label: initial_group_label)
+      end
+      @current_user = user unless user.auth_inactive?
+    end
   end
 
   # JWT bridge resolution (master plan §JWT Contract → Bridge token contract).
