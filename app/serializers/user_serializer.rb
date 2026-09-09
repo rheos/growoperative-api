@@ -8,6 +8,10 @@ class UserSerializer
   # only through the discovery endpoints.
   attributes :location_opted_in, :discovery_radius_km
 
+  # Enriched profiles: app-owned "what I grow/sell" blurb (Plan 30), so the
+  # profile + update_profile responses carry it for the editor + own-profile view.
+  attributes :offering
+
   attributes :user_types do |object|
     object.user_groups
   end
