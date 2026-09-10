@@ -581,6 +581,9 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.datetime "location_updated_at", precision: nil
     t.integer "discovery_radius_km"
     t.string "custody_state", default: "pending"
+    t.text "about"
+    t.string "area_label"
+    t.text "offering"
     t.index ["custody_state"], name: "index_users_on_custody_state"
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["disabled_at"], name: "index_users_on_disabled_at"
