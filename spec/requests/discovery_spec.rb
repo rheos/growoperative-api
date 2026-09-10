@@ -208,7 +208,7 @@ RSpec.describe 'Discovery API', type: :request, skip_hooks: true do
       locate!(caller, 45.0, -73.0)
       locate!(target, 45.01, -73.01)
       opt_in!(target)
-      target.update!(location_updated_at: 40.days.ago)
+      target.update!(location_updated_at: 120.days.ago) # past the 90-day default cutoff
 
       get '/v1/discovery/nearby', headers: auth_headers(caller)
 
