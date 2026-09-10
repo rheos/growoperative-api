@@ -57,7 +57,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["item_unit_id"], name: "index_category_units_on_item_unit_id"
   end
 
-  create_table "foaf_outbox_entries", charset: "utf8mb4", force: :cascade do |t|
+  create_table "foaf_outbox_entries", charset: "latin1", force: :cascade do |t|
     t.bigint "trustline_id", null: false
     t.string "operation_type", limit: 32, null: false
     t.json "payload", null: false
@@ -77,6 +77,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.string "setting", default: ""
+    t.text "string_value"
   end
 
   create_table "grades", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
