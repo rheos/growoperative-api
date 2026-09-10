@@ -572,14 +572,34 @@ module Api::V1
 	# consistent without a round-trip to auth.
 	def update_profile
 		patch = profile_update_params
+		app_patch = app_owned_profile_params
 
 		match = request.headers['Authorization'].to_s.match(/\ABearer\s+(.+)\z/i)
 		bearer = match && match[1]
 
+		# App-owned fields (offering) live only on the local users row and are
+		# never proxied to auth. Write them first so a bad value 422s before any
+		# auth round-trip; they persist independently of the identity update.
+		if app_patch.present? && !current_user.update(app_patch.to_h)
+			return render json: { errors: current_user.errors.full_messages, code: 'validation_failed' }, status: 422
+		end
+
+		# No identity-shaped fields to change — the app-owned write (if any) is
+		# already done, so return the current profile without calling auth.
+		unless patch.present?
+			return render json: UserSerializer.new(current_user).serializable_hash.merge(
+				identity: identity_payload(current_user),
+			), status: 200
+		end
+
 		status, body = AuthFoafClient.update_profile(patch: patch.to_h, bearer: bearer)
 
 		if status == 200
-			local_mirror = patch.slice(:first_name, :last_name, :display_name)
+			# Mirror the app-owned name fields + the descriptive identity fields
+			# (about/area_label are canonical in auth) onto the local row so
+			# contact_list / discovery / serializers stay consistent without a
+			# round-trip to auth.
+			local_mirror = patch.slice(:first_name, :last_name, :display_name, :about, :area_label)
 			current_user.update(local_mirror) if local_mirror.present?
 			render json: UserSerializer.new(current_user).serializable_hash.merge(
 				identity: body['identity'] || identity_payload(current_user),
@@ -697,7 +717,16 @@ module Api::V1
 			# `invite_limit` and `is_admin` go through their own routes.
 			source = params[:user].present? ? params[:user] : params
 			source = ActionController::Parameters.new(source) unless source.is_a?(ActionController::Parameters)
-			source.permit(:first_name, :last_name, :display_name, :email, :pending_email)
+			source.permit(:first_name, :last_name, :display_name, :email, :pending_email, :about, :area_label)
+		end
+
+		# App-owned profile fields written to the local users row, never proxied
+		# to auth. Kept separate from profile_update_params so the identity proxy
+		# only ever receives identity-shaped fields.
+		def app_owned_profile_params
+			source = params[:user].present? ? params[:user] : params
+			source = ActionController::Parameters.new(source) unless source.is_a?(ActionController::Parameters)
+			source.permit(:offering)
 		end
 
 

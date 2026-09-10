@@ -13,6 +13,10 @@ class User < ApplicationRecord
 	# Validation
   validates :user_name, presence: :true, uniqueness: { case_sensitive: false }
   validates :invitations_count, numericality: { only_integer: true }
+  # Enriched profiles (Plan 30): app-owned "what I grow/sell" blurb. about +
+  # area_label mirror auth's identity (validated there) so they get no local
+  # length guard — only offering is app-owned and capped here.
+  validates :offering, length: { maximum: 140 }, allow_nil: true
 
   # Lowercase canonical handle (auth.foaf.io contract). UI re-displays as
   # @handle. Catches even legacy controllers that bypass the form layer.

@@ -114,6 +114,10 @@ class Api::V1::ApiController < ApplicationController
       email_verified_at: (user.respond_to?(:email_verified_at) ? user.email_verified_at&.iso8601 : nil),
       pending_email: (user.respond_to?(:pending_email) ? user.pending_email : nil),
       avatar_url: user.avatar_url,
+      # Enriched-profile identity fields (Plan 30), mirrored locally from auth
+      # (canonical there); present on the users table since the Plan 30 migration.
+      about: user.about,
+      area_label: user.area_label,
       # FOAF ledger address for display. Behind FOAF_SHARED_READS this resolves
       # from the JWT claim (shadow-diffed against the DB); otherwise from the DB.
       # Resolver only shadow-diffs the *current* user's own address, so fall back
@@ -130,6 +134,8 @@ class Api::V1::ApiController < ApplicationController
       id: user.id,
       foaf_id: user.foaf_id,
       role: growoperative_role_for(labels),
+      # App-owned "what I grow/sell" blurb (Plan 30). Not portable to other apps.
+      offering: user.offering,
       invitation_limit: user.invite_limit,
       invite_limit: user.invite_limit,
       is_demo: labels.include?('demo'),
