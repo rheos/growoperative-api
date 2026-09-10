@@ -6,6 +6,7 @@ class Category < ApplicationRecord
     'Herbs',
     'Greens',
     'Eggs',
+    'Meat',
     'Plant Starts',
     'Honey & Preserves',
     'Hot Sauce / Bottled',
