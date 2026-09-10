@@ -86,6 +86,7 @@ def generate_category
     { name: "Herbs and Greens", default: "bunch", units: %w[bunch head lb oz g each], kind: :produce, price: 1.0 },
     { name: "Herbs", default: "bunch", units: %w[bunch oz g each], kind: :produce, price: 1.0 },
     { name: "Eggs", default: "dozen", units: %w[dozen half-dozen each], kind: :produce, price: 1.0 },
+    { name: "Meat", default: "lb", units: %w[lb], kind: :produce, price: 1.0 },
     { name: "Plant Starts", default: "each", units: %w[each 6-pack], kind: :produce, price: 1.0 },
     { name: "Honey & Preserves", default: "jar", units: %w[jar oz lb], kind: :produce, price: 1.0 },
     { name: "Hot Sauce / Bottled", default: "bottle", units: %w[bottle], kind: :produce, price: 1.0 },

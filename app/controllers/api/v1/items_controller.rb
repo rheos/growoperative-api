@@ -361,7 +361,14 @@ module Api::V1
         :pack_contains_quantity,
         :pack_contains_unit_id,
         :condition,
-        :one_time_listing
+        :one_time_listing,
+        :pricing_basis,
+        :sale_unit_label,
+        :est_weight_min,
+        :est_weight_max,
+        :cut_yield_factor,
+        :on_the_rail_available,
+        :on_the_rail_delta
       )
     end
 
