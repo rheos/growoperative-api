@@ -8,8 +8,6 @@ RUN apt-get update -qq && apt-get install -y \
     automake \
     build-essential \
     libpq-dev \
-    default-libmysqlclient-dev \
-    default-mysql-client \
     imagemagick \
     git \
     libmagickwand-dev \
