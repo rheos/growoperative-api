@@ -77,6 +77,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
     t.string "setting", default: ""
+    t.text "string_value"
   end
 
   create_table "grades", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
