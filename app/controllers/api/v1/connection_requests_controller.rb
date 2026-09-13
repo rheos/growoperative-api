@@ -31,8 +31,8 @@ class Api::V1::ConnectionRequestsController < Api::V1::ApiController
   # simply its first caller.
   #
   # There is NO pair-unique index on the relationships table. The ONLY dup/block guard is the
-  # normalization convention (lower id = user_id, higher id = friend_id) plus a MySQL advisory
-  # lock keyed on the sorted pair. The lock key is SHARED with introductions
+  # normalization convention (lower id = user_id, higher id = friend_id) plus a Postgres advisory
+  # lock (`pg_try_advisory_lock`) keyed on the sorted pair. The lock key is SHARED with introductions
   # (`go:intro:rel:LOW:HIGH`) on purpose: a concurrent introduction-accept and a connect-request
   # on the same pair serialize on the same key, so neither inserts a second row while the other's
   # transaction is still open. Acquire BEFORE the read-check-write transaction; release AFTER it

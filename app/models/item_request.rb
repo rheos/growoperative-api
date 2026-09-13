@@ -30,7 +30,7 @@ class ItemRequest < ApplicationRecord
 
   # "Accept all" fires concurrent accepts that contend on the same source
   # inventory row and the same seller User row (locked in find_or_create_pending),
-  # so MySQL can pick a deadlock victim and roll one back. Retry the victim a few
+  # so Postgres can pick a deadlock victim and roll one back. Retry the victim a few
   # times before surfacing it — see the 2026-06-07 demo 500.
   MAX_ACCEPT_ATTEMPTS = 3
   ACCEPT_RETRY_BACKOFF = 0.05 # seconds, multiplied by attempt number
