@@ -19,8 +19,8 @@ class Order < ApplicationRecord
   # CONCURRENCY: two requests accepted at the same instant (e.g. the "accept
   # all" button firing parallel accepts) both ran find-then-create and each
   # created an order, producing duplicate pending orders for one pair. We
-  # serialize per seller with a FOR UPDATE row lock. A row lock (unlike a MySQL
-  # named lock) is held until the surrounding transaction commits, so the order
+  # serialize per seller with a FOR UPDATE row lock. A row lock (unlike a session-
+  # scoped advisory lock) is held until the surrounding transaction commits, so the order
   # is durable before the next caller proceeds. The candidates query is then a
   # LOCKING read (.lock) so that next caller sees the just-committed order — a
   # plain read would use its REPEATABLE READ snapshot (taken before the first
