@@ -14,8 +14,8 @@ A Rails backend system supporting a local food distribution network with an inte
 
 ### Prerequisites
 
-- Ruby version 2.3.1
-- MySQL database
+- Ruby 3.2.11
+- PostgreSQL 16
 
 ### Setup
 

@@ -23,8 +23,8 @@ Port mapping: Rails container listens on 8080 internally, exposed as `localhost:
 
 ## Tech Stack
 
-- Rails 5.2 API mode
-- MySQL 5.7
+- Rails 7.1 API mode
+- PostgreSQL 16 (Neon in every deployed tier; `postgres:16` locally)
 - Puma (clustered, `WEB_CONCURRENCY` workers)
 - JWT authentication (HS256, 1-year expiry)
 - CarrierWave + fog-aws for S3 uploads (rmagick for image processing)
@@ -165,35 +165,47 @@ docker-compose exec backend rails db:migrate
 
 ### Dev Data Snapshots
 
-MySQL dumps live in `db/snapshots/`. Used to save/restore a known-good dev database state with realistic test data (users, items, requests, orders).
+SQL dumps live in `db/snapshots/`. Used to save/restore a known-good dev database state with realistic test data (users, items, requests, orders).
 
 ```bash
 # Save
-docker-compose exec db sh -c 'mysqldump -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' > db/snapshots/dev_preshipment.sql
+docker-compose exec db pg_dump -U postgres growoperative_development > db/snapshots/dev_preshipment.sql
 
 # Restore
-docker-compose exec db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < db/snapshots/dev_preshipment.sql
+docker-compose exec -T db psql -U postgres growoperative_development < db/snapshots/dev_preshipment.sql
 ```
+
+Dumps taken before the 2026-08-22 Contabo/Neon migration are MySQL-format and will not restore into Postgres.
 
 Current snapshot: `dev_preshipment.sql` — full demo network with requests and orders, pre-shipment state (no credit transactions yet).
 
 ## Deployment
 
-- **Server:** AWS Lightsail `growoperative-rails` (`35.163.185.37`)
-- **Two backend containers, one repo:** `backend` (production, `.env.production`, prod MySQL DB) and `backend-demo` (demo + beta soak, `.env.demo`, demo MySQL DB). Both build from the same code on master.
-- **Demo doubles as beta:** push to `master` → auto-deploys to `backend-demo` only (`demo.growoperative.app`). Soak there, then promote to prod manually.
-- **Deploy workflows:**
-  - `.github/workflows/deploy-demo.yml` — auto on push to master, builds & deploys `backend-demo`.
-  - `.github/workflows/deploy-prod.yml` — manual `workflow_dispatch`, requires typing `deploy-prod` to confirm. Optional SHA input for rolling back. Deploys `backend`.
-- **No tests in CI pipeline** — soak-time on demo is the safety net.
-- **Production Docker:** `docker-compose.prod.yml` (no MySQL — connects to Lightsail DB at `172.26.13.168`)
-- **Nginx:** reverse proxy with Certbot SSL. Box is API-only for GrowOperative since the 2026-05-27 frontend migration to Cloudflare Pages.
-  - `api.growoperative.app` → `backend` (prod API)
-  - `dpi.growoperative.app` → `backend-demo` (demo API; added during the Cloudflare migration so the CF demo/beta frontends have a demo backend host separate from their own host)
-  - Other hosts on this nginx: `api.foaf.io`, `dpi.foaf.io`, `auth.foaf.io`, `dauth.foaf.io`.
-  - The old static-frontend server blocks for `growoperative.app` / `demo.growoperative.app` / `beta.growoperative.app` still exist in `nginx.conf` but are unused (DNS for all three points at Cloudflare Pages). Safe to remove for tidiness; harmless to leave.
-- **Frontend dist mounts:** previously `/home/ubuntu/growoperative-app/dist-prod` + `dist-demo` were bound to `/var/www/prod` + `/var/www/demo`. **Unused** after the migration — DNS no longer resolves there. The `growoperative-app` repo's `deploy-demo.yml` / `deploy-prod.yml` workflows that populated them have been deleted; Cloudflare Pages now builds and serves the frontends directly from `main` (web + demo) and `develop` (beta).
-- **URLs:** prod API `https://api.growoperative.app`; demo API `https://dpi.growoperative.app` (was `https://demo.growoperative.app/v1/` pre-migration — the app's `apiBase.ts` now points demo at `dpi`). Web frontends: `https://web.growoperative.app` (prod), `https://demo.growoperative.app` (demo), `https://beta.growoperative.app` (soak/develop); all Cloudflare Pages.
+- **Host:** Coolify on the Contabo box `144.126.145.4`. The AWS Lightsail box (`35.163.185.37`) and the MySQL box (`172.26.13.168`) were decommissioned in the 2026-08-22 Contabo/Neon migration and no longer exist.
+- **Databases:** Neon Postgres, one per tier.
+- **Three Coolify apps, one repo, all tracking `master`.** They differ by environment and database, not by branch:
+
+  | Tier | Host | Coolify uuid |
+  |---|---|---|
+  | prod | `api.growoperative.app` | `bre53dp4tikyezgfvclzaxy1` |
+  | demo | `dpi.growoperative.app` | `mcuuicw8jm9bbpn6f9ossiwz` |
+  | beta | `bpi.growoperative.app` | `1pbmmgxmxrlyo1rp1lnlckot` |
+
+- **`master` is the integration branch. There is NO `develop`** — that belongs to `growoperative-app`, a different repo. Merge fixes straight to `master` via PR.
+- **Merging to `master` does NOT auto-deploy.** The old `deploy-demo.yml` / `deploy-prod.yml` workflows were removed in PR #38; only `ci.yml` remains. A deploy is an explicit Coolify API call:
+
+  ```bash
+  ssh -i ~/Documents/novadiem/keys/contabo/contabo_ed25519 -f -N -L 8009:localhost:8000 root@144.126.145.4
+  CT=$(cat ~/Documents/novadiem/keys/contabo/coolify-api-token.txt)
+  curl -X POST "http://localhost:8009/api/v1/deploy?uuid=<app-uuid>" -H "Authorization: Bearer $CT"
+  # poll: GET /api/v1/deployments/<deployment_uuid> until status=finished
+  ```
+
+  A deploy pulls the latest `master` and rebuilds from the repo `Dockerfile` (`build_pack: dockerfile`).
+- **CI runs a curated rspec subset**, not the full suite — see the list in `.github/workflows/ci.yml`. A new spec file is not exercised unless added there.
+- **Routing + TLS:** handled by Coolify's proxy on the Contabo box, per-app. `nginx/nginx.conf` and `docker-compose.prod.yml` are still in the repo but are **Lightsail-era artifacts** — nothing on Contabo reads them. Do not edit them expecting a routing change.
+- **Frontends are not served from here.** Cloudflare Pages builds and serves them straight from the `growoperative-app` repo: `main` (web + demo), `develop` (beta). The old `/var/www/prod` + `/var/www/demo` dist mounts are gone with the Lightsail box.
+- **URLs:** prod API `https://api.growoperative.app`; demo API `https://dpi.growoperative.app`; beta API `https://bpi.growoperative.app`. Web frontends: `https://web.growoperative.app` (prod), `https://demo.growoperative.app` (demo), `https://beta.growoperative.app` (soak/develop); all Cloudflare Pages.
 
 ## Key Environment Variables
 
@@ -203,5 +215,5 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
 | `COOKIE_DOMAIN` | JWT cookie scope (`localhost` dev, `.growoperative.app` prod) |
 | `FRONTEND_URL` | Primary CORS origin |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_BUCKET` | CarrierWave S3 storage |
-| `DATABASE_HOST`, `DATABASE_USERNAME`, `DATABASE_PASSWORD` | MySQL connection |
+| `DATABASE_URL` | Postgres connection. `config/database.yml` reads this and nothing else — `DATABASE_HOST`/`USERNAME`/`PASSWORD` are ignored. |
 | `SEED_DATABASE` | If `"true"`, auto-seeds DB on container startup (dev only) |
