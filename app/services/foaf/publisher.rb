@@ -148,16 +148,19 @@ module Foaf
       ensure_identity!(from_user)
       ensure_identity!(to_user)
 
-      extra_data = {
-        app: "growoperative",
-        description: description,
-        operation: operation,
-        order_id: order&.id,
-        order_label: order&.try(:order_label),
-        # Preserve the existing wire metadata key during this naming-only
-        # rollout so FOAF event consumers see byte-for-byte compatible metadata.
-        mirrored_at: (tx_row&.created_at || Time.current).iso8601
-      }.merge(metadata || {}).compact.to_json
+      extra_data = Foaf::ExternalPayment.merge_into(
+        {
+          app: "growoperative",
+          description: description,
+          operation: operation,
+          order_id: order&.id,
+          order_label: order&.try(:order_label),
+          # Preserve the existing wire metadata key during this naming-only
+          # rollout so FOAF event consumers see byte-for-byte compatible metadata.
+          mirrored_at: (tx_row&.created_at || Time.current).iso8601
+        }.merge(metadata || {}),
+        description
+      ).compact.to_json
 
       publish_shared_payment(
         amount: amount,
