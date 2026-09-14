@@ -209,6 +209,70 @@ RSpec.describe Foaf::AuditService, type: :model, skip_hooks: true do
       expect(row[:transaction][:path_info][:payment_request]["requested_by_name"]).to eq(canonical_user_a.user_name)
     end
 
+    it 'surfaces structured Polygonscan metadata on the audit row' do
+      hash = '0x' + 'ab' * 32
+      url = "https://polygonscan.com/tx/#{hash}"
+      allow(fake_client).to receive(:user_events).and_return([
+        {
+          'type'         => 'Transfer',
+          'value'        => 89.0,
+          'direction'    => 'sent',
+          'timestamp'    => 1_000_200,
+          'blockNumber'  => 105,
+          'extraData'    => {
+            app: 'growoperative',
+            operation: 'settlement',
+            description: "USDT #{url}",
+            external_payment: {
+              chain: 'polygon',
+              tx_hash: hash,
+              explorer_url: url,
+            },
+          }.to_json,
+          'counterParty' => canonical_user_b.foaf_address,
+        },
+      ])
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      row = result[:rows].first
+
+      expect(row[:transaction][:path_info][:external_payment]).to include(
+        'chain' => 'polygon',
+        'tx_hash' => hash,
+        'explorer_url' => url
+      )
+      expect(row[:transaction][:description]).to eq("USDT #{url}")
+    end
+
+    it 'parses a Polygonscan URL from a legacy description-only extraData blob' do
+      hash = '0x' + 'cd' * 32
+      url = "https://polygonscan.com/tx/#{hash}"
+      allow(fake_client).to receive(:user_events).and_return([
+        {
+          'type'         => 'Transfer',
+          'value'        => 89.0,
+          'direction'    => 'sent',
+          'timestamp'    => 1_000_200,
+          'blockNumber'  => 106,
+          'extraData'    => {
+            app: 'growoperative',
+            operation: 'settlement',
+            description: "Paid on Polygon #{url}",
+          }.to_json,
+          'counterParty' => canonical_user_b.foaf_address,
+        },
+      ])
+
+      result = Foaf::AuditService.events_for_trustline(trustline, viewer: canonical_user_a)
+      row = result[:rows].first
+
+      expect(row[:transaction][:path_info][:external_payment]).to include(
+        'chain' => 'polygon',
+        'tx_hash' => hash,
+        'explorer_url' => url
+      )
+    end
+
     it 'recognizes legacy cash settlement descriptions without operation metadata' do
       allow(fake_client).to receive(:user_events).and_return([
         {

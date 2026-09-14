@@ -88,7 +88,6 @@ class Api::V1::DebugController < Api::V1::ApiController
     description = extra["description"] || (is_credloop ? "Credit loop cancellation" : nil)
     is_settlement = extra["operation"] == "settlement" ||
                     description.to_s.start_with?("Cash settlement from ")
-    payment_request = extra["payment_request"]
 
     classification = if is_credloop
       "credloop"
@@ -128,7 +127,7 @@ class Api::V1::DebugController < Api::V1::ApiController
         created_at: Time.at(event["timestamp"].to_i).iso8601,
         initiated_by_name: initiator.user_name,
         order_label: order_label,
-        path_info: transfer_path_info(path, payment_request),
+        path_info: transfer_path_info(path, extra, description),
         _direction: event["direction"]
       },
       balance_before: 0.0,
@@ -138,10 +137,21 @@ class Api::V1::DebugController < Api::V1::ApiController
     }
   end
 
-  private def transfer_path_info(path, payment_request)
+  private def transfer_path_info(path, extra, description)
     info = {}
     info[:hops] = path if path.is_a?(Array) && path.size > 2
-    info[:payment_request] = payment_request if payment_request.present?
+    info[:payment_request] = extra["payment_request"] if extra["payment_request"].present?
+
+    if extra["external_payment"].present?
+      info[:external_payment] = extra["external_payment"]
+    elsif extra["external_payments"].present?
+      info[:external_payments] = extra["external_payments"]
+    else
+      parsed = Foaf::ExternalPayment.metadata_for(description)
+      info[:external_payment] = parsed["external_payment"] if parsed["external_payment"]
+      info[:external_payments] = parsed["external_payments"] if parsed["external_payments"]
+    end
+
     info.presence
   end
 
