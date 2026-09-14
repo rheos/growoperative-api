@@ -17,7 +17,7 @@ class SiteConfig
   # growoperative-app `SITE_CURRENCIES`.
   CURRENCIES = %w[
     CAD USD EUR GBP CHF SEK NOK DKK PLN CZK HUF
-    JPY KRW AUD NZD MXN BRL INR IDR VND ZAR
+    JPY KRW AUD NZD MXN CRC BRL INR IDR VND ZAR
   ].freeze
 
   # Returns the merged flag hash for a subnet. Resolution order (first match wins):
@@ -38,8 +38,9 @@ class SiteConfig
   end
 
   # Shared whitelist for seed-invitation mint and PATCH /v1/subnets/:id/config.
-  # Unknown keys are dropped. Unknown currency codes are dropped (caller keeps
-  # the previous / default value).
+  # Unknown keys are dropped. Unknown currency codes are omitted from the
+  # returned hash — callers that received an explicit bad code should 422 via
+  # invalid_currency? rather than silently keeping the previous value.
   def self.permit_flags(source)
     p = indifferent_params(source)
     allowed = {}
@@ -76,6 +77,11 @@ class SiteConfig
   def self.normalize_currency(value)
     code = value.to_s.strip.upcase
     CURRENCIES.include?(code) ? code : nil
+  end
+
+  def self.invalid_currency?(source)
+    p = indifferent_params(source)
+    p.key?(:currency) && p[:currency].present? && normalize_currency(p[:currency]).nil?
   end
 
   def self.symbolize_keys(hash)

@@ -10,7 +10,8 @@ module Api::V1
     def index
       subnets = Subnet.includes(:seed_user, :subnet_configs, :subnet_memberships).all
       render json: {
-        subnets: subnets.map { |s| subnet_payload(s) }
+        subnets: subnets.map { |s| subnet_payload(s) },
+        available_currencies: SiteConfig::CURRENCIES
       }, status: 200
     end
 
@@ -60,6 +61,10 @@ module Api::V1
     # update in place). Returns the subnet's new effective state.
     def update_config
       subnet = Subnet.find(params[:id])
+      if SiteConfig.invalid_currency?(params)
+        return render json: { message: 'Unknown currency' }, status: 422
+      end
+
       updates = permitted_flags
       return render json: { message: 'No flags provided' }, status: 422 if updates.empty?
 

@@ -34,7 +34,9 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       expect(match['seed_user_name']).to eq('sa_seed')
       expect(match['member_count']).to eq(1)
       expect(match['config']['multi_role']).to eq(false)
+      expect(match['config']['currency']).to eq('CAD')
       expect(match['version']).to eq(1)
+      expect(body['available_currencies']).to eq(SiteConfig::CURRENCIES)
     end
   end
 
@@ -80,6 +82,39 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       expect(body['config']['currency']).to eq('EUR')
       expect(body['config']['multi_role']).to eq(true)
       expect(subnet.reload.current_config.config['currency']).to eq('EUR')
+    end
+
+    it 'rejects an unknown currency when it is the only update' do
+      subnet = create(:subnet, seed_user: superuser)
+      patch "/v1/subnets/#{subnet.id}/config",
+            params: { currency: 'XXX' }.to_json,
+            headers: super_headers.merge('Content-Type' => 'application/json')
+      expect(response).to have_http_status(422)
+      expect(JSON.parse(response.body)['message']).to eq('Unknown currency')
+    end
+
+    it 'rejects an unknown currency even when other flags are present' do
+      subnet = create(:subnet, seed_user: superuser)
+      create(:subnet_config, subnet: subnet, version: 1, config: { 'multi_role' => true })
+
+      patch "/v1/subnets/#{subnet.id}/config",
+            params: { currency: 'XXX', multi_role: false }.to_json,
+            headers: super_headers.merge('Content-Type' => 'application/json')
+      expect(response).to have_http_status(422)
+      expect(subnet.reload.current_config.config['multi_role']).to eq(true)
+    end
+
+    it 'stores CRC for a Costa Rican network' do
+      subnet = create(:subnet, seed_user: superuser)
+      create(:subnet_config, subnet: subnet, version: 1, config: { 'multi_role' => true })
+
+      patch "/v1/subnets/#{subnet.id}/config",
+            params: { currency: 'crc' }.to_json,
+            headers: super_headers.merge('Content-Type' => 'application/json')
+      expect(response).to have_http_status(200)
+
+      body = JSON.parse(response.body)
+      expect(body['config']['currency']).to eq('CRC')
     end
 
     it 'ignores unknown flags' do

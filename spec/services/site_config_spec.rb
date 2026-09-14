@@ -60,6 +60,18 @@ RSpec.describe SiteConfig do
     end
   end
 
+  describe '.invalid_currency?' do
+    it 'is false when currency is omitted or valid' do
+      expect(SiteConfig.invalid_currency?({})).to eq(false)
+      expect(SiteConfig.invalid_currency?(currency: 'EUR')).to eq(false)
+      expect(SiteConfig.invalid_currency?(currency: '')).to eq(false)
+    end
+
+    it 'is true when an explicit code is not in the catalog' do
+      expect(SiteConfig.invalid_currency?(currency: 'XXX')).to eq(true)
+    end
+  end
+
   describe '.normalize_currency' do
     it 'upcases a supported code' do
       expect(SiteConfig.normalize_currency('eur')).to eq('EUR')
@@ -67,6 +79,11 @@ RSpec.describe SiteConfig do
 
     it 'rejects an unsupported code' do
       expect(SiteConfig.normalize_currency('XXX')).to be_nil
+    end
+
+    it 'accepts Mexican peso and Costa Rican colon' do
+      expect(SiteConfig.normalize_currency('mxn')).to eq('MXN')
+      expect(SiteConfig.normalize_currency('crc')).to eq('CRC')
     end
   end
 end

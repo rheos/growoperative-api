@@ -38,6 +38,9 @@ module Api::V1
       def create_seed
         subnet_name = params[:subnet_name].to_s.strip
         return render json: { message: 'subnet_name is required' }, status: 422 if subnet_name.blank?
+        if SiteConfig.invalid_currency?(params)
+          return render json: { message: 'Unknown currency' }, status: 422
+        end
 
         config_payload = permitted_flags
         seed_payload = {
@@ -94,7 +97,9 @@ module Api::V1
 
       # Same whitelist as PATCH /v1/subnets/:id/config.
       def permitted_flags
-        SiteConfig.permit_flags(params).stringify_keys
+        flags = SiteConfig.permit_flags(params).stringify_keys
+        flags['currency'] ||= SiteConfig::DEFAULTS[:currency]
+        flags
       end
 
       def permitted_user_type
