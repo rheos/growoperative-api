@@ -39,5 +39,58 @@ RSpec.describe SiteConfig do
       copy[:multi_role] = :mutated
       expect(SiteConfig::DEFAULTS[:multi_role]).not_to eq(:mutated)
     end
+
+    it 'defaults currency to CAD' do
+      expect(SiteConfig::DEFAULTS[:currency]).to eq('CAD')
+    end
+  end
+
+  describe '.permit_flags' do
+    it 'accepts a known currency and drops unknown keys' do
+      allowed = SiteConfig.permit_flags(
+        currency: 'eur',
+        multi_role: false,
+        evil_key: 'nope'
+      )
+      expect(allowed).to eq(currency: 'EUR', multi_role: false)
+    end
+
+    it 'drops an unknown currency code so the default is preserved' do
+      expect(SiteConfig.permit_flags(currency: 'XXX')).to eq({})
+    end
+  end
+
+  describe '.invalid_currency?' do
+    it 'is false when currency is omitted or valid' do
+      expect(SiteConfig.invalid_currency?({})).to eq(false)
+      expect(SiteConfig.invalid_currency?(currency: 'EUR')).to eq(false)
+      expect(SiteConfig.invalid_currency?(currency: '')).to eq(false)
+    end
+
+    it 'is true when an explicit code is not in the catalog' do
+      expect(SiteConfig.invalid_currency?(currency: 'XXX')).to eq(true)
+    end
+  end
+
+  describe '.normalize_currency' do
+    it 'upcases a supported code' do
+      expect(SiteConfig.normalize_currency('eur')).to eq('EUR')
+    end
+
+    it 'rejects an unsupported code' do
+      expect(SiteConfig.normalize_currency('XXX')).to be_nil
+    end
+
+    it 'accepts Mexican peso, Costa Rican colon, and Thai baht' do
+      expect(SiteConfig.normalize_currency('mxn')).to eq('MXN')
+      expect(SiteConfig.normalize_currency('crc')).to eq('CRC')
+      expect(SiteConfig.normalize_currency('thb')).to eq('THB')
+    end
+
+    it 'accepts a code added to the registry' do
+      SupportedCurrency.create!(code: 'PHP', name: 'Philippine peso', locale: 'en-PH')
+      expect(SiteConfig.normalize_currency('php')).to eq('PHP')
+      expect(SiteConfig.invalid_currency?(currency: 'PHP')).to eq(false)
+    end
   end
 end

@@ -24,6 +24,25 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       body = JSON.parse(response.body)
       expect(body['subnet_id']).to eq(subnet.id)
       expect(body['config']['multi_role']).to eq(SiteConfig::DEFAULTS[:multi_role])
+      expect(body['config']['currency']).to eq('CAD')
+      codes = body['available_currencies'].map { |c| c['code'] }
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC', 'THB')
+      cad = body['available_currencies'].find { |c| c['code'] == 'CAD' }
+      expect(cad['name']).to eq('Canadian dollar')
+      expect(cad['locale']).to eq('en-CA')
+    end
+
+    it 'returns a stored subnet currency' do
+      subnet = create(:subnet, seed_user: user)
+      create(:subnet_membership, user: user, subnet: subnet, is_primary: true)
+      create(:subnet_config, subnet: subnet, version: 1, config: { 'currency' => 'EUR' })
+
+      get '/v1/site_config', headers: auth_headers
+      expect(response).to have_http_status(200)
+
+      body = JSON.parse(response.body)
+      expect(body['config']['currency']).to eq('EUR')
+      expect(body['config']['multi_role']).to eq(SiteConfig::DEFAULTS[:multi_role])
     end
 
     it 'returns the latest config version merged over defaults' do
@@ -38,6 +57,8 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       expect(body['config']['multi_role']).to eq(false)
       expect(body['config']['demo_mode']).to eq(true)
       expect(body['config']['chain_limit']).to eq(SiteConfig::DEFAULTS[:chain_limit])
+      codes = body['available_currencies'].map { |c| c['code'] }
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC', 'THB')
     end
 
     it 'falls back to the user primary subnet when subnet_id is omitted' do

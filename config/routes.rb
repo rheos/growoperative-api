@@ -220,6 +220,11 @@ Rails.application.routes.draw do
       post 'admin/invitations/seed' => 'admin/invitations#create_seed'
       get  'admin/invitations/seed' => 'admin/invitations#list_seed'
 
+      # Display-currency registry. Superuser-gated in the controller.
+      get   'admin/currencies'        => 'admin/currencies#index'
+      post  'admin/currencies'        => 'admin/currencies#create'
+      patch 'admin/currencies/:code'  => 'admin/currencies#update', constraints: { code: /[A-Za-z]{3}/ }
+
       # Superuser-only user administration. Rails is the policy/audit
       # boundary; auth.foaf.io owns identity search and password mutation.
       get  'admin/users'                         => 'admin/users#index'

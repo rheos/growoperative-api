@@ -75,6 +75,7 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
              default_markup_type: 'percent',
              visible_roles: ['broker'],
              multi_role: false,
+             currency: 'EUR',
              evil_key: 'mwahaha'
            }.to_json,
            headers: super_headers
@@ -92,9 +93,38 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
         'default_markup' => 10.0,
         'default_markup_type' => 'percent',
         'visible_roles' => ['broker'],
-        'multi_role' => false
+        'multi_role' => false,
+        'currency' => 'EUR'
       )
       expect(stored['config']).not_to have_key('evil_key')
+    end
+
+    it 'defaults minted seed currency to CAD when omitted' do
+      post '/v1/admin/invitations/seed',
+           params: { subnet_name: 'Kaslo Network' }.to_json,
+           headers: super_headers
+      expect(response).to have_http_status(201)
+
+      stored = Invitation.find(JSON.parse(response.body)['id']).subnet_seed_config
+      expect(stored['config']['currency']).to eq('CAD')
+    end
+
+    it 'stores CRC on a seed invitation' do
+      post '/v1/admin/invitations/seed',
+           params: { subnet_name: 'Puntarenas Network', currency: 'crc' }.to_json,
+           headers: super_headers
+      expect(response).to have_http_status(201)
+
+      stored = Invitation.find(JSON.parse(response.body)['id']).subnet_seed_config
+      expect(stored['config']['currency']).to eq('CRC')
+    end
+
+    it 'rejects an unknown currency' do
+      post '/v1/admin/invitations/seed',
+           params: { subnet_name: 'Kaslo Network', currency: 'XXX' }.to_json,
+           headers: super_headers
+      expect(response).to have_http_status(422)
+      expect(JSON.parse(response.body)['message']).to eq('Unknown currency')
     end
   end
 
@@ -110,7 +140,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
             'default_markup' => 10.0,
             'default_markup_type' => 'percent',
             'visible_roles' => ['broker'],
-            'multi_role' => false
+            'multi_role' => false,
+            'currency' => 'EUR'
           }
         }
       )
@@ -139,7 +170,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
         'default_markup' => 10.0,
         'default_markup_type' => 'percent',
         'visible_roles' => ['broker'],
-        'multi_role' => false
+        'multi_role' => false,
+        'currency' => 'EUR'
       )
     end
 
@@ -163,6 +195,20 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
       memberships = new_user.subnet_memberships.reload
       expect(memberships.count).to eq(1)
       expect(memberships.first.subnet.name).to eq('Kaslo Network')
+    end
+
+    it 'defaults display currency to CAD when the seed config omits it' do
+      invitation.update_columns(
+        subnet_seed_config: { 'subnet_name' => 'Plain Net', 'config' => {} }
+      )
+
+      new_user = User.create!(
+        user_name: 'si_cad_default', password: password,
+        invited_code: invitation.invitation_code
+      )
+
+      subnet = new_user.subnet_memberships.first.subnet
+      expect(SiteConfig.for(subnet)[:currency]).to eq('CAD')
     end
 
     it 'falls back to "{user_name}\'s Network" when subnet_name is blank' do

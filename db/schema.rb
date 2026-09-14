@@ -427,6 +427,16 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["seed_user_id"], name: "index_subnets_on_seed_user_id"
   end
 
+  create_table "supported_currencies", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.string "code", limit: 3, null: false
+    t.string "name", null: false
+    t.string "locale", null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code"], name: "index_supported_currencies_on_code", unique: true
+  end
+
   create_table "trustline_transactions", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.bigint "trustline_id", null: false
     t.decimal "amount", precision: 10, scale: 2, null: false

@@ -10,7 +10,8 @@ class Api::V1::SiteConfigsController < Api::V1::ApiController
     render json: {
       subnet_id: subnet&.id,
       subnet_name: subnet&.name,
-      config: SiteConfig.for(subnet)
+      config: SiteConfig.for(subnet),
+      available_currencies: SiteConfig.currency_catalog
     }
   end
 
