@@ -22,7 +22,8 @@ RSpec.describe Foaf::ExternalPayment do
         {
           "chain" => "polygon",
           "tx_hash" => hash,
-          "explorer_url" => canonical
+          "explorer_url" => canonical,
+          "token_symbol" => "USDT"
         }
       ])
     end
@@ -40,7 +41,8 @@ RSpec.describe Foaf::ExternalPayment do
           {
             "chain" => "polygon",
             "tx_hash" => hash,
-            "explorer_url" => canonical
+            "explorer_url" => canonical,
+            "token_symbol" => "USDT"
           }
         ]), text
       end
@@ -67,6 +69,11 @@ RSpec.describe Foaf::ExternalPayment do
       text = "#{canonical} #{canonical.sub(hash, other)}"
       expect(described_class.parse(text).map { |p| p["tx_hash"] }).to eq([hash, other])
     end
+
+    it "defaults Polygonscan notes to USDT, unless the note names another token" do
+      expect(described_class.parse(canonical).first["token_symbol"]).to eq("USDT")
+      expect(described_class.parse("USDC #{canonical}").first["token_symbol"]).to eq("USDC")
+    end
   end
 
   describe ".metadata_for" do
@@ -79,7 +86,8 @@ RSpec.describe Foaf::ExternalPayment do
         "external_payment" => {
           "chain" => "polygon",
           "tx_hash" => hash,
-          "explorer_url" => canonical
+          "explorer_url" => canonical,
+          "token_symbol" => "USDT"
         }
       )
     end

@@ -92,6 +92,7 @@ RSpec.describe Api::V1::PendingPaymentsController, type: :controller, skip_hooks
       expect(payment["chain"]).to eq("polygon")
       expect(payment["tx_hash"]).to eq(hash)
       expect(payment["explorer_url"]).to eq(url)
+      expect(payment["token_symbol"]).to eq("USDT")
     end
   end
 end
