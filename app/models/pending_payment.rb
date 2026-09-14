@@ -43,12 +43,13 @@ class PendingPayment < ApplicationRecord
                    end
 
     transaction do
+      desc = description.presence || default_description(payer, payee)
       tx_row = trustline.settle_payment!(
         amount,
         payer,
         payee,
-        description: description || default_description(payer, payee),
-        path_info: audit_metadata(payer, payee)
+        description: desc,
+        path_info: Foaf::ExternalPayment.merge_into(audit_metadata(payer, payee), desc)
       )
 
       update!(

@@ -77,5 +77,22 @@ RSpec.describe Api::V1::PendingPaymentsController, type: :controller, skip_hooks
       expect(body.dig("pending_payment", "status")).to eq("confirmed")
       expect(pending_payment.reload).to be_confirmed
     end
+
+    it "stores parsed Polygonscan metadata on the settlement row" do
+      hash = "0x#{'ab' * 32}"
+      url = "https://polygonscan.com/tx/#{hash}"
+      pending_payment.update!(description: "USDT #{url}")
+
+      put :confirm, params: { id: pending_payment.id }
+
+      expect(response).to have_http_status(:accepted)
+      tx = TrustlineTransaction.order(:id).last
+      expect(tx.description).to eq("USDT #{url}")
+      payment = tx.path_info.with_indifferent_access.fetch("external_payment")
+      expect(payment["chain"]).to eq("polygon")
+      expect(payment["tx_hash"]).to eq(hash)
+      expect(payment["explorer_url"]).to eq(url)
+      expect(payment["token_symbol"]).to eq("USDT")
+    end
   end
 end
