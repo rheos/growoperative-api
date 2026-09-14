@@ -75,6 +75,7 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
              default_markup_type: 'percent',
              visible_roles: ['broker'],
              multi_role: false,
+             currency: 'EUR',
              evil_key: 'mwahaha'
            }.to_json,
            headers: super_headers
@@ -92,7 +93,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
         'default_markup' => 10.0,
         'default_markup_type' => 'percent',
         'visible_roles' => ['broker'],
-        'multi_role' => false
+        'multi_role' => false,
+        'currency' => 'EUR'
       )
       expect(stored['config']).not_to have_key('evil_key')
     end
@@ -110,7 +112,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
             'default_markup' => 10.0,
             'default_markup_type' => 'percent',
             'visible_roles' => ['broker'],
-            'multi_role' => false
+            'multi_role' => false,
+            'currency' => 'EUR'
           }
         }
       )
@@ -139,7 +142,8 @@ RSpec.describe 'Seed invitations', type: :request, skip_hooks: true do
         'default_markup' => 10.0,
         'default_markup_type' => 'percent',
         'visible_roles' => ['broker'],
-        'multi_role' => false
+        'multi_role' => false,
+        'currency' => 'EUR'
       )
     end
 

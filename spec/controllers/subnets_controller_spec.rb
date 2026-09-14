@@ -61,9 +61,25 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       expect(body['config']['multi_role']).to eq(false)
       expect(body['config']['visible_roles']).to eq(['broker'])
       expect(body['config']['chain_limit']).to eq(3) # preserved from prior version
+      expect(body['config']['currency']).to eq('CAD') # default, not stored on v1
 
       expect(subnet.subnet_configs.count).to eq(2)
       expect(subnet.subnet_configs.find_by(version: 2).changed_by_user_id).to eq(superuser.id)
+    end
+
+    it 'stores a supported currency on a new config version' do
+      subnet = create(:subnet, seed_user: superuser)
+      create(:subnet_config, subnet: subnet, version: 1, config: { 'multi_role' => true })
+
+      patch "/v1/subnets/#{subnet.id}/config",
+            params: { currency: 'EUR' }.to_json,
+            headers: super_headers.merge('Content-Type' => 'application/json')
+      expect(response).to have_http_status(200)
+
+      body = JSON.parse(response.body)
+      expect(body['config']['currency']).to eq('EUR')
+      expect(body['config']['multi_role']).to eq(true)
+      expect(subnet.reload.current_config.config['currency']).to eq('EUR')
     end
 
     it 'ignores unknown flags' do

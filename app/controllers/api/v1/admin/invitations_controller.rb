@@ -31,6 +31,7 @@ module Api::V1
       #   visible_roles:      ["broker", ...]         (optional)
       #   multi_role:         false                   (optional)
       #   enforce_valid_email:false                   (optional)
+      #   currency:           "EUR"                   (optional, ISO 4217)
       #
       # Returns the invitation including its code. The redeeming user becomes
       # seed_user of a new Subnet with these flags written as SubnetConfig v1.
@@ -91,42 +92,14 @@ module Api::V1
         render json: { message: 'Superuser access required' }, status: 403
       end
 
-      # Mirrors the whitelist from SubnetsController#permitted_flags so the
-      # admin endpoint and the per-subnet config-update endpoint accept the
-      # same shape.
+      # Same whitelist as PATCH /v1/subnets/:id/config.
       def permitted_flags
-        allowed = {}
-        if params.key?(:multi_role)
-          allowed['multi_role'] = to_bool(params[:multi_role])
-        end
-        if params.key?(:enforce_valid_email)
-          allowed['enforce_valid_email'] = to_bool(params[:enforce_valid_email])
-        end
-        if params.key?(:visible_roles)
-          roles = Array(params[:visible_roles]).map(&:to_s).reject(&:empty?)
-          allowed['visible_roles'] = roles
-        end
-        if params.key?(:chain_limit) && params[:chain_limit].present?
-          allowed['chain_limit'] = params[:chain_limit].to_i
-        end
-        if params.key?(:default_markup) && params[:default_markup].present?
-          allowed['default_markup'] = params[:default_markup].to_f
-        end
-        if params.key?(:default_markup_type) && params[:default_markup_type].present?
-          type = params[:default_markup_type].to_s
-          allowed['default_markup_type'] = Markup::TYPES.include?(type) ? type : 'flat'
-        end
-        allowed
+        SiteConfig.permit_flags(params).stringify_keys
       end
 
       def permitted_user_type
         return params[:user_type] if Invitation.user_types.key?(params[:user_type].to_s)
         'broker'
-      end
-
-      def to_bool(v)
-        return v if v == true || v == false
-        %w[true 1 yes].include?(v.to_s.downcase)
       end
 
       def serialize(invitation)

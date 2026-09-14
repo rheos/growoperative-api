@@ -24,6 +24,7 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       body = JSON.parse(response.body)
       expect(body['subnet_id']).to eq(subnet.id)
       expect(body['config']['multi_role']).to eq(SiteConfig::DEFAULTS[:multi_role])
+      expect(body['config']['currency']).to eq('CAD')
     end
 
     it 'returns the latest config version merged over defaults' do

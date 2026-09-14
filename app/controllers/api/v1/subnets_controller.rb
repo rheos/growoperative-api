@@ -83,39 +83,8 @@ module Api::V1
       render json: { message: 'Superuser access required' }, status: 403
     end
 
-    # Whitelist the flags the admin UI is allowed to set. Expanded cautiously —
-    # anything not here is silently ignored.
     def permitted_flags
-      allowed = {}
-      if params.key?(:multi_role)
-        allowed[:multi_role] = to_bool(params[:multi_role])
-      end
-      if params.key?(:show_mutual_contacts)
-        allowed[:show_mutual_contacts] = to_bool(params[:show_mutual_contacts])
-      end
-      if params.key?(:enforce_valid_email)
-        allowed[:enforce_valid_email] = to_bool(params[:enforce_valid_email])
-      end
-      if params.key?(:visible_roles)
-        roles = Array(params[:visible_roles]).map(&:to_s).reject(&:empty?)
-        allowed[:visible_roles] = roles
-      end
-      if params.key?(:chain_limit) && params[:chain_limit].present?
-        allowed[:chain_limit] = params[:chain_limit].to_i
-      end
-      if params.key?(:default_markup) && params[:default_markup].present?
-        allowed[:default_markup] = params[:default_markup].to_f
-      end
-      if params.key?(:default_markup_type) && params[:default_markup_type].present?
-        type = params[:default_markup_type].to_s
-        allowed[:default_markup_type] = Markup::TYPES.include?(type) ? type : 'flat'
-      end
-      allowed
-    end
-
-    def to_bool(v)
-      return v if v == true || v == false
-      %w[true 1 yes].include?(v.to_s.downcase)
+      SiteConfig.permit_flags(params)
     end
 
     def serialize_graph_node(user)
