@@ -36,7 +36,8 @@ RSpec.describe 'Subnets admin API', type: :request, skip_hooks: true do
       expect(match['config']['multi_role']).to eq(false)
       expect(match['config']['currency']).to eq('CAD')
       expect(match['version']).to eq(1)
-      expect(body['available_currencies']).to eq(SiteConfig::CURRENCIES)
+      codes = body['available_currencies'].map { |c| c['code'] }
+      expect(codes).to include('CAD', 'EUR', 'CRC')
     end
   end
 

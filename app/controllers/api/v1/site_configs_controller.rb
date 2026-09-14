@@ -11,7 +11,7 @@ class Api::V1::SiteConfigsController < Api::V1::ApiController
       subnet_id: subnet&.id,
       subnet_name: subnet&.name,
       config: SiteConfig.for(subnet),
-      available_currencies: SiteConfig::CURRENCIES
+      available_currencies: SiteConfig.currency_catalog
     }
   end
 

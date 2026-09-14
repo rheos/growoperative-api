@@ -31,7 +31,10 @@ module Api::V1
       #   visible_roles:      ["broker", ...]         (optional)
       #   multi_role:         false                   (optional)
       #   enforce_valid_email:false                   (optional)
-      #   currency:           "EUR"                   (optional, ISO 4217)
+      #   currency:           "EUR"                   (optional, ISO 4217;
+      #                                               must already be in the
+      #                                               GET /v1/admin/currencies
+      #                                               registry)
       #
       # Returns the invitation including its code. The redeeming user becomes
       # seed_user of a new Subnet with these flags written as SubnetConfig v1.

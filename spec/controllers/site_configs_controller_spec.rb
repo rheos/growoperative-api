@@ -25,8 +25,11 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       expect(body['subnet_id']).to eq(subnet.id)
       expect(body['config']['multi_role']).to eq(SiteConfig::DEFAULTS[:multi_role])
       expect(body['config']['currency']).to eq('CAD')
-      expect(body['available_currencies']).to eq(SiteConfig::CURRENCIES)
-      expect(body['available_currencies']).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      codes = body['available_currencies'].map { |c| c['code'] }
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      cad = body['available_currencies'].find { |c| c['code'] == 'CAD' }
+      expect(cad['name']).to eq('Canadian dollar')
+      expect(cad['locale']).to eq('en-CA')
     end
 
     it 'returns a stored subnet currency' do
@@ -54,8 +57,8 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       expect(body['config']['multi_role']).to eq(false)
       expect(body['config']['demo_mode']).to eq(true)
       expect(body['config']['chain_limit']).to eq(SiteConfig::DEFAULTS[:chain_limit])
-      expect(body['available_currencies']).to eq(SiteConfig::CURRENCIES)
-      expect(body['available_currencies']).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      codes = body['available_currencies'].map { |c| c['code'] }
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
     end
 
     it 'falls back to the user primary subnet when subnet_id is omitted' do

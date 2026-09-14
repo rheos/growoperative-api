@@ -13,12 +13,10 @@ class SiteConfig
     currency: 'CAD'
   }.freeze
 
-  # Currencies a new subnet can pick. Keep in sync with
-  # growoperative-app `SITE_CURRENCIES`.
-  CURRENCIES = %w[
-    CAD USD EUR GBP CHF SEK NOK DKK PLN CZK HUF
-    JPY KRW AUD NZD MXN CRC BRL INR IDR VND ZAR
-  ].freeze
+  # Starter ISO codes. The live picker list is SupportedCurrency.codes
+  # (builtin rows plus POST /v1/admin/currencies). Kept so existing
+  # references still mean "the shipped catalog".
+  CURRENCIES = SupportedCurrency::BUILTIN.map { |row| row[:code] }.freeze
 
   # Returns the merged flag hash for a subnet. Resolution order (first match wins):
   #   1. Current (latest version) subnet_config for the subnet
@@ -74,9 +72,13 @@ class SiteConfig
     allowed
   end
 
+  def self.currency_catalog
+    SupportedCurrency.payloads
+  end
+
   def self.normalize_currency(value)
     code = value.to_s.strip.upcase
-    CURRENCIES.include?(code) ? code : nil
+    SupportedCurrency.codes.include?(code) ? code : nil
   end
 
   def self.invalid_currency?(source)

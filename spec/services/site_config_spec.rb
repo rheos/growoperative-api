@@ -85,5 +85,11 @@ RSpec.describe SiteConfig do
       expect(SiteConfig.normalize_currency('mxn')).to eq('MXN')
       expect(SiteConfig.normalize_currency('crc')).to eq('CRC')
     end
+
+    it 'accepts a code added to the registry' do
+      SupportedCurrency.create!(code: 'THB', name: 'Thai baht', locale: 'th-TH')
+      expect(SiteConfig.normalize_currency('thb')).to eq('THB')
+      expect(SiteConfig.invalid_currency?(currency: 'THB')).to eq(false)
+    end
   end
 end

@@ -11,7 +11,7 @@ module Api::V1
       subnets = Subnet.includes(:seed_user, :subnet_configs, :subnet_memberships).all
       render json: {
         subnets: subnets.map { |s| subnet_payload(s) },
-        available_currencies: SiteConfig::CURRENCIES
+        available_currencies: SiteConfig.currency_catalog
       }, status: 200
     end
 

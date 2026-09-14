@@ -77,3 +77,5 @@ jobs:
           spec/controllers/seed_invitation_spec.rb
           spec/controllers/subnets_controller_spec.rb
           spec/controllers/site_configs_controller_spec.rb
+          spec/models/supported_currency_spec.rb
+          spec/controllers/admin_currencies_spec.rb
