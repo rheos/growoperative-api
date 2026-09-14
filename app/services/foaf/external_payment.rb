@@ -8,13 +8,17 @@
 # documentation, not on-chain authentication — we never fetch RPC data here.
 #
 # Trustline amounts are CAD. A Polygonscan link is treated as USDT unless the
-# note names USDC or DAI. We never copy the CAD amount onto the token.
+# note names another known ticker. We never copy the CAD amount onto the token.
 module Foaf
   class ExternalPayment
     POLYGONSCAN_TX = %r{
       (?:https?://)?(?:www\.|m\.)?polygonscan\.com/tx/(0x[a-fA-F0-9]{64})
     }ix
-    NOTE_TOKEN = /\b(USDC|DAI|USDT)\b/i
+    NOTE_TOKEN = /\b(USDC|DAI|USDT|BTC|ETH|BITCOIN|ETHEREUM)\b/i
+    TOKEN_ALIASES = {
+      "BITCOIN" => "BTC",
+      "ETHEREUM" => "ETH"
+    }.freeze
 
     def self.parse(text)
       return [] if text.blank?
@@ -33,7 +37,10 @@ module Foaf
 
     def self.token_symbol_from(text)
       match = text.to_s.match(NOTE_TOKEN)
-      match ? match[1].upcase : "USDT"
+      return "USDT" unless match
+
+      raw = match[1].upcase
+      TOKEN_ALIASES.fetch(raw, raw)
     end
 
     def self.metadata_for(text)
