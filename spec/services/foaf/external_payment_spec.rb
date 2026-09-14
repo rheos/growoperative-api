@@ -70,11 +70,11 @@ RSpec.describe Foaf::ExternalPayment do
       expect(described_class.parse(text).map { |p| p["tx_hash"] }).to eq([hash, other])
     end
 
-    it "defaults Polygonscan notes to USDT, unless the note names another token" do
+    it "defaults Polygonscan notes to USDT, unless the note names USDC or DAI" do
       expect(described_class.parse(canonical).first["token_symbol"]).to eq("USDT")
       expect(described_class.parse("USDC #{canonical}").first["token_symbol"]).to eq("USDC")
-      expect(described_class.parse("BTC #{canonical}").first["token_symbol"]).to eq("BTC")
-      expect(described_class.parse("paid in ethereum #{canonical}").first["token_symbol"]).to eq("ETH")
+      expect(described_class.parse("BTC #{canonical}").first["token_symbol"]).to eq("USDT")
+      expect(described_class.parse("paid in ethereum #{canonical}").first["token_symbol"]).to eq("USDT")
     end
   end
 
