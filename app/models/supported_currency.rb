@@ -22,6 +22,7 @@ class SupportedCurrency < ApplicationRecord
     { code: 'NZD', name: 'New Zealand dollar', locale: 'en-NZ' },
     { code: 'PLN', name: 'Polish zloty', locale: 'pl-PL' },
     { code: 'SEK', name: 'Swedish krona', locale: 'sv-SE' },
+    { code: 'THB', name: 'Thai baht', locale: 'th-TH' },
     { code: 'USD', name: 'US dollar', locale: 'en-US' },
     { code: 'VND', name: 'Vietnamese dong', locale: 'vi-VN' },
     { code: 'ZAR', name: 'South African rand', locale: 'en-ZA' }

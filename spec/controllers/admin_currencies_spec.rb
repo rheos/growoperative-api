@@ -31,7 +31,7 @@ RSpec.describe 'Admin currencies API', type: :request, skip_hooks: true do
 
       body = JSON.parse(response.body)
       codes = body['currencies'].map { |c| c['code'] }
-      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC', 'THB')
       cad = body['currencies'].find { |c| c['code'] == 'CAD' }
       expect(cad['name']).to eq('Canadian dollar')
       expect(cad['locale']).to eq('en-CA')
@@ -49,16 +49,16 @@ RSpec.describe 'Admin currencies API', type: :request, skip_hooks: true do
 
     it 'registers a new ISO code' do
       post '/v1/admin/currencies',
-           params: { code: 'thb', name: 'Thai baht', locale: 'th-TH' }.to_json,
+           params: { code: 'php', name: 'Philippine peso', locale: 'en-PH' }.to_json,
            headers: super_headers
       expect(response).to have_http_status(201)
 
       body = JSON.parse(response.body)
-      expect(body['code']).to eq('THB')
-      expect(body['name']).to eq('Thai baht')
-      expect(body['locale']).to eq('th-TH')
+      expect(body['code']).to eq('PHP')
+      expect(body['name']).to eq('Philippine peso')
+      expect(body['locale']).to eq('en-PH')
       expect(body['active']).to eq(true)
-      expect(SiteConfig.normalize_currency('THB')).to eq('THB')
+      expect(SiteConfig.normalize_currency('PHP')).to eq('PHP')
     end
 
     it 'defaults name to the code and locale to en' do
@@ -88,12 +88,7 @@ RSpec.describe 'Admin currencies API', type: :request, skip_hooks: true do
       expect(response).to have_http_status(422)
     end
 
-    it 'makes the new code pickable on a subnet and visible in site_config' do
-      post '/v1/admin/currencies',
-           params: { code: 'THB', name: 'Thai baht', locale: 'th-TH' }.to_json,
-           headers: super_headers
-      expect(response).to have_http_status(201)
-
+    it 'lets a subnet pick Thai baht from the starter list' do
       subnet = create(:subnet, seed_user: superuser)
       create(:subnet_membership, user: superuser, subnet: subnet, is_primary: true)
 
@@ -106,32 +101,34 @@ RSpec.describe 'Admin currencies API', type: :request, skip_hooks: true do
       get '/v1/site_config', headers: super_headers
       body = JSON.parse(response.body)
       expect(body['config']['currency']).to eq('THB')
-      expect(body['available_currencies'].map { |c| c['code'] }).to include('THB')
+      thb = body['available_currencies'].find { |c| c['code'] == 'THB' }
+      expect(thb['name']).to eq('Thai baht')
+      expect(thb['locale']).to eq('th-TH')
     end
   end
 
   describe 'PATCH /v1/admin/currencies/:code' do
     it 'updates name and locale for a newly registered code' do
-      SupportedCurrency.create!(code: 'THB', name: 'Thai baht', locale: 'th-TH')
+      SupportedCurrency.create!(code: 'PHP', name: 'Philippine peso', locale: 'en-PH')
 
-      patch '/v1/admin/currencies/THB',
-            params: { name: 'Baht', locale: 'th' }.to_json,
+      patch '/v1/admin/currencies/PHP',
+            params: { name: 'Peso', locale: 'fil-PH' }.to_json,
             headers: super_headers
       expect(response).to have_http_status(200)
 
       body = JSON.parse(response.body)
-      expect(body['name']).to eq('Baht')
-      expect(body['locale']).to eq('th')
+      expect(body['name']).to eq('Peso')
+      expect(body['locale']).to eq('fil-PH')
     end
 
     it 'deactivates a registered code so it leaves the picker' do
-      SupportedCurrency.create!(code: 'THB', name: 'Thai baht', locale: 'th-TH')
+      SupportedCurrency.create!(code: 'PHP', name: 'Philippine peso', locale: 'en-PH')
 
-      patch '/v1/admin/currencies/THB',
+      patch '/v1/admin/currencies/PHP',
             params: { active: false }.to_json,
             headers: super_headers
       expect(response).to have_http_status(200)
-      expect(SiteConfig.normalize_currency('THB')).to be_nil
+      expect(SiteConfig.normalize_currency('PHP')).to be_nil
     end
 
     it 'refuses to deactivate CAD' do

@@ -26,7 +26,7 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       expect(body['config']['multi_role']).to eq(SiteConfig::DEFAULTS[:multi_role])
       expect(body['config']['currency']).to eq('CAD')
       codes = body['available_currencies'].map { |c| c['code'] }
-      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC', 'THB')
       cad = body['available_currencies'].find { |c| c['code'] == 'CAD' }
       expect(cad['name']).to eq('Canadian dollar')
       expect(cad['locale']).to eq('en-CA')
@@ -58,7 +58,7 @@ RSpec.describe 'SiteConfigs API', type: :request, skip_hooks: true do
       expect(body['config']['demo_mode']).to eq(true)
       expect(body['config']['chain_limit']).to eq(SiteConfig::DEFAULTS[:chain_limit])
       codes = body['available_currencies'].map { |c| c['code'] }
-      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC')
+      expect(codes).to include('CAD', 'USD', 'EUR', 'MXN', 'CRC', 'THB')
     end
 
     it 'falls back to the user primary subnet when subnet_id is omitted' do

@@ -5,20 +5,20 @@ RSpec.describe SupportedCurrency do
 
   describe '.catalog' do
     it 'includes builtin CAD even when the table is empty' do
-      expect(SupportedCurrency.codes).to include('CAD', 'EUR', 'CRC')
+      expect(SupportedCurrency.codes).to include('CAD', 'EUR', 'CRC', 'THB')
     end
 
     it 'includes a row written through the registry' do
-      SupportedCurrency.create!(code: 'thb', name: 'Thai baht', locale: 'th-TH')
-      expect(SupportedCurrency.codes).to include('THB')
-      thb = SupportedCurrency.catalog.find { |row| row[:code] == 'THB' }
-      expect(thb[:name]).to eq('Thai baht')
-      expect(thb[:locale]).to eq('th-TH')
+      SupportedCurrency.create!(code: 'php', name: 'Philippine peso', locale: 'en-PH')
+      expect(SupportedCurrency.codes).to include('PHP')
+      php = SupportedCurrency.catalog.find { |row| row[:code] == 'PHP' }
+      expect(php[:name]).to eq('Philippine peso')
+      expect(php[:locale]).to eq('en-PH')
     end
 
     it 'omits a deactivated row' do
-      SupportedCurrency.create!(code: 'THB', name: 'Thai baht', locale: 'th-TH', active: false)
-      expect(SupportedCurrency.codes).not_to include('THB')
+      SupportedCurrency.create!(code: 'PHP', name: 'Philippine peso', locale: 'en-PH', active: false)
+      expect(SupportedCurrency.codes).not_to include('PHP')
     end
   end
 

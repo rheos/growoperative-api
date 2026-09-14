@@ -15,7 +15,7 @@ module Api::V1
       end
 
       # POST /v1/admin/currencies
-      # Body: { code: "THB", name: "Thai baht", locale: "th-TH" }
+      # Body: { code: "PHP", name: "Philippine peso", locale: "en-PH" }
       # `name` and `locale` are optional (`name` defaults to the code, locale to "en").
       def create
         code = params[:code].to_s.strip.upcase

@@ -81,15 +81,16 @@ RSpec.describe SiteConfig do
       expect(SiteConfig.normalize_currency('XXX')).to be_nil
     end
 
-    it 'accepts Mexican peso and Costa Rican colon' do
+    it 'accepts Mexican peso, Costa Rican colon, and Thai baht' do
       expect(SiteConfig.normalize_currency('mxn')).to eq('MXN')
       expect(SiteConfig.normalize_currency('crc')).to eq('CRC')
+      expect(SiteConfig.normalize_currency('thb')).to eq('THB')
     end
 
     it 'accepts a code added to the registry' do
-      SupportedCurrency.create!(code: 'THB', name: 'Thai baht', locale: 'th-TH')
-      expect(SiteConfig.normalize_currency('thb')).to eq('THB')
-      expect(SiteConfig.invalid_currency?(currency: 'THB')).to eq(false)
+      SupportedCurrency.create!(code: 'PHP', name: 'Philippine peso', locale: 'en-PH')
+      expect(SiteConfig.normalize_currency('php')).to eq('PHP')
+      expect(SiteConfig.invalid_currency?(currency: 'PHP')).to eq(false)
     end
   end
 end
