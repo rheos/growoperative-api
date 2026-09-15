@@ -76,6 +76,16 @@ class Inventory < ApplicationRecord
         'grade-id' => self.item.grade_id,
         'item-unit-id' => self.item.item_unit_id, 
         'unit-name' => self.item.item_unit.item_symbol, 
+        # The web client consumes inventory payloads for every dashboard
+        # column, so variable-weight metadata must be exposed here rather
+        # than only through ItemSerializer.
+        'pricing-basis' => self.item.pricing_basis,
+        'sale-unit-label' => self.item.sale_unit_label,
+        'est-weight-min' => self.item.est_weight_min,
+        'est-weight-max' => self.item.est_weight_max,
+        'cut-yield-factor' => self.item.cut_yield_factor,
+        'on-the-rail-available' => self.item.on_the_rail_available,
+        'on-the-rail-delta' => self.item.on_the_rail_delta,
         'pack-contains-quantity' => self.item.pack_contains_quantity,
         'pack-contains-unit-id' => self.item.pack_contains_unit_id,
         'condition' => self.item.condition,

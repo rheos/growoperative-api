@@ -11,7 +11,10 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[7.1].define(version: 201811070122202) do
-  create_table "audit_logs", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "plpgsql"
+
+  create_table "audit_logs", force: :cascade do |t|
     t.string "action", null: false
     t.string "status", default: "succeeded", null: false
     t.string "source"
@@ -24,7 +27,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["created_at"], name: "index_audit_logs_on_created_at"
   end
 
-  create_table "categories", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "categories", force: :cascade do |t|
     t.string "category_name"
     t.decimal "default_node_price", precision: 10, scale: 2
     t.datetime "created_at", precision: nil, null: false
@@ -35,7 +38,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["default_unit_id"], name: "index_categories_on_default_unit_id"
   end
 
-  create_table "category_sizes", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "category_sizes", force: :cascade do |t|
     t.integer "user_id"
     t.integer "category_id", null: false
     t.integer "item_unit_id", null: false
@@ -46,7 +49,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id", "category_id"], name: "index_category_sizes_on_user_and_category"
   end
 
-  create_table "category_units", charset: "latin1", force: :cascade do |t|
+  create_table "category_units", force: :cascade do |t|
     t.bigint "category_id", null: false
     t.bigint "item_unit_id", null: false
     t.integer "display_order", default: 0, null: false
@@ -57,7 +60,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["item_unit_id"], name: "index_category_units_on_item_unit_id"
   end
 
-  create_table "foaf_outbox_entries", charset: "utf8mb4", force: :cascade do |t|
+  create_table "foaf_outbox_entries", force: :cascade do |t|
     t.bigint "trustline_id", null: false
     t.string "operation_type", limit: 32, null: false
     t.json "payload", null: false
@@ -72,7 +75,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["trustline_id"], name: "index_foaf_outbox_entries_on_trustline_id"
   end
 
-  create_table "global_settings", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "global_settings", force: :cascade do |t|
     t.integer "value", default: 3
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
@@ -80,14 +83,14 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.text "string_value"
   end
 
-  create_table "grades", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "grades", force: :cascade do |t|
     t.string "name"
     t.string "value"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
   end
 
-  create_table "introductions", charset: "latin1", force: :cascade do |t|
+  create_table "introductions", force: :cascade do |t|
     t.bigint "introducer_id", null: false
     t.bigint "introducee_a_id", null: false
     t.bigint "introducee_b_id", null: false
@@ -102,7 +105,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["introducer_id", "status"], name: "index_introductions_on_introducer_and_status"
   end
 
-  create_table "inventories", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "inventories", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
     t.float "quantity"
@@ -124,7 +127,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_inventories_on_user_id"
   end
 
-  create_table "invitation_redemptions", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "invitation_redemptions", force: :cascade do |t|
     t.bigint "invitation_id"
     t.bigint "user_id"
     t.datetime "redeemed_at", precision: nil
@@ -134,7 +137,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_invitation_redemptions_on_user_id"
   end
 
-  create_table "invitations", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "invitations", force: :cascade do |t|
     t.string "invitation_code"
     t.bigint "user_id"
     t.integer "status"
@@ -158,7 +161,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_invitations_on_user_id"
   end
 
-  create_table "item_names", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "item_names", force: :cascade do |t|
     t.string "name"
     t.bigint "category_id"
     t.text "description"
@@ -167,7 +170,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["category_id"], name: "index_item_names_on_category_id"
   end
 
-  create_table "item_relationships", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "item_relationships", force: :cascade do |t|
     t.bigint "item_id"
     t.bigint "relationship_id"
     t.boolean "status"
@@ -177,7 +180,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["relationship_id"], name: "index_item_relationships_on_relationship_id"
   end
 
-  create_table "item_requests", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "item_requests", force: :cascade do |t|
     t.bigint "user_id"
     t.decimal "price", precision: 10, scale: 2
     t.integer "status"
@@ -198,7 +201,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_item_requests_on_user_id"
   end
 
-  create_table "item_units", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "item_units", force: :cascade do |t|
     t.string "unit_name"
     t.datetime "created_at", precision: nil, null: false
     t.datetime "updated_at", precision: nil, null: false
@@ -207,7 +210,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.integer "unit_type", default: 0, null: false
   end
 
-  create_table "items", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "items", force: :cascade do |t|
     t.bigint "user_id"
     t.decimal "quantity", precision: 10, scale: 5
     t.bigint "category_id"
@@ -226,6 +229,13 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.bigint "pack_contains_unit_id"
     t.integer "condition"
     t.boolean "one_time_listing", default: false, null: false
+    t.integer "pricing_basis", default: 0, null: false
+    t.string "sale_unit_label"
+    t.decimal "est_weight_min", precision: 10, scale: 2
+    t.decimal "est_weight_max", precision: 10, scale: 2
+    t.decimal "cut_yield_factor", precision: 4, scale: 3, default: "0.6"
+    t.boolean "on_the_rail_available", default: false, null: false
+    t.decimal "on_the_rail_delta", precision: 10, scale: 2, default: "0.0", null: false
     t.index ["category_id"], name: "index_items_on_category_id"
     t.index ["grade_id"], name: "index_items_on_grade_id"
     t.index ["item_name_id"], name: "index_items_on_item_name_id"
@@ -234,13 +244,13 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_items_on_user_id"
   end
 
-  create_table "jwt_blacklist", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "jwt_blacklist", force: :cascade do |t|
     t.string "jti", null: false
     t.datetime "exp", precision: nil, null: false
     t.index ["jti"], name: "index_jwt_blacklist_on_jti"
   end
 
-  create_table "notifications", charset: "latin1", force: :cascade do |t|
+  create_table "notifications", force: :cascade do |t|
     t.bigint "recipient_id", null: false
     t.bigint "actor_id"
     t.string "notification_type", null: false
@@ -266,7 +276,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["subject_type", "subject_id"], name: "index_notifications_on_subject"
   end
 
-  create_table "orders", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "orders", force: :cascade do |t|
     t.string "user_id"
     t.string "friend_id"
     t.string "order_label"
@@ -291,7 +301,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id", "friend_id", "order_status"], name: "index_orders_on_user_friend_status"
   end
 
-  create_table "pending_payments", charset: "latin1", force: :cascade do |t|
+  create_table "pending_payments", force: :cascade do |t|
     t.bigint "from_user_id"
     t.bigint "to_user_id"
     t.bigint "trustline_id"
@@ -312,7 +322,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["trustline_id"], name: "index_pending_payments_on_trustline_id"
   end
 
-  create_table "push_tokens", charset: "latin1", force: :cascade do |t|
+  create_table "push_tokens", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.string "token", null: false
     t.string "device_id", null: false
@@ -325,7 +335,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_push_tokens_on_user_id"
   end
 
-  create_table "relationships", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "relationships", force: :cascade do |t|
     t.integer "friend_id"
     t.integer "status", default: 0
     t.integer "action_user_id"
@@ -340,7 +350,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_relationships_on_user_id"
   end
 
-  create_table "request_contracts", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "request_contracts", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_id"
     t.decimal "quantity", precision: 10, scale: 5
@@ -359,7 +369,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_request_contracts_on_user_id"
   end
 
-  create_table "request_list_relationship_statuses", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "request_list_relationship_statuses", force: :cascade do |t|
     t.bigint "relationship_id"
     t.string "status"
     t.datetime "created_at", precision: nil, null: false
@@ -369,7 +379,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["relationship_id"], name: "index_request_list_relationship_statuses_on_relationship_id"
   end
 
-  create_table "reviews", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "reviews", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "item_name_id"
     t.bigint "item_id"
@@ -382,7 +392,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_reviews_on_user_id"
   end
 
-  create_table "subnet_applications", charset: "latin1", force: :cascade do |t|
+  create_table "subnet_applications", force: :cascade do |t|
     t.string "community_name", null: false
     t.string "location", null: false
     t.string "contact_name", null: false
@@ -399,7 +409,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["status"], name: "index_subnet_applications_on_status"
   end
 
-  create_table "subnet_configs", charset: "latin1", force: :cascade do |t|
+  create_table "subnet_configs", force: :cascade do |t|
     t.bigint "subnet_id", null: false
     t.integer "version", null: false
     t.json "config", null: false
@@ -408,7 +418,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["subnet_id", "version"], name: "index_subnet_configs_on_subnet_id_and_version", unique: true
   end
 
-  create_table "subnet_memberships", charset: "latin1", force: :cascade do |t|
+  create_table "subnet_memberships", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "subnet_id", null: false
     t.bigint "joined_via_invitation_id"
@@ -419,7 +429,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id", "subnet_id"], name: "index_subnet_memberships_on_user_id_and_subnet_id", unique: true
   end
 
-  create_table "subnets", charset: "latin1", force: :cascade do |t|
+  create_table "subnets", force: :cascade do |t|
     t.bigint "seed_user_id", null: false
     t.string "name", null: false
     t.datetime "created_at", precision: nil, null: false
@@ -427,7 +437,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["seed_user_id"], name: "index_subnets_on_seed_user_id"
   end
 
-  create_table "trustline_transactions", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "trustline_transactions", force: :cascade do |t|
     t.bigint "trustline_id", null: false
     t.decimal "amount", precision: 10, scale: 2, null: false
     t.text "description"
@@ -458,7 +468,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["trustline_id"], name: "index_trustline_transactions_on_trustline_id"
   end
 
-  create_table "trustlines", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "trustlines", force: :cascade do |t|
     t.bigint "user_a_id", null: false
     t.bigint "user_b_id", null: false
     t.decimal "credit_limit_a_to_b", precision: 10, scale: 2, default: "0.0", null: false
@@ -477,7 +487,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_b_id"], name: "index_trustlines_on_user_b_id"
   end
 
-  create_table "unit_options", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "unit_options", force: :cascade do |t|
     t.integer "inventory_id", null: false
     t.integer "item_unit_id", null: false
     t.float "price"
@@ -490,7 +500,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["inventory_id"], name: "index_unit_options_on_inventory_id"
   end
 
-  create_table "user_category_prices", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "user_category_prices", force: :cascade do |t|
     t.bigint "user_id"
     t.bigint "category_id"
     t.decimal "price", precision: 10, scale: 2
@@ -502,7 +512,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_category_prices_on_user_id"
   end
 
-  create_table "user_groups", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "user_groups", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "group_label"
     t.datetime "created_at", precision: nil, null: false
@@ -510,7 +520,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_groups_on_user_id"
   end
 
-  create_table "user_relationship_prices", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "user_relationship_prices", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "friend_id"
     t.bigint "category_id"
@@ -526,7 +536,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_relationship_prices_on_user_id"
   end
 
-  create_table "user_relationship_request_prices", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "user_relationship_request_prices", force: :cascade do |t|
     t.bigint "user_id"
     t.integer "friend_id"
     t.bigint "relationship_id"
@@ -539,7 +549,7 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.index ["user_id"], name: "index_user_relationship_request_prices_on_user_id"
   end
 
-  create_table "users", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+  create_table "users", force: :cascade do |t|
     t.string "encrypted_password", default: "", null: false
     t.string "reset_password_token"
     t.datetime "reset_password_sent_at", precision: nil
