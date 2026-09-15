@@ -29,6 +29,52 @@ class Item < ApplicationRecord
     condition_n_a: 2
   }
   
+  # Variable-weight "buy a share" listings (meat): priced per pound of
+  # carcass/hanging weight. per_unit (default) leaves existing listings alone.
+  enum pricing_basis: {
+    per_unit: 0,
+    per_weight: 1
+  }
+
+  with_options if: :per_weight? do
+    validates :est_weight_min, :est_weight_max, presence: true,
+              numericality: { greater_than: 0 }
+    validates :cut_yield_factor,
+              numericality: { greater_than: 0, less_than_or_equal_to: 1 }
+    validates :on_the_rail_delta, numericality: { greater_than_or_equal_to: 0 }
+    validate :est_weight_range_ordered
+  end
+
+  # Effective per-lb rate billed (on-the-rail knocks off the delta).
+  def billed_rate(on_the_rail: false)
+    VariableWeightEstimate.billed_rate(
+      price, on_the_rail_delta, on_the_rail: on_the_rail && on_the_rail_available
+    )
+  end
+
+  # [low, high] billed estimate across the carcass-weight range.
+  def billed_estimate_range(on_the_rail: false)
+    VariableWeightEstimate.billed_range(
+      billed_rate(on_the_rail: on_the_rail), est_weight_min, est_weight_max
+    )
+  end
+
+  # [low, high] take-home (packaged cut) weight across the range.
+  def take_home_estimate_range
+    VariableWeightEstimate.take_home_range(est_weight_min, est_weight_max, cut_yield_factor)
+  end
+
+  # Effective $/lb of packaged meat (billed rate / yield).
+  def packaged_rate(on_the_rail: false)
+    VariableWeightEstimate.packaged_rate(billed_rate(on_the_rail: on_the_rail), cut_yield_factor)
+  end
+
+  def est_weight_range_ordered
+    return if est_weight_min.blank? || est_weight_max.blank?
+    return unless est_weight_min > est_weight_max
+    errors.add(:est_weight_max, 'must be at least the minimum weight')
+  end
+
   # callbacks
   before_create :set_item_name
   before_save :set_item_unit

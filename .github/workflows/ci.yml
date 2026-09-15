@@ -26,7 +26,10 @@ jobs:
 
     env:
       RAILS_ENV: test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/growoperative_test
+      # `config/database.yml` deliberately reads TEST_DATABASE_URL for the
+      # test environment, preventing a test run from ever using development.
+      # The GitHub Actions Postgres service is exposed on port 5432.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/growoperative_test
       SECRET_KEY_BASE: ci-secret-key-base
       FOAF_AUTH_BASE_URL: http://localhost:3013
       FOAF_AUTH_PUBLIC_BASE_URL: https://auth.foaf.io
