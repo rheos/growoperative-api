@@ -11,7 +11,7 @@ gem 'pg', '~> 1.5'
 gem 'puma', '~> 7.2'
 gem 'sprockets-rails'
 # Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
-gem 'jbuilder', '~> 2.5'
+gem 'jbuilder', '~> 2.15'
 gem 'jwt'
 gem 'jsonapi-serializer'
 gem "foaf_client",
