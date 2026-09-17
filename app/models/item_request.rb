@@ -179,6 +179,7 @@ class ItemRequest < ApplicationRecord
         'on-the-rail-available' => self.inventory.item.on_the_rail_available,
         'on-the-rail-delta' => self.inventory.item.on_the_rail_delta,
         # Contract-level weight state. Null on fixed-price lines.
+        'request-contract-id' => self.request_contract_id,
         'on-the-rail' => self.request_contract.on_the_rail,
         'estimated-weight' => self.request_contract.estimated_weight,
         'actual-weight' => self.request_contract.actual_weight,

@@ -538,6 +538,10 @@ module Api::V1
           current_request = item.item_requests.find_by(friend_id: current_user.id)
           json[:attributes]['total-price'] = previous_request.price if previous_request
           json[:attributes]['expected-price'] = (current_request.price || item.ref_price) if current_request
+          # This column serializes Inventory rather than ItemRequest, so the
+          # contract-level weight state has to be overlaid explicitly or a meat
+          # share on the dashboard looks like a fixed-price line.
+          overlay_variable_weight!(json, (previous_request || current_request)&.request_contract)
 
           next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
           user_name = helpers.target_user_name(current_user.id, next_request.user_id) if next_request
@@ -670,6 +674,19 @@ module Api::V1
       return false unless item&.per_weight? && item.on_the_rail_available
 
       ActiveModel::Type::Boolean.new.cast(flag) || false
+    end
+
+    # Copies a contract's weight state onto an Inventory-shaped payload, matching
+    # the keys ItemRequest#to_json already emits.
+    def overlay_variable_weight!(json, contract)
+      return if contract.nil?
+
+      json[:attributes]['request-contract-id'] = contract.id
+      json[:attributes]['on-the-rail'] = contract.on_the_rail
+      json[:attributes]['estimated-weight'] = contract.estimated_weight
+      json[:attributes]['actual-weight'] = contract.actual_weight
+      json[:attributes]['weight-finalized-at'] = contract.weight_finalized_at
+      json[:attributes]['weight-pending'] = contract.weight_pending?
     end
 
     # Books the buyer's estimate and cut mode on a variable-weight contract.
