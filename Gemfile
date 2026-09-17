@@ -50,7 +50,7 @@ gem 'devise_invitable', '~> 2.0'
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
   gem 'dotenv-rails', '~> 2.7'
-  gem 'byebug', '~> 11.1'
+  gem 'byebug', '~> 13.0'
   gem 'rspec-rails', '~> 6.1'
   gem 'factory_bot_rails', '~> 6.1'
   gem 'pry-rails', '~> 0.3'
