@@ -29,7 +29,7 @@ Port mapping: Rails container listens on 8080 internally, exposed as `localhost:
 - JWT authentication (HS256, 1-year expiry)
 - CarrierWave + fog-aws for S3 uploads (rmagick for image processing)
 - Devise (username-based auth) + devise-jwt + devise_invitable
-- fast_jsonapi for serialization
+- jsonapi-serializer for serialization
 - RSpec + Factory Bot for testing
 
 ## API
@@ -185,14 +185,16 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
 - **Databases:** Neon Postgres, one per tier.
 - **Three Coolify apps, one repo, all tracking `master`.** They differ by environment and database, not by branch:
 
-  | Tier | Host | Coolify uuid |
-  |---|---|---|
-  | prod | `api.growoperative.app` | `bre53dp4tikyezgfvclzaxy1` |
-  | demo | `dpi.growoperative.app` | `mcuuicw8jm9bbpn6f9ossiwz` |
-  | beta | `bpi.growoperative.app` | `1pbmmgxmxrlyo1rp1lnlckot` |
+  | Tier | Coolify app | Coolify uuid | Host | Neon endpoint |
+  |---|---|---|---|---|
+  | prod | `railsbackend-prod` | `bre53dp4tikyezgfvclzaxy1` | `api.growoperative.app` | `ep-long-scene-a6e7fw2x` |
+  | demo | `railsbackend-demo` | `mcuuicw8jm9bbpn6f9ossiwz` | `dpi.growoperative.app` | `ep-bitter-forest-a6xp8yet` |
+  | beta | `railsbackend-beta` | `1pbmmgxmxrlyo1rp1lnlckot` | `bpi.growoperative.app` | `ep-orange-bar-a685bn4x` |
+
+  Beta is a full tier of its own now, with its own host and its own Neon database. It is no longer the demo container doing double duty.
 
 - **`master` is the integration branch. There is NO `develop`** — that belongs to `growoperative-app`, a different repo. Merge fixes straight to `master` via PR.
-- **Merging to `master` does NOT auto-deploy.** The old `deploy-demo.yml` / `deploy-prod.yml` workflows were removed in PR #38; only `ci.yml` remains. A deploy is an explicit Coolify API call:
+- **Merging to `master` does NOT auto-deploy.** The old `deploy-demo.yml` / `deploy-prod.yml` workflows were removed in PR #38; only `ci.yml` remains. Nor is there a webhook: `gh api repos/rheos/railsbackend/hooks` returns `[]`, so GitHub has no way to reach Coolify at all. Merging is safe, and it also ships nothing. A deploy is an explicit Coolify API call:
 
   ```bash
   ssh -i ~/Documents/novadiem/keys/contabo/contabo_ed25519 -f -N -L 8009:localhost:8000 root@144.126.145.4
@@ -202,8 +204,11 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
   ```
 
   A deploy pulls the latest `master` and rebuilds from the repo `Dockerfile` (`build_pack: dockerfile`).
-- **CI runs a curated rspec subset**, not the full suite — see the list in `.github/workflows/ci.yml`. A new spec file is not exercised unless added there.
-- **Routing + TLS:** handled by Coolify's proxy on the Contabo box, per-app. `nginx/nginx.conf` and `docker-compose.prod.yml` are still in the repo but are **Lightsail-era artifacts** — nothing on Contabo reads them. Do not edit them expecting a routing change.
+  Full app list for the box (every repo, not just this one): `GET /api/v1/applications`.
+- **Promotion path:** merge to `master`, deploy beta or demo, soak, then deploy prod with the same call and the prod uuid. Because every tier tracks `master`, promoting is "deploy the next uuid," not a branch merge. There is no per-tier branch and no SHA pinning, so a deploy always takes current `master` HEAD: anything already merged ships with it. Deploy one uuid at a time to hold a tier back.
+- **Env vars live in Coolify, per app** — not in `.env.production` / `.env.demo` files on a box, as they did on Lightsail. Read them with `GET /api/v1/applications/<uuid>/envs`. An edit takes effect on the next deploy.
+- **CI runs a curated rspec subset**, not the full suite — see the list in `.github/workflows/ci.yml`. A new spec file is not exercised unless added there. CI also runs `scripts/test_trade_test.py` and `scripts/test_foaf_reset_demo.py`, and it never deploys.
+- **Routing + TLS:** handled by Coolify's proxy on the Contabo box, per-app. `nginx/nginx.conf` and `docker-compose.prod.yml` are still in the repo but are **Lightsail-era artifacts** — nothing on Contabo reads them. Do not edit them expecting a routing change. `scripts/backup_dbs.sh` is the same vintage: it dumps MySQL from the retired box and does not back up Neon.
 - **Frontends are not served from here.** Cloudflare Pages builds and serves them straight from the `growoperative-app` repo: `main` (web + demo), `develop` (beta). The old `/var/www/prod` + `/var/www/demo` dist mounts are gone with the Lightsail box.
 - **URLs:** prod API `https://api.growoperative.app`; demo API `https://dpi.growoperative.app`; beta API `https://bpi.growoperative.app`. Web frontends: `https://web.growoperative.app` (prod), `https://demo.growoperative.app` (demo), `https://beta.growoperative.app` (soak/develop); all Cloudflare Pages.
 
