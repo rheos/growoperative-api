@@ -58,9 +58,26 @@ class Order < ApplicationRecord
       end
       self.update(signed_on: DateTime.now, order_status: :signed)
 
+    when 'finalize_weight'
+      # Only the seller (friend_id) records the scale reading, and only before
+      # the order ships — after that the number is already what settlement used.
+      return false if user_id.to_s != self.friend_id || self.order_status == "shipped"
+      return false if action[:weights].blank?
+
+      begin
+        finalize_weights!(action[:weights])
+      rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid, ArgumentError
+        # Unknown line, non-positive weight, or a fixed-price line — surfaces as
+        # the controller's 422 rather than a 500.
+        return false
+      end
+
     when 'ship'
       # Only the seller (friend_id) can ship; all contracts must be accepted
       return false if (user_id.to_s != self.friend_id || self.order_status == "shipped") || self.item_requests.find{|item_request| item_request.request_contract.status != "accepted"}
+      # A variable-weight share cannot ship on an estimate. This guard is what
+      # lets settlement_amount trust actual_weight.
+      return false if weight_pending?
       # Transaction ensures item_requests and order status update atomically —
       # if any item fails to ship, the order stays pending (no split state).
       ActiveRecord::Base.transaction do
@@ -214,13 +231,52 @@ class Order < ApplicationRecord
     end
   end
 
+  # --- Variable-weight ("buy a share") lines --------------------------------
+
+  # Contracts on this order that are priced per pound and have not been weighed.
+  # Public because the app has to tell a seller what is blocking their ship.
+  def pending_weight_contracts
+    request_contracts.select(&:weight_pending?)
+  end
+
+  def weight_pending?
+    pending_weight_contracts.any?
+  end
+
   private
 
+  # weights: [{ request_contract_id:, actual_weight: }, ...]
+  #
+  # All-or-nothing: one bad line rejects the whole call rather than leaving an
+  # order half-weighed, because the seller's next action is to ship.
+  def finalize_weights!(weights)
+    contracts = request_contracts.includes(:item).index_by(&:id)
+
+    ActiveRecord::Base.transaction do
+      Array(weights).each do |entry|
+        entry = entry.respond_to?(:to_unsafe_h) ? entry.to_unsafe_h : entry
+        entry = entry.symbolize_keys
+
+        contract = contracts[entry[:request_contract_id].to_i]
+        raise ActiveRecord::RecordNotFound, 'Unknown request contract' if contract.nil?
+
+        contract.finalize_weight!(entry[:actual_weight])
+      end
+    end
+  end
+
   # The actual dollar amount owed — sum of (price × quantity) for each item.
+  #
+  # Variable-weight (meat) lines bill the per-pound rate on the actual hanging
+  # weight instead of on the share count, so they COALESCE to actual_weight.
+  # That column is null until the seller runs finalize_weight, and the ship
+  # guard below refuses to ship while it is — so by the time any settlement
+  # path calls this, a weighed line has a real number. Fixed-price lines have
+  # no actual_weight at all and fall through to quantity, unchanged.
   def settlement_amount
     self.item_requests
       .joins(:request_contract)
-      .sum('item_requests.price * request_contracts.quantity')
+      .sum('item_requests.price * COALESCE(request_contracts.actual_weight, request_contracts.quantity)')
   end
 
   # Ensure FOAF reports enough direct capacity between the parties, then

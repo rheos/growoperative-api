@@ -55,6 +55,22 @@ module VariableWeightEstimate
     to_d(billed_rate) / yf
   end
 
+  # Midpoint of a carcass-weight range. What a claimed share is booked at before
+  # anything has been on a scale — an honest centre of the advertised range,
+  # never a number anyone is billed on.
+  def midpoint(weight_min, weight_max)
+    return nil if weight_min.nil? || weight_max.nil?
+    (to_d(weight_min) + to_d(weight_max)) / 2
+  end
+
+  # Expected total carcass weight for `shares` of a listing whose single share
+  # is advertised at weight_min..weight_max.
+  def estimated_weight(weight_min, weight_max, shares)
+    mid = midpoint(weight_min, weight_max)
+    return nil if mid.nil? || shares.nil?
+    mid * to_d(shares)
+  end
+
   def to_d(value)
     value.is_a?(BigDecimal) ? value : BigDecimal(value.to_s)
   end

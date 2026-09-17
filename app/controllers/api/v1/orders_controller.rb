@@ -99,7 +99,8 @@ module Api::V1
     end
 
     def order_action_params
-      params.require(:order_action).permit(:action_name, :item_id, :settlement_type, :cash_amount)
+      params.require(:order_action).permit(:action_name, :item_id, :settlement_type, :cash_amount,
+                                           weights: [:request_contract_id, :actual_weight])
     end
 
     # Publishes order-lifecycle + settlement notifications to the counterparty when
@@ -158,6 +159,9 @@ module Api::V1
         cash_paid_by: order.cash_paid_by,
         cash_confirmed_by: order.cash_confirmed_by,
         settlement_amount: serialized_settlement_amount(order),
+        # True while any meat share on the order is still unweighed. Ship is
+        # refused until it is false.
+        weight_pending: order.weight_pending?,
         item_request_count: order.item_requests.count,
         shipped_on: order.shipped_on,
         signed_on: order.signed_on,
@@ -181,6 +185,18 @@ module Api::V1
             accepted_at: request.accepted_at,
             shipped_at: request.shipped_at,
             signed_at: request.signed_at,
+            # Variable-weight (meat) state. `price` above is a per-pound rate on
+            # these lines, and the seller has to record actual_weight before the
+            # order can ship.
+            request_contract_id: contract&.id,
+            pricing_basis: item&.pricing_basis,
+            sale_unit_label: item&.sale_unit_label,
+            cut_yield_factor: item&.cut_yield_factor&.to_f,
+            on_the_rail: contract&.on_the_rail,
+            estimated_weight: contract&.estimated_weight&.to_f,
+            actual_weight: contract&.actual_weight&.to_f,
+            weight_finalized_at: contract&.weight_finalized_at,
+            weight_pending: contract&.weight_pending? || false,
           }
         end
       }

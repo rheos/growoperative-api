@@ -69,6 +69,14 @@ class Item < ApplicationRecord
     VariableWeightEstimate.packaged_rate(billed_rate(on_the_rail: on_the_rail), cut_yield_factor)
   end
 
+  # Expected total carcass weight for a claim of `shares` shares. Booked on the
+  # contract at request time so the buyer's estimate survives finalize_weight;
+  # nobody is ever billed on it.
+  def estimated_weight_for(shares)
+    return nil unless per_weight?
+    VariableWeightEstimate.estimated_weight(est_weight_min, est_weight_max, shares)
+  end
+
   def est_weight_range_ordered
     return if est_weight_min.blank? || est_weight_max.blank?
     return unless est_weight_min > est_weight_max
