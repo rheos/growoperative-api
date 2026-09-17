@@ -39,7 +39,7 @@ gem 'aws-sdk-s3', '~> 1.130.0', require: false
 gem 'bootsnap', '>= 1.17.0', require: false
 # gem 'devise_token_auth'
 # gem 'omniauth'
-gem 'active_model_serializers', '~> 0.10.0'
+gem 'active_model_serializers', '~> 0.10.16'
 gem 'devise',           '~> 4.9'
 gem 'devise-jwt'
 gem 'carrierwave', '~> 2.0'
