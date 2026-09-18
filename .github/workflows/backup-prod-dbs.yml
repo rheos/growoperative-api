@@ -38,13 +38,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # min_tables is the real "is this the right database" gate. A dump of a
+        # blank or wrong database is structurally valid and passes every other
+        # check, but contains zero CREATE TABLE statements. Each floor is set
+        # near half the table count observed on 2026-09-17 (39 / 18 / 9), which
+        # catches a wrong-database dump outright while leaving room for ordinary
+        # schema churn. If a legitimate migration trips one of these, raise it
+        # in the same PR as the migration.
         include:
           - service: growoperative-api-prod
             secret: NEON_GROWOPERATIVE_API_PROD_URL
+            min_tables: 20
           - service: foaf-auth-prod
             secret: NEON_FOAF_AUTH_PROD_URL
+            min_tables: 9
           - service: foaf-protocol-prod
             secret: NEON_FOAF_PROTOCOL_PROD_URL
+            min_tables: 5
 
     env:
       BACKUP_BUCKET: growoperative-backups
@@ -72,6 +82,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
           SERVICE: ${{ matrix.service }}
+          MIN_TABLES: ${{ matrix.min_tables }}
         run: |
           # pipefail is load-bearing: without it, `pg_dump | gzip` reports
           # gzip's exit status and a failed dump would upload happily as a
@@ -103,17 +114,24 @@ jobs:
             exit 1
           fi
 
-          bytes="$(wc -c < "$out")"
-          # Floor, not a target. Each prod DB is ~9-11 MB raw today, so a
-          # healthy gzip lands well above this. The floor only catches a dump
-          # that succeeded structurally but came back effectively empty, e.g.
-          # pointed at the wrong (blank) database.
-          if [ "$bytes" -lt 51200 ]; then
-            echo "::error::${SERVICE} dump is only ${bytes} bytes - suspiciously small, refusing to upload"
+          # Content gate. These databases are small - the gzipped dumps are tens
+          # of kilobytes, not megabytes, because most of Neon's reported size is
+          # index and catalog overhead rather than rows. So size alone cannot
+          # tell a real dump from a blank one; the table count can.
+          tables="$(gzip -dc "$out" | grep -c '^CREATE TABLE' || true)"
+          if [ "$tables" -lt "$MIN_TABLES" ]; then
+            echo "::error::${SERVICE} dump has only ${tables} tables, expected at least ${MIN_TABLES} - wrong or empty database, refusing to upload"
             exit 1
           fi
 
-          tables="$(gzip -dc "$out" | grep -c '^CREATE TABLE' || true)"
+          # Backstop against a pathologically small archive that somehow cleared
+          # both checks above.
+          bytes="$(wc -c < "$out")"
+          if [ "$bytes" -lt 5000 ]; then
+            echo "::error::${SERVICE} dump is only ${bytes} bytes - refusing to upload"
+            exit 1
+          fi
+
           echo "${SERVICE}: ${bytes} bytes gzipped, ${tables} tables, marker present"
 
           key="${SERVICE}/${ts}.sql.gz"

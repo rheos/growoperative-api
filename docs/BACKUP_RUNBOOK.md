@@ -73,7 +73,9 @@ lifecycle rule instead.
 Do this after any change to the workflow, and periodically regardless.
 
 ```bash
-# Most recent dump per database (expect one per day, ~1-3 MB each)
+# Most recent dump per database (expect one per day; 14-34 KB gzipped as of
+# 2026-09-17 - these databases are small, and most of Neon's reported 9-11 MB
+# is index and catalog overhead rather than rows)
 aws s3 ls s3://growoperative-backups/growoperative-api-prod/ | tail -3
 aws s3 ls s3://growoperative-backups/foaf-auth-prod/ | tail -3
 aws s3 ls s3://growoperative-backups/foaf-protocol-prod/ | tail -3
@@ -110,6 +112,13 @@ point the app at it or copy the missing rows back into `main`.
 
 **Never restore straight over prod.** Load the dump into a scratch Neon branch,
 verify it, then move the data you need.
+
+This path was exercised on 2026-09-17: the `growoperative-api-prod` dump was
+pulled back from S3 and restored into a scratch PostgreSQL 16 with
+`ON_ERROR_STOP=1`, returning all 39 tables and their rows (including 57
+`trustline_transactions`) with no errors. Re-run that drill after any change to
+the workflow — a backup nobody has restored is a guess, which is how the
+previous runbook ended up describing a backup that did not exist.
 
 ```bash
 # 1. Pick a dump
