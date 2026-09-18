@@ -1,0 +1,154 @@
+name: Backup prod databases
+
+# Nightly logical backup of the three FOAF prod Neon databases to S3.
+#
+# Why this exists as a workflow and not a host cron: the previous backup
+# (scripts/backup_dbs.sh) was a cron meant to run on the Lightsail host. It was
+# never installed there, nobody could tell from the repo, and the S3 bucket sat
+# empty from May 2026 until it was noticed in September. Running it here keeps
+# execution visible in version control, gives every run a public history, and
+# survives any single host being rebuilt. See docs/BACKUP_RUNBOOK.md.
+#
+# Neon's free plan caps point-in-time restore at 6 hours and cannot be raised,
+# so these dumps are the only recovery path beyond that window - and the only
+# copy that lives outside the Neon account.
+
+on:
+  schedule:
+    # 09:17 UTC ~ 02:17 PT. Off-peak, and offset from the top of the hour so it
+    # does not collide with every other cron on the internet.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backup-prod-dbs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dump:
+    name: Dump ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # One job per database: a failure on one is visible on its own rather than
+    # hidden behind whichever database happened to be dumped first.
+    strategy:
+      fail-fast: false
+      matrix:
+        # min_tables is the real "is this the right database" gate. A dump of a
+        # blank or wrong database is structurally valid and passes every other
+        # check, but contains zero CREATE TABLE statements. Each floor is set
+        # near half the table count observed on 2026-09-17 (39 / 18 / 9), which
+        # catches a wrong-database dump outright while leaving room for ordinary
+        # schema churn. If a legitimate migration trips one of these, raise it
+        # in the same PR as the migration.
+        include:
+          - service: growoperative-api-prod
+            secret: NEON_GROWOPERATIVE_API_PROD_URL
+            min_tables: 20
+          - service: foaf-auth-prod
+            secret: NEON_FOAF_AUTH_PROD_URL
+            min_tables: 9
+          - service: foaf-protocol-prod
+            secret: NEON_FOAF_PROTOCOL_PROD_URL
+            min_tables: 5
+
+    env:
+      BACKUP_BUCKET: growoperative-backups
+      AWS_DEFAULT_REGION: us-west-2
+
+    steps:
+      - name: Install PostgreSQL 16 client
+        # Neon prod runs PostgreSQL 16. pg_dump must be >= the server version,
+        # so pin the client rather than taking whatever ubuntu-latest ships.
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+          https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          pg_dump --version
+
+      - name: Dump, verify, and upload
+        env:
+          DATABASE_URL: ${{ secrets[matrix.secret] }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          SERVICE: ${{ matrix.service }}
+          MIN_TABLES: ${{ matrix.min_tables }}
+        run: |
+          # pipefail is load-bearing: without it, `pg_dump | gzip` reports
+          # gzip's exit status and a failed dump would upload happily as a
+          # valid-looking empty archive.
+          set -euo pipefail
+
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::secret ${{ matrix.secret }} is empty or unset"
+            exit 1
+          fi
+
+          ts="$(date -u +%Y-%m-%dT%H%MZ)"
+          out="${RUNNER_TEMP}/${SERVICE}_${ts}.sql.gz"
+
+          echo "Dumping ${SERVICE} ..."
+          pg_dump "$DATABASE_URL" \
+            --format=plain \
+            --no-owner \
+            --no-privileges \
+            --quote-all-identifiers \
+            | gzip -6 > "$out"
+
+          # Integrity gate. pg_dump writes this marker as the final line of a
+          # complete dump; a dump truncated by a dropped connection or a killed
+          # process will not have it. Checking the marker catches a partial
+          # dump that a size check alone would wave through.
+          if ! gzip -dc "$out" | tail -5 | grep -q "PostgreSQL database dump complete"; then
+            echo "::error::${SERVICE} dump is missing its completion marker - refusing to upload a truncated backup"
+            exit 1
+          fi
+
+          # Content gate. These databases are small - the gzipped dumps are tens
+          # of kilobytes, not megabytes, because most of Neon's reported size is
+          # index and catalog overhead rather than rows. So size alone cannot
+          # tell a real dump from a blank one; the table count can.
+          tables="$(gzip -dc "$out" | grep -c '^CREATE TABLE' || true)"
+          if [ "$tables" -lt "$MIN_TABLES" ]; then
+            echo "::error::${SERVICE} dump has only ${tables} tables, expected at least ${MIN_TABLES} - wrong or empty database, refusing to upload"
+            exit 1
+          fi
+
+          # Backstop against a pathologically small archive that somehow cleared
+          # both checks above.
+          bytes="$(wc -c < "$out")"
+          if [ "$bytes" -lt 5000 ]; then
+            echo "::error::${SERVICE} dump is only ${bytes} bytes - refusing to upload"
+            exit 1
+          fi
+
+          echo "${SERVICE}: ${bytes} bytes gzipped, ${tables} tables, marker present"
+
+          key="${SERVICE}/${ts}.sql.gz"
+          aws s3 cp "$out" "s3://${BACKUP_BUCKET}/${key}" --only-show-errors
+
+          # Confirm from the bucket's side, not from the exit code of the
+          # upload. This is the check that would have caught the old script:
+          # prove the object is actually there before calling the run green.
+          remote_bytes="$(aws s3api head-object \
+            --bucket "$BACKUP_BUCKET" --key "$key" \
+            --query 'ContentLength' --output text)"
+
+          if [ "$remote_bytes" != "$bytes" ]; then
+            echo "::error::uploaded size ${remote_bytes} != local size ${bytes} for ${key}"
+            exit 1
+          fi
+
+          echo "Verified s3://${BACKUP_BUCKET}/${key} (${remote_bytes} bytes)"
+          echo "### ${SERVICE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Uploaded \`s3://${BACKUP_BUCKET}/${key}\` - ${remote_bytes} bytes, ${tables} tables." >> "$GITHUB_STEP_SUMMARY"
