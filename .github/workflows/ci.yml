@@ -56,23 +56,10 @@ jobs:
       - name: Test FOAF demo reset guards
         run: python3 scripts/test_foaf_reset_demo.py
 
-      # Temporary Rails-upgrade gate. The historical full suite is currently
-      # red on stale legacy scenario specs; expand this back to bare `rspec`
-      # once those baseline failures are retired.
-      - name: Run upgrade-safety specs
-        run: >
-          bundle exec rspec
-          spec/requests/foaf_auth_round_trip_contract_spec.rb
-          spec/services/auth_jwks_verifier_spec.rb
-          spec/controllers/job36_auth_resolution_spec.rb
-          spec/controllers/v1_auth_envelope_spec.rb
-          spec/controllers/sessions_cookie_attributes_spec.rb
-          spec/controllers/jwt_aud_enforcement_spec.rb
-          spec/controllers/jwt_hs256_bridge_sunset_spec.rb
-          spec/controllers/jwt_bridge_resolution_spec.rb
-          spec/services/jwt_generation_service_spec.rb
-          spec/requests/discovery_spec.rb
-          spec/models/foaf_outbox_entry_spec.rb
-          spec/services/foaf/ledger_hooks_limit_outbox_spec.rb
-          spec/services/foaf/publisher_limit_outbox_spec.rb
-          spec/services/foaf/replay_worker_spec.rb
+      # Ran the full suite locally (clean container, isolated Postgres) on 2026-09-17:
+      # 699 examples, 0 failures, 16 pending (stub specs marked "not yet implemented" +
+      # one integration spec gated behind INTEGRATION=1). The "full suite is red on
+      # legacy specs" premise that narrowed this job to a hand-picked list no longer
+      # holds — back to the real suite.
+      - name: Run RSpec
+        run: bundle exec rspec
