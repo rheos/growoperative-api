@@ -1,5 +1,10 @@
 # MySQL box runbook — `growoperative-mysql`
 
+> **Historical.** This box was decommissioned in the 2026-08-22 Contabo/Neon
+> migration. Prod now runs as Coolify apps on `144.126.145.4` with databases on
+> Neon Postgres. Kept for incident history only — nothing here is actionable.
+> For backups and restores, see [BACKUP_RUNBOOK.md](BACKUP_RUNBOOK.md).
+
 Triage + history for when "demo and/or prod API is down." Written after two
 outages on 2026-05-21. Read the decision tree first; the two failure modes look
 identical from the outside but need **opposite** responses.
@@ -75,7 +80,9 @@ inconclusive. Disk was fine (6 G/39 G).
 **Related work same day:** 11 perf indexes added (migration `20260521120000`, see
 `docs/plans/db_index_audit.md`); items-path N+1 plan (`docs/plans/n_plus_one_items_index.md`);
 S3 versioning + `growoperative-backups` bucket + backup scripts (`scripts/`, cron
-NOT yet installed).
+NOT yet installed — the cron was never installed before the box was retired, and
+the scripts were deleted in 2026-09; backups now run in CI, see
+[BACKUP_RUNBOOK.md](BACKUP_RUNBOOK.md)).
 
 ## Open / not yet done
 
@@ -85,6 +92,8 @@ NOT yet installed).
 - **Managed DB migration** — deferred (can't justify cost for 1.7 MB), but the
   auth.foaf.io blast radius + two failures in a night argue for revisiting. Decision
   was Lightsail-managed, prod-only; note that leaves auth + demos on this box.
-- **DB backup cron** — scripts exist in `scripts/`, not installed on the host.
+- ~~**DB backup cron**~~ — resolved 2026-09-17, after the scripts sat uninstalled
+  for four months. Now a scheduled GitHub Action dumping the three prod Neon
+  databases to S3; see [BACKUP_RUNBOOK.md](BACKUP_RUNBOOK.md).
 - **fail2ban** — optional (log noise only, given key-only SSH).
 ```
