@@ -274,7 +274,7 @@ RSpec.describe Order, type: :model, skip_hooks: true do
       )
 
       # $10/lb on 512 lb of carcass, not on the 500 lb estimate and not on 1 share.
-      expect(order.reload.send(:settlement_amount)).to eq(BigDecimal('5120'))
+      expect(order.reload.settlement_amount).to eq(BigDecimal('5120'))
     end
 
     it 'bills the discounted rate when the share went out on the rail' do
@@ -289,14 +289,23 @@ RSpec.describe Order, type: :model, skip_hooks: true do
       )
 
       # $8.70/lb on 500 lb
-      expect(order.reload.send(:settlement_amount)).to eq(BigDecimal('4350'))
+      expect(order.reload.settlement_amount).to eq(BigDecimal('4350'))
+    end
+
+    it 'counts an unweighed share as nothing, not as rate times share count' do
+      buyer, seller = users
+      claimed = claim(buyer, seller, meat_item(seller))
+
+      # Not $10 (the per-pound rate x 1 share) — there is no honest number yet.
+      expect(claimed[:order].settlement_amount).to eq(0)
+      expect(claimed[:order]).to be_weight_pending
     end
 
     it 'still bills price times quantity for a fixed-price order' do
       buyer, seller = users
       claimed = claim(buyer, seller, produce_item(seller), shares: 3, rate: 5)
 
-      expect(claimed[:order].send(:settlement_amount)).to eq(BigDecimal('15'))
+      expect(claimed[:order].settlement_amount).to eq(BigDecimal('15'))
     end
 
     it 'mixes a weighed share and a fixed-price line on one order' do
@@ -320,7 +329,7 @@ RSpec.describe Order, type: :model, skip_hooks: true do
       )
 
       # 500 lb x $10 + 4 x $5
-      expect(claimed[:order].reload.send(:settlement_amount)).to eq(BigDecimal('5020'))
+      expect(claimed[:order].reload.settlement_amount).to eq(BigDecimal('5020'))
     end
   end
 
