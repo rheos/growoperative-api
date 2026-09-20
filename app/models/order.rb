@@ -243,6 +243,41 @@ class Order < ApplicationRecord
     pending_weight_contracts.any?
   end
 
+  # The actual dollar amount owed — sum of (price × quantity) for each item.
+  #
+  # PUBLIC on purpose: OrdersController serializes this number for the app, and
+  # when it kept its own copy of the sum the two drifted — the serialized figure
+  # still billed a side of beef as rate x 1 share ($10) while the credit path
+  # charged rate x actual weight ($5,120). One method, one answer.
+  #
+  # Variable-weight (meat) lines bill the per-pound rate on the actual hanging
+  # weight instead of on the share count, so they COALESCE to actual_weight.
+  # That column is null until the seller runs finalize_weight, and the ship
+  # guard below refuses to ship while it is — so by the time any settlement
+  # path calls this, a weighed line has a real number.
+  #
+  # An unweighed share contributes 0 rather than falling back to `quantity`.
+  # Falling back would value a side of beef at rate x 1 share ($10) — a number
+  # that means nothing and that the app would render next to its own $0, making
+  # the audit view report a phantom settlement discrepancy. Nothing can settle
+  # on the 0 either: ship is refused while any share is unweighed, and
+  # settlement only runs after ship.
+  #
+  # Fixed-price lines are matched on pricing_basis and bill quantity, unchanged.
+  # LEFT join on purpose: an INNER join would silently drop any line whose item
+  # row is missing, under-billing the settlement. A null pricing_basis fails the
+  # CASE and falls through to quantity, which is the safe reading.
+  def settlement_amount
+    self.item_requests
+      .left_joins(request_contract: :item)
+      .sum(
+        'item_requests.price * ' \
+        "CASE WHEN items.pricing_basis = #{Item.pricing_bases[:per_weight]} " \
+        'THEN COALESCE(request_contracts.actual_weight, 0) ' \
+        'ELSE request_contracts.quantity END'
+      )
+  end
+
   private
 
   # weights: [{ request_contract_id:, actual_weight: }, ...]
@@ -263,20 +298,6 @@ class Order < ApplicationRecord
         contract.finalize_weight!(entry[:actual_weight])
       end
     end
-  end
-
-  # The actual dollar amount owed — sum of (price × quantity) for each item.
-  #
-  # Variable-weight (meat) lines bill the per-pound rate on the actual hanging
-  # weight instead of on the share count, so they COALESCE to actual_weight.
-  # That column is null until the seller runs finalize_weight, and the ship
-  # guard below refuses to ship while it is — so by the time any settlement
-  # path calls this, a weighed line has a real number. Fixed-price lines have
-  # no actual_weight at all and fall through to quantity, unchanged.
-  def settlement_amount
-    self.item_requests
-      .joins(:request_contract)
-      .sum('item_requests.price * COALESCE(request_contracts.actual_weight, request_contracts.quantity)')
   end
 
   # Ensure FOAF reports enough direct capacity between the parties, then

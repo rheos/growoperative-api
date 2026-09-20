@@ -238,10 +238,11 @@ module Api::V1
         .first
       return settled_transaction.amount.to_f if settled_transaction
 
-      order.item_requests
-        .joins(:request_contract)
-        .sum('item_requests.price * request_contracts.quantity')
-        .to_f
+      # Delegate rather than re-implement the sum. This used to be its own copy
+      # of `price * quantity`, which silently stopped matching the credit path
+      # once variable-weight lines landed: the app was shown $10 for a side of
+      # beef while execute_credit_payment! would have moved $5,120.
+      order.settlement_amount.to_f
     end
   end
 end
