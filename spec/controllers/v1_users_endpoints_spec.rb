@@ -228,11 +228,21 @@ RSpec.describe 'v1 user endpoints', type: :request do
   end
 
   describe 'rate limiting on handle endpoints' do
+    # The throttle buckets by wall clock: `Time.now.to_i / HANDLE_LOOKUP_WINDOW`.
+    # This example fires HANDLE_LOOKUP_LIMIT + 1 requests in a loop, so if that
+    # loop happens to straddle a 60-second boundary the bucket key changes, the
+    # counter starts over, and the last request comes back 200 instead of 429.
+    # That is a real flake, not a hypothetical: on 2026-09-20 two CI runs of the
+    # SAME commit, started one second apart, disagreed — the push run failed here
+    # while the pull_request run passed. Freezing time pins every request to one
+    # bucket and makes the example deterministic.
+    include ActiveSupport::Testing::TimeHelpers
+
     around do |ex|
       original = Rails.cache
       # Memory store so increment is atomic in the test process.
       Rails.cache = ActiveSupport::Cache::MemoryStore.new
-      ex.run
+      freeze_time { ex.run }
       Rails.cache = original
     end
 
