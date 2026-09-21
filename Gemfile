@@ -76,5 +76,5 @@ group :test do
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data', '~> 1.2023.3'
+gem 'tzinfo-data', '~> 1.2026.4'
 gem 'rack-cors', '~> 2.0'
