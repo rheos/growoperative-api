@@ -269,6 +269,11 @@ class Order < ApplicationRecord
   # LEFT join on purpose: an INNER join would silently drop any line whose item
   # row is missing, under-billing the settlement. A null pricing_basis fails the
   # CASE and falls through to quantity, which is the safe reading.
+  #
+  # Rounded to the cent. A weighed line is rate x pounds, which lands on sub-cent
+  # values ($0.75 x 5.25 lb = $3.9375). The ledger column stores cents and FOAF
+  # stores the transfer at cents, so an unrounded figure made the publisher see
+  # its own confirmed transfer as a mismatch and never post it.
   def settlement_amount
     self.item_requests
       .left_joins(request_contract: :item)
@@ -278,6 +283,8 @@ class Order < ApplicationRecord
         'THEN COALESCE(request_contracts.actual_weight, 0) ' \
         'ELSE request_contracts.quantity END'
       )
+      .to_d
+      .round(2)
   end
 
   private
