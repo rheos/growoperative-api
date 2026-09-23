@@ -122,6 +122,12 @@ module Api::V1
         request_contract.item_id = inventory.item_id
         request_contract.quantity = request_params[:quantity]
         request_contract.steps = chain_prices.size
+        # Multi-hop meat is not a flow anyone drives yet, but record the estimate
+        # and cut mode so a chained share is not silently missing them.
+        apply_variable_weight!(
+          request_contract, inventory.item, request_params[:quantity],
+          variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
+        )
 
         request_contract.save!
 
@@ -153,13 +159,24 @@ module Api::V1
         request_contract.quantity = request_params[:quantity].to_f
         request_contract.steps = 1
         request_contract.unit = unit.item_unit.id
+        on_the_rail = variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
+        apply_variable_weight!(request_contract, inventory.item, request_params[:quantity].to_f, on_the_rail)
         request_contract.save!
 
         request = ItemRequest.new
         request.request_contract_id = request_contract.id
         request.user_id = current_user.id
         request.friend_id = inventory.user.id
-        request.price = unit.price
+        # A variable-weight line prices per pound of hanging weight, so the
+        # stored price is the rate, not a total — settlement multiplies it by
+        # the weight recorded at finalize_weight.
+        request.price = if inventory.item.per_weight?
+                          VariableWeightEstimate.billed_rate(
+                            inventory.price, inventory.item.on_the_rail_delta, on_the_rail: on_the_rail
+                          )
+                        else
+                          unit.price
+                        end
         request.status = :pending
         request.sent = request.user_id == current_user.id ? 1 : 0
         request.step = 1
@@ -380,6 +397,10 @@ module Api::V1
               else
                 inventory.price
               end
+      # On a variable-weight listing this price is a rate per pound, so the
+      # on-the-rail discount comes off it before anything is stored.
+      on_the_rail = variable_weight_on_the_rail(inventory.item, reserve_params[:on_the_rail])
+      price = VariableWeightEstimate.billed_rate(price, inventory.item.on_the_rail_delta, on_the_rail: true) if on_the_rail
 
       reserved = Inventory.new do |m|
         m.item_id = inventory.item_id
@@ -400,6 +421,7 @@ module Api::V1
       request_contract.item_id = reserved.item_id
       request_contract.quantity = reserved.quantity
       request_contract.steps = 1
+      apply_variable_weight!(request_contract, inventory.item, reserved.quantity, on_the_rail)
       request_contract.save!
 
       request = ItemRequest.new
@@ -516,6 +538,10 @@ module Api::V1
           current_request = item.item_requests.find_by(friend_id: current_user.id)
           json[:attributes]['total-price'] = previous_request.price if previous_request
           json[:attributes]['expected-price'] = (current_request.price || item.ref_price) if current_request
+          # This column serializes Inventory rather than ItemRequest, so the
+          # contract-level weight state has to be overlaid explicitly or a meat
+          # share on the dashboard looks like a fixed-price line.
+          overlay_variable_weight!(json, (previous_request || current_request)&.request_contract)
 
           next_request = item.item_requests.find_by(friend_id: current_user.id, status: [:pending, :accepted, :reserved])
           user_name = helpers.target_user_name(current_user.id, next_request.user_id) if next_request
@@ -635,11 +661,41 @@ module Api::V1
     end
 
     def request_params
-      params.require(:request).permit(:quantity, :price, :unit)
+      params.require(:request).permit(:quantity, :price, :unit, :on_the_rail)
     end
 
     def reserve_params
-      params.permit(:inventory_id, :user_id, :quantity, :price)
+      params.permit(:inventory_id, :user_id, :quantity, :price, :on_the_rail)
+    end
+
+    # True only when the buyer asked for on-the-rail AND the listing offers it,
+    # so a stray flag can never discount a listing that does not allow it.
+    def variable_weight_on_the_rail(item, flag)
+      return false unless item&.per_weight? && item.on_the_rail_available
+
+      ActiveModel::Type::Boolean.new.cast(flag) || false
+    end
+
+    # Copies a contract's weight state onto an Inventory-shaped payload, matching
+    # the keys ItemRequest#to_json already emits.
+    def overlay_variable_weight!(json, contract)
+      return if contract.nil?
+
+      json[:attributes]['request-contract-id'] = contract.id
+      json[:attributes]['on-the-rail'] = contract.on_the_rail
+      json[:attributes]['estimated-weight'] = contract.estimated_weight
+      json[:attributes]['actual-weight'] = contract.actual_weight
+      json[:attributes]['weight-finalized-at'] = contract.weight_finalized_at
+      json[:attributes]['weight-pending'] = contract.weight_pending?
+    end
+
+    # Books the buyer's estimate and cut mode on a variable-weight contract.
+    # No-op for fixed-price listings, which keeps every existing line untouched.
+    def apply_variable_weight!(request_contract, item, shares, on_the_rail)
+      return unless item&.per_weight?
+
+      request_contract.on_the_rail = on_the_rail
+      request_contract.estimated_weight = item.estimated_weight_for(shares)
     end
 
     def set_request

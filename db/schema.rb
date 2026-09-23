@@ -364,6 +364,10 @@ ActiveRecord::Schema[7.1].define(version: 201811070122202) do
     t.datetime "deleted_by", precision: nil
     t.boolean "archived", default: false
     t.string "unit"
+    t.decimal "estimated_weight", precision: 10, scale: 2
+    t.decimal "actual_weight", precision: 10, scale: 2
+    t.datetime "weight_finalized_at"
+    t.boolean "on_the_rail", default: false, null: false
     t.index ["inventory_id"], name: "index_request_contracts_on_inventory_id"
     t.index ["item_id"], name: "index_request_contracts_on_item_id"
     t.index ["user_id"], name: "index_request_contracts_on_user_id"

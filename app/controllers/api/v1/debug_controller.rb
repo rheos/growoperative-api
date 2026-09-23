@@ -211,7 +211,7 @@ class Api::V1::DebugController < Api::V1::ApiController
       .first
     return settled_transaction.amount.to_f if settled_transaction
 
-    order.send(:settlement_amount).to_f
+    order.settlement_amount.to_f
   end
 
   # GET /v1/debug/invariants

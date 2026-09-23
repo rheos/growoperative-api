@@ -4,7 +4,15 @@ class SeedMeatCategory < ActiveRecord::Migration[7.1]
   # being present in db/seeds.rb. This idempotent data migration brings every
   # database that applies the feature schema to the same category catalog.
   def up
-    pound = ItemUnit.find_by!(item_symbol: 'lb')
+    # find_by! here assumed the unit catalog was already seeded, which is true of
+    # every deployed database but false of a fresh one — so this migration
+    # aborted the whole `db:migrate` run on a new checkout and in CI. Create the
+    # pound if it is missing, with the same attributes db/seeds.rb uses.
+    pound = ItemUnit.find_or_create_by!(item_symbol: 'lb') do |unit|
+      unit.unit_name = 'pounds'
+      unit.unit_type = :weight
+      unit.equivalent = 453.592
+    end
     category = Category.find_or_initialize_by(category_name: 'Meat')
     category.assign_attributes(
       default_unit: pound,
