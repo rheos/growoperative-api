@@ -268,11 +268,13 @@ module Foaf
         record_write_result!(
           tx_row,
           "rejected",
-          "ok" => false,
-          "status" => 409,
-          "outcome" => "rejected",
-          "body" => pending.to_json,
-          "error" => "Reconciled pending transfer does not match the intended write"
+          {
+            "ok" => false,
+            "status" => 409,
+            "outcome" => "rejected",
+            "body" => pending.to_json,
+            "error" => "Reconciled pending transfer does not match the intended write"
+          }
         )
         return
       end
@@ -289,11 +291,13 @@ module Foaf
         record_write_result!(
           tx_row,
           "ambiguous_confirm",
-          "ok" => false,
-          "status" => 200,
-          "outcome" => "ambiguous",
-          "body" => pending.to_json,
-          "error" => "Confirmed transfer has no operation id",
+          {
+            "ok" => false,
+            "status" => 200,
+            "outcome" => "ambiguous",
+            "body" => pending.to_json,
+            "error" => "Confirmed transfer has no operation id",
+          },
           pending_transfer_id: pending_id
         )
         return
@@ -301,11 +305,13 @@ module Foaf
         record_write_result!(
           tx_row,
           "rejected",
-          "ok" => false,
-          "status" => 409,
-          "outcome" => "rejected",
-          "body" => pending.to_json,
-          "error" => "Pending transfer is #{pending["status"]}",
+          {
+            "ok" => false,
+            "status" => 409,
+            "outcome" => "rejected",
+            "body" => pending.to_json,
+            "error" => "Pending transfer is #{pending["status"]}",
+          },
           pending_transfer_id: pending_id
         )
         return
@@ -395,11 +401,13 @@ module Foaf
         return record_write_result!(
           tx_row,
           "rejected",
-          "ok" => false,
-          "status" => 409,
-          "outcome" => "rejected",
-          "body" => pending.to_json,
-          "error" => "Reconciled pending transfer does not match the intended write"
+          {
+            "ok" => false,
+            "status" => 409,
+            "outcome" => "rejected",
+            "body" => pending.to_json,
+            "error" => "Reconciled pending transfer does not match the intended write"
+          }
         )
       end
 
@@ -415,11 +423,13 @@ module Foaf
       record_write_result!(
         tx_row,
         state,
-        "ok" => false,
-        "status" => 200,
-        "outcome" => state == "rejected" ? "rejected" : "ambiguous",
-        "body" => pending.to_json,
-        "error" => "Reconciled transfer status is #{pending["status"]}",
+        {
+          "ok" => false,
+          "status" => 200,
+          "outcome" => state == "rejected" ? "rejected" : "ambiguous",
+          "body" => pending.to_json,
+          "error" => "Reconciled transfer status is #{pending["status"]}",
+        },
         pending_transfer_id: pending.fetch("id")
       )
     end

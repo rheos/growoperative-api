@@ -165,6 +165,33 @@ RSpec.describe Foaf::Publisher, type: :model, skip_hooks: true do
     )
   end
 
+  it 'records a mismatched pending transfer as rejected instead of raising' do
+    # FOAF holds the transfer at a different value than the publisher intended.
+    # The mismatch branch passes a string-keyed hash; braceless, Ruby 3 read it
+    # as keywords and raised ArgumentError, so the state was never recorded.
+    allow(fake_client).to receive(:pending_transfer_by_idempotency_key)
+      .with(idempotency_key: idempotency_key)
+      .and_return(not_found)
+    allow(fake_client).to receive(:create_pending_transfer)
+      .and_return(success(pending_payload.merge('value' => 3.94)))
+    expect(fake_client).not_to receive(:confirm_transfer)
+
+    expect {
+      described_class.new.send(
+        :publish_shared_payment,
+        amount: BigDecimal('3.9375'), from_user: alice, to_user: bob,
+        extra_data: '{}', tx_row: tx_row
+      )
+    }.not_to raise_error
+
+    expect(tx_row.reload.foaf_write_state).to eq('rejected')
+    expect(JSON.parse(tx_row.foaf_write_error)).to include(
+      'status' => 409,
+      'error' => 'Reconciled pending transfer does not match the intended write'
+    )
+    expect(tx_row.foaf_posted_at).to be_nil
+  end
+
   def pending_payload
     {
       'id' => 42,
