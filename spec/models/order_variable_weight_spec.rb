@@ -203,6 +203,20 @@ RSpec.describe Order, type: :model, skip_hooks: true do
       expect(claimed[:contract].reload.actual_weight).to eq(BigDecimal('512'))
     end
 
+    it 'settles to the cent when rate x weight lands between cents' do
+      buyer, seller = users
+      # $8.70/lb on the rail x 512.33 lb = $4,457.271
+      claimed = claim(buyer, seller, meat_item(seller), on_the_rail: true)
+
+      claimed[:order].apply_action(
+        { action_name: 'finalize_weight',
+          weights: [{ request_contract_id: claimed[:contract].id, actual_weight: 512.33 }] },
+        seller.id
+      )
+
+      expect(claimed[:order].reload.settlement_amount).to eq(BigDecimal('4457.27'))
+    end
+
     it 'refuses once the buyer has signed, before settlement runs' do
       buyer, seller = users
       claimed = claim(buyer, seller, meat_item(seller))
