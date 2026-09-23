@@ -60,8 +60,10 @@ class Order < ApplicationRecord
 
     when 'finalize_weight'
       # Only the seller (friend_id) records the scale reading, and only before
-      # the order ships — after that the number is already what settlement used.
-      return false if user_id.to_s != self.friend_id || self.order_status == "shipped"
+      # the order ships. Checked as "still pending" rather than "not shipped":
+      # a signed order is past shipping too, and settlement reads actual_weight
+      # when it executes, so a re-weigh after signing would change the bill.
+      return false if user_id.to_s != self.friend_id || self.order_status != "pending"
       return false if action[:weights].blank?
 
       begin

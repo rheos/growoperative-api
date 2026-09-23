@@ -203,6 +203,32 @@ RSpec.describe Order, type: :model, skip_hooks: true do
       expect(claimed[:contract].reload.actual_weight).to eq(BigDecimal('512'))
     end
 
+    it 'refuses once the buyer has signed, before settlement runs' do
+      buyer, seller = users
+      claimed = claim(buyer, seller, meat_item(seller))
+      order = claimed[:order]
+
+      order.apply_action(
+        { action_name: 'finalize_weight',
+          weights: [{ request_contract_id: claimed[:contract].id, actual_weight: 512 }] },
+        seller.id
+      )
+      order.reload.apply_action({ action_name: 'ship' }, seller.id)
+      order.reload.apply_action({ action_name: 'sign' }, buyer.id)
+      expect(order.reload.order_status).to eq('signed')
+      billed = order.settlement_amount
+
+      result = order.apply_action(
+        { action_name: 'finalize_weight',
+          weights: [{ request_contract_id: claimed[:contract].id, actual_weight: 900 }] },
+        seller.id
+      )
+
+      expect(result).to be false
+      expect(claimed[:contract].reload.actual_weight).to eq(BigDecimal('512'))
+      expect(order.reload.settlement_amount).to eq(billed)
+    end
+
     it 'rejects a weight of zero rather than settling for nothing' do
       buyer, seller = users
       claimed = claim(buyer, seller, meat_item(seller))
