@@ -77,6 +77,39 @@ RSpec.describe 'V1 meat share weight finalization', type: :request, skip_hooks: 
           headers: headers_for(user)
   end
 
+  # The app claims a share with `unit: null`, which routes a direct request
+  # through the request-chain branch of ItemRequestsController#create rather
+  # than the unit branch. On-the-rail has to be priced there too.
+  describe 'POST /v1/items/:inventory_id/requests (claim, no unit)' do
+    before do
+      low, high = [buyer.id, seller.id].minmax
+      Relationship.create!(user_id: low, friend_id: high, status: :accepted, action_user_id: buyer.id)
+    end
+
+    def claim_via_api(on_the_rail:)
+      post "/v1/items/#{meat_item.inventory.first.id}/requests",
+           params: { request: { quantity: 1, unit: nil, on_the_rail: on_the_rail } }.to_json,
+           headers: headers_for(buyer)
+      expect(response).to have_http_status(:ok)
+      RequestContract.find(json.dig('data', 'contract_id'))
+    end
+
+    it 'bills the on-the-rail rate when the buyer takes the share on the rail' do
+      contract = claim_via_api(on_the_rail: true)
+
+      expect(contract.on_the_rail).to be true
+      # $10/lb less the $1.30 on-the-rail delta.
+      expect(contract.item_requests.first.price).to eq(BigDecimal('8.7'))
+    end
+
+    it 'bills the full rate for cut and wrap' do
+      contract = claim_via_api(on_the_rail: false)
+
+      expect(contract.on_the_rail).to be false
+      expect(contract.item_requests.first.price).to eq(BigDecimal('10'))
+    end
+  end
+
   describe 'PATCH /v1/orders/:id finalize_weight' do
     it 'permits the weights array and records the scale reading' do
       claimed = claim_share
