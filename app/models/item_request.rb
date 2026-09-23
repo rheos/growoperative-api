@@ -178,6 +178,13 @@ class ItemRequest < ApplicationRecord
         'cut-yield-factor' => self.inventory.item.cut_yield_factor,
         'on-the-rail-available' => self.inventory.item.on_the_rail_available,
         'on-the-rail-delta' => self.inventory.item.on_the_rail_delta,
+        # Contract-level weight state. Null on fixed-price lines.
+        'request-contract-id' => self.request_contract_id,
+        'on-the-rail' => self.request_contract.on_the_rail,
+        'estimated-weight' => self.request_contract.estimated_weight,
+        'actual-weight' => self.request_contract.actual_weight,
+        'weight-finalized-at' => self.request_contract.weight_finalized_at,
+        'weight-pending' => self.request_contract.weight_pending?,
         'item-name-id' => self.inventory.item.item_name_id,
         'date-available' => self.inventory.item.date_available,
         'total-quantity' => self.inventory.quantity,
