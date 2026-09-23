@@ -77,6 +77,17 @@ module Api::V1
 
       # default request chain calculation 
       if request_params[:unit].nil?
+        # The app claims a meat share without a unit, so a direct request lands
+        # here too. On-the-rail comes off the owner's per-pound rate before any
+        # hop markup (and before the path search compares totals), the same as
+        # the reserve and unit paths below. Otherwise the contract says
+        # on-the-rail while the buyer is billed the full rate.
+        on_the_rail = variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
+        base_price = if on_the_rail
+                       VariableWeightEstimate.billed_rate(inventory.price, inventory.item.on_the_rail_delta, on_the_rail: true)
+                     else
+                       inventory.price
+                     end
         # check if inventory is available
         contacts = [{ :user_id => current_user.id, :path => [] }]
         shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
@@ -86,8 +97,8 @@ module Api::V1
           # check if selected user is current user, it means inventory is available
           if contact[:user_id] == inventory.user_id
             path = contact[:path] + [inventory.user_id]
-            prices = request_chain_prices(inventory, path)
-            total = prices.last || inventory.price.to_f
+            prices = request_chain_prices(inventory, path, base_price: base_price)
+            total = prices.last || base_price.to_f
 
             if total < shortest[:total]
               shortest = { :total => total, :path => path, :prices => prices.reverse }
@@ -113,16 +124,6 @@ module Api::V1
           return
         end
 
-        # The app claims a meat share without a unit, so a direct request lands
-        # here too. On-the-rail comes off the owner's per-pound rate before any
-        # hop markup, the same as the reserve and unit paths below; otherwise the
-        # contract says on-the-rail while the buyer is billed the full rate.
-        on_the_rail = variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
-        base_price = if on_the_rail
-                       VariableWeightEstimate.billed_rate(inventory.price, inventory.item.on_the_rail_delta, on_the_rail: true)
-                     else
-                       inventory.price
-                     end
         chain_prices = request_chain_prices(inventory, shortest[:path], base_price: base_price).reverse
 
         # create request contract
