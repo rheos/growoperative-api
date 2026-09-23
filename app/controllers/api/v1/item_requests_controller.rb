@@ -77,6 +77,17 @@ module Api::V1
 
       # default request chain calculation 
       if request_params[:unit].nil?
+        # The app claims a meat share without a unit, so a direct request lands
+        # here too. On-the-rail comes off the owner's per-pound rate before any
+        # hop markup (and before the path search compares totals), the same as
+        # the reserve and unit paths below. Otherwise the contract says
+        # on-the-rail while the buyer is billed the full rate.
+        on_the_rail = variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
+        base_price = if on_the_rail
+                       VariableWeightEstimate.billed_rate(inventory.price, inventory.item.on_the_rail_delta, on_the_rail: true)
+                     else
+                       inventory.price
+                     end
         # check if inventory is available
         contacts = [{ :user_id => current_user.id, :path => [] }]
         shortest = { :total => BigDecimal::INFINITY, :path => [], :prices => [] }
@@ -86,8 +97,8 @@ module Api::V1
           # check if selected user is current user, it means inventory is available
           if contact[:user_id] == inventory.user_id
             path = contact[:path] + [inventory.user_id]
-            prices = request_chain_prices(inventory, path)
-            total = prices.last || inventory.price.to_f
+            prices = request_chain_prices(inventory, path, base_price: base_price)
+            total = prices.last || base_price.to_f
 
             if total < shortest[:total]
               shortest = { :total => total, :path => path, :prices => prices.reverse }
@@ -113,7 +124,7 @@ module Api::V1
           return
         end
 
-        chain_prices = request_chain_prices(inventory, shortest[:path]).reverse
+        chain_prices = request_chain_prices(inventory, shortest[:path], base_price: base_price).reverse
 
         # create request contract
         request_contract = RequestContract.new
@@ -124,10 +135,7 @@ module Api::V1
         request_contract.steps = chain_prices.size
         # Multi-hop meat is not a flow anyone drives yet, but record the estimate
         # and cut mode so a chained share is not silently missing them.
-        apply_variable_weight!(
-          request_contract, inventory.item, request_params[:quantity],
-          variable_weight_on_the_rail(inventory.item, request_params[:on_the_rail])
-        )
+        apply_variable_weight!(request_contract, inventory.item, request_params[:quantity], on_the_rail)
 
         request_contract.save!
 
@@ -613,10 +621,10 @@ module Api::V1
 
     private
 
-    def request_chain_prices(inventory, buyer_to_owner_path)
+    def request_chain_prices(inventory, buyer_to_owner_path, base_price: inventory.price)
       owner_to_buyer_path = buyer_to_owner_path.reverse
       prices = []
-      running_price = inventory.price.to_f
+      running_price = base_price.to_f
 
       owner_to_buyer_path.each_cons(2).with_index do |(seller_id, buyer_id), index|
         unless index.zero? && !inventory.apply_first_hop_markup?
