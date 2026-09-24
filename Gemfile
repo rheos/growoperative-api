@@ -44,7 +44,7 @@ gem 'devise',           '~> 5.0'
 gem 'devise-jwt'
 gem 'carrierwave', '~> 2.0'
 gem 'fog-aws'
-gem "rmagick", '~> 5.0'
+gem "rmagick", '~> 7.1'
 gem 'devise_invitable', '~> 2.0'
 
 group :development, :test do
