@@ -195,10 +195,14 @@ module Api::V1
       member_set = member_ids.to_set
       mine_set   = my_ids.to_set
       raw_map    = Hash.new { |h, k| h[k] = [] }
+      # Check both directions independently. When two nearby members are both
+      # my contacts and know each other (a triangle), one row makes each the
+      # other's mutual; an elsif credited only the lower-id side.
       cross.each do |rel|
         if member_set.include?(rel.user_id) && mine_set.include?(rel.friend_id)
           raw_map[rel.user_id] << rel.friend_id
-        elsif member_set.include?(rel.friend_id) && mine_set.include?(rel.user_id)
+        end
+        if member_set.include?(rel.friend_id) && mine_set.include?(rel.user_id)
           raw_map[rel.friend_id] << rel.user_id
         end
       end
