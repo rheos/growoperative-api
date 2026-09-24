@@ -55,7 +55,7 @@ group :development, :test do
   gem 'factory_bot_rails', '~> 6.1'
   gem 'pry-rails', '~> 0.3'
   gem 'pry-byebug', '~> 3.10'
-  gem 'pry-stack_explorer', '~> 0.4'
+  gem 'pry-stack_explorer', '~> 0.6'
 end
 
 group :development do
