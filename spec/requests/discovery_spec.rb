@@ -495,6 +495,22 @@ RSpec.describe 'Discovery API', type: :request, skip_hooks: true do
       expect(face).to have_key('avatar_url')
     end
 
+    # 2b. A triangle: both nearby members are my contacts and know each other.
+    # Each must list the other as mutual, not just the lower-id one.
+    it 'credits a triangle mutual to both nearby members' do
+      a = mk('tri-a'); b = mk('tri-b')
+      accept!(caller, a); accept!(caller, b); accept!(a, b)
+      locate!(caller, 45.0, -73.0)
+      locate!(a, 45.005, -73.005); opt_in!(a)
+      locate!(b, 45.006, -73.006); opt_in!(b)
+
+      get '/v1/discovery/nearby', headers: auth_headers(caller)
+
+      by_id = body['members'].index_by { |m| m['id'] }
+      expect(by_id[a.id]['mutual'].map { |f| f['id'] }).to eq([b.id])
+      expect(by_id[b.id]['mutual'].map { |f| f['id'] }).to eq([a.id])
+    end
+
     # 3. Mutual is the INTERSECTION only, never the member's full contact list.
     it 'returns only the intersection (1), not the member’s full contact list (3)' do
       shared = mk('shared')
