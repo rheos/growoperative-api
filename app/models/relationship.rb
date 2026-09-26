@@ -1,6 +1,6 @@
 class Relationship < ApplicationRecord
   # It handle status value as enum
-  enum status: [ :pending, :accepted, :declined, :blocked ]
+  enum :status, [ :pending, :accepted, :declined, :blocked ]
   belongs_to :user
   belongs_to :friend, class_name: 'User'
   has_many   :item_relationships, dependent: :destroy
