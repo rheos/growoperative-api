@@ -23,9 +23,9 @@ Port mapping: Rails container listens on 8080 internally, exposed as `localhost:
 
 ## Tech Stack
 
-- Rails 7.1 API mode
+- Rails 8.1.4 on Ruby 3.4.11 (fleet walk completed 2026-09-26; playbook: `foaf-auth/docs/rails-8-upgrade.md`)
 - PostgreSQL 16 (Neon in every deployed tier; `postgres:16` locally)
-- Puma (clustered, `WEB_CONCURRENCY` workers)
+- Puma 8 + Rack 3 (clustered, `WEB_CONCURRENCY` workers)
 - JWT authentication (HS256, 1-year expiry)
 - CarrierWave + fog-aws for S3 uploads (rmagick for image processing)
 - Devise (username-based auth) + devise-jwt + devise_invitable
