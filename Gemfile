@@ -4,7 +4,7 @@ git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 ruby '3.4.11'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-gem 'rails', '~> 7.2.4'
+gem 'rails', '~> 8.1.4'
 # Use sqlite3 as the database for Active Record
 gem 'pg', '~> 1.5'
 # csv stopped being a default gem in Ruby 3.4, so `require "csv"` no longer
@@ -70,6 +70,17 @@ group :development do
   gem 'web-console', '~> 3.7'
   gem 'listen', '~> 3.8'
   # Spring speeds up development by keeping your application running in the background. Read more: https://github.com/rails/spring
+  # mutex_m left Ruby 3.4's default gems. spring 2.1.1 requires it via
+  # spring-watcher-listen and is unmaintained, so it will not be fixed
+  # upstream. Declared here rather than removing spring, to keep this PR to
+  # one variable; dropping spring entirely is a reasonable follow-up, since
+  # Rails dropped it from the default Gemfile in 7.x and everything here runs
+  # in Docker anyway.
+  #
+  # Worth noting this did NOT show up in the suite: spring is development-group
+  # only, so RAILS_ENV=test never loads it. It broke `bin/rails` in
+  # development while 735 examples stayed green.
+  gem 'mutex_m'
   gem 'spring', '~> 2.1'
   gem 'spring-watcher-listen', '~> 2.0.0'
 end
