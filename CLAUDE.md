@@ -194,7 +194,25 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
   Beta is a full tier of its own now, with its own host and its own Neon database. It is no longer the demo container doing double duty.
 
 - **`master` is the integration branch. There is NO `develop`** — that belongs to `growoperative-app`, a different repo. Merge fixes straight to `master` via PR.
-- **Merging to `master` does NOT auto-deploy.** The old `deploy-demo.yml` / `deploy-prod.yml` workflows were removed in PR #38; only `ci.yml` remains. Nor is there a webhook: `gh api repos/rheos/railsbackend/hooks` returns `[]`, so GitHub has no way to reach Coolify at all. Merging is safe, and it also ships nothing. A deploy is an explicit Coolify API call:
+- **Deploys go through `.github/workflows/deploy.yml` (added 2026-09-26, PR #85). Demo deploys automatically once CI is green on `master`; prod and beta need an explicit dispatch.**
+
+  ```bash
+  gh workflow run deploy.yml -f tier=prod -f confirm=deploy-prod-growop --repo rheos/railsbackend
+  ```
+
+  The workflow calls the Coolify API directly over HTTPS at `coolify.rheo.ca` (published through Traefik), so it needs only `COOLIFY_API_TOKEN` and no SSH key.
+
+- **⚠️ This file previously claimed "merging to `master` does NOT auto-deploy ... merging ships nothing." That was WRONG and it was load-bearing.** The reasoning was that PR #38 removed the deploy workflows and `gh api repos/rheos/railsbackend/hooks` returns `[]`, so nothing could reach Coolify. But Coolify has its own per-app `is_auto_deploy_enabled` setting, invisible from this repo and not requiring a repo webhook, and it was **true on prod, demo and beta**. Merging to `master` rebuilt `api.growoperative.app` immediately. Confirmed by the container state on 2026-09-26: prod was running image tag `df844e6`, the merge commit of PR #64, with an uptime matching that merge. **The absence of a deploy workflow is not the absence of a deploy trigger.**
+
+  Auto-deploy is now **off** for all three tiers, which is what makes the workflow's prod confirm real. To check it:
+
+  ```bash
+  curl -s https://coolify.rheo.ca/api/v1/applications/<uuid> \
+    -H "Authorization: Bearer $(cat ~/Documents/novadiem/keys/contabo/coolify-api-token.txt)" \
+    | python3 -c 'import sys,json;print(json.load(sys.stdin)["settings"]["is_auto_deploy_enabled"])'
+  ```
+
+- A deploy can still be driven by hand with a direct Coolify API call:
 
   ```bash
   ssh -i ~/Documents/novadiem/keys/contabo/contabo_ed25519 -f -N -L 8009:localhost:8000 root@144.126.145.4
@@ -207,7 +225,7 @@ Current snapshot: `dev_preshipment.sql` — full demo network with requests and 
   Full app list for the box (every repo, not just this one): `GET /api/v1/applications`.
 - **Promotion path:** merge to `master`, deploy beta or demo, soak, then deploy prod with the same call and the prod uuid. Because every tier tracks `master`, promoting is "deploy the next uuid," not a branch merge. There is no per-tier branch and no SHA pinning, so a deploy always takes current `master` HEAD: anything already merged ships with it. Deploy one uuid at a time to hold a tier back.
 - **Env vars live in Coolify, per app** — not in `.env.production` / `.env.demo` files on a box, as they did on Lightsail. Read them with `GET /api/v1/applications/<uuid>/envs`. An edit takes effect on the next deploy.
-- **CI runs a curated rspec subset**, not the full suite — see the list in `.github/workflows/ci.yml`. A new spec file is not exercised unless added there. CI also runs `scripts/test_trade_test.py` and `scripts/test_foaf_reset_demo.py`, and it never deploys.
+- **CI runs the full rspec suite** (699 examples). It ran a curated subset until PR #69 widened it back on 2026-09-18, so a new spec file IS now exercised without being listed anywhere. CI also runs `scripts/test_trade_test.py` and `scripts/test_foaf_reset_demo.py`, and it never deploys.
 - **Routing + TLS:** handled by Coolify's proxy on the Contabo box, per-app. `nginx/nginx.conf` and `docker-compose.prod.yml` are still in the repo but are **Lightsail-era artifacts** — nothing on Contabo reads them. Do not edit them expecting a routing change.
 - **Backups:** the three prod Neon databases are dumped nightly to S3 by `.github/workflows/backup-prod-dbs.yml`. Neon's free plan caps point-in-time restore at **6 hours** and the cap cannot be raised by API, so those dumps are the only recovery path beyond that window. Procedures, verification, and restore steps: `docs/BACKUP_RUNBOOK.md`. (The MySQL-era `scripts/backup_dbs.sh` and `scripts/restore_db.sh` were deleted in 2026-09 — their cron was never installed on any host, so the S3 bucket sat empty from May to September.)
 - **Frontends are not served from here.** Cloudflare Pages builds and serves them straight from the `growoperative-app` repo: `main` (web + demo), `develop` (beta). The old `/var/www/prod` + `/var/www/demo` dist mounts are gone with the Lightsail box.
