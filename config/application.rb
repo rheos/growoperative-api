@@ -14,7 +14,7 @@ end
 module Realgrow
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version
-    config.load_defaults 7.2
+    config.load_defaults 8.1
 
     # Rails 7.2 default, deliberately NOT adopted.
     #
