@@ -5,8 +5,8 @@ class Invitation < ApplicationRecord
   EASY_CODE_CHARS = (('A'..'Z').to_a + ('2'..'9').to_a - %w[I O]).freeze
 
   # It handle status value as enum
-  enum status: [ :pending, :accepted ]
-  enum user_type: [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
+  enum :status, [ :pending, :accepted ]
+  enum :user_type, [:consumer, :producer, :broker, :retailer, :wholesaler, :admin]
   belongs_to :user
   belongs_to :subnet, optional: true
   has_many :invitation_redemptions, dependent: :destroy

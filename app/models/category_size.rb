@@ -5,12 +5,12 @@ class CategorySize < ApplicationRecord
 
   before_validation :set_canonical_quantity
 
-  enum canonical_unit_type: {
+  enum :canonical_unit_type, {
     weight: 0,
     count: 1,
     volume: 2,
     discrete: 3
-  }, _prefix: :canonical
+  }, prefix: :canonical
 
   def as_json
     {

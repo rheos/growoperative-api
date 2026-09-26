@@ -27,7 +27,7 @@ class Category < ApplicationRecord
   has_many :category_units, -> { order(:display_order) }, dependent: :destroy
   has_many :allowed_units, through: :category_units, source: :item_unit
 
-  enum kind: {
+  enum :kind, {
     produce: 0,
     goods: 1
   }

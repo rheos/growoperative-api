@@ -4,7 +4,7 @@ class RequestContract < ApplicationRecord
   has_many   :item_requests, dependent: :destroy
   has_one :inventory, primary_key: 'inventory_id', foreign_key: 'id'
   
-  enum status: [ :pending, :accepted, :completed, :cancelled ]
+  enum :status, [ :pending, :accepted, :completed, :cancelled ]
 
   with_options allow_nil: true, numericality: { greater_than: 0 } do
     validates :estimated_weight

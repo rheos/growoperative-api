@@ -4,7 +4,7 @@ class Introduction < ApplicationRecord
   belongs_to :introducee_b, class_name: 'User'
   belongs_to :declined_by,  class_name: 'User', optional: true, foreign_key: :declined_by_id
 
-  enum status: { pending: 0, completed: 1, declined: 2 }
+  enum :status, { pending: 0, completed: 1, declined: 2 }
   # Transitions are one-way: pending → completed | declined (enforced in controller)
 
   # Returns true if user_id has already accepted their side.
