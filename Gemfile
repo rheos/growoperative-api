@@ -1,12 +1,19 @@
 source 'https://rubygems.org'
 git_source(:github) { |repo| "https://github.com/#{repo}.git" }
 
-ruby '3.2.11'
+ruby '3.4.11'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 7.2.4'
 # Use sqlite3 as the database for Active Record
 gem 'pg', '~> 1.5'
+# csv stopped being a default gem in Ruby 3.4, so `require "csv"` no longer
+# resolves without declaring it. Used by lib/tasks/foaf_custody.rake. That is
+# a rake task, which the suite never loads, so a green suite would NOT have
+# caught this - the task would simply have failed the next time it was run.
+# base64 also left the default gems (lib/auth_foaf_client.rb requires it) but
+# arrives via activesupport, so it needs no entry.
+gem 'csv', '~> 3.3'
 # Use Puma as the app server
 gem 'puma', '~> 8.0'
 gem 'sprockets-rails'
