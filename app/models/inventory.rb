@@ -18,14 +18,14 @@ class Inventory < ApplicationRecord
     remove_avatars!
   end
 
-  enum status: [ :unavailable, :available, :reserved, :in_order ]
+  enum :status, [ :unavailable, :available, :reserved, :in_order ]
 
-  enum canonical_unit_type: {
+  enum :canonical_unit_type, {
     weight: 0,
     count: 1,
     volume: 2,
     discrete: 3
-  }, _prefix: :canonical
+  }, prefix: :canonical
 
   attr_accessor :target_user_id
   attr_accessor :total_price

@@ -23,7 +23,7 @@ class Item < ApplicationRecord
 
   attr_accessor :unit, :with_inventory
 
-  enum condition: {
+  enum :condition, {
     condition_new: 0,
     condition_used: 1,
     condition_n_a: 2
@@ -31,7 +31,7 @@ class Item < ApplicationRecord
   
   # Variable-weight "buy a share" listings (meat): priced per pound of
   # carcass/hanging weight. per_unit (default) leaves existing listings alone.
-  enum pricing_basis: {
+  enum :pricing_basis, {
     per_unit: 0,
     per_weight: 1
   }

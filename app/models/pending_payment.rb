@@ -3,8 +3,8 @@ class PendingPayment < ApplicationRecord
   belongs_to :to_user, class_name: 'User'
   belongs_to :trustline
 
-  enum status: [:pending, :confirmed, :rejected, :cancelled, :paid_pending_confirmation]
-  enum kind: [:payment, :request]
+  enum :status, [:pending, :confirmed, :rejected, :cancelled, :paid_pending_confirmation]
+  enum :kind, [:payment, :request]
 
   validates :amount, presence: true, numericality: { greater_than: 0 }
   validate :users_on_trustline, on: :create
