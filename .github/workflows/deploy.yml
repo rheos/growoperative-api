@@ -1,0 +1,113 @@
+name: deploy
+
+# Deploy for the railsbackend tiers. Each tier is a Coolify app on the Contabo
+# box (144.126.145.4) tracking this repo's `master`; a deploy asks Coolify to
+# pull latest and rebuild.
+#
+#   prod   api.growoperative.app   (manual dispatch, needs confirm=deploy-prod-growop)
+#   demo   demo.growoperative.app  (auto, after CI goes green on master)
+#   beta                           (manual dispatch)
+#
+# Secret: COOLIFY_API_TOKEN (Coolify API bearer).
+#
+# THIS WORKFLOW IS THE ONLY DEPLOY PATH, AND THAT IS LOAD-BEARING.
+# Coolify has a per-app "auto deploy on git push" setting that is invisible
+# from this repo. It was ON for all three tiers until 2026-09-26, which meant
+# every merge to `master` rebuilt PRODUCTION immediately, with no gate anywhere
+# in the repo and no way to tell from the code. It is now OFF for prod, demo and
+# beta, which is what makes the prod confirm below real rather than decorative.
+#
+# If prod ever starts deploying on merge again, check that setting first:
+#   curl -s https://coolify.rheo.ca/api/v1/applications/<uuid> \
+#     -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+#     | python3 -c 'import sys,json;print(json.load(sys.stdin)["settings"]["is_auto_deploy_enabled"])'
+# Turn it back off with a PATCH of {"is_auto_deploy_enabled": false}.
+#
+# Unlike foaf-auth's equivalent workflow, this one talks to the Coolify API
+# directly over HTTPS at coolify.rheo.ca rather than tunnelling SSH to the box.
+# The API is already published through Traefik, so the SSH key is unnecessary
+# and is deliberately not a secret here.
+
+on:
+  # Demo deploys only after the suite is green on master. A push trigger would
+  # deploy red commits, which is the failure this repo's CI exists to prevent.
+  workflow_run:
+    workflows: ["Rails upgrade safety"]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Tier to deploy"
+        required: true
+        type: choice
+        options: [demo, beta, prod]
+      confirm:
+        description: "Type deploy-prod-growop to allow a prod deploy"
+        required: false
+        type: string
+
+# One deploy per tier at a time. Coolify serialises builds anyway; this keeps
+# the run log honest about which commit actually landed.
+concurrency:
+  group: deploy-${{ github.event.inputs.tier || 'demo' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # On workflow_run, only proceed if the suite actually passed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Resolve tier and guard prod
+        id: tier
+        run: |
+          set -euo pipefail
+          TIER="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tier || 'demo' }}"
+          if [ "$TIER" = "prod" ] && [ "${{ github.event.inputs.confirm }}" != "deploy-prod-growop" ]; then
+            echo "::error::Refusing prod deploy without confirm=deploy-prod-growop"
+            exit 1
+          fi
+          case "$TIER" in
+            prod) UUID="bre53dp4tikyezgfvclzaxy1" ;;
+            demo) UUID="mcuuicw8jm9bbpn6f9ossiwz" ;;
+            beta) UUID="1pbmmgxmxrlyo1rp1lnlckot" ;;
+            *) echo "::error::Unknown tier $TIER"; exit 1 ;;
+          esac
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "uuid=$UUID" >> "$GITHUB_OUTPUT"
+          echo "Deploying tier=$TIER uuid=$UUID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger Coolify deploy and wait
+        env:
+          CT: ${{ secrets.COOLIFY_API_TOKEN }}
+          TIER: ${{ steps.tier.outputs.tier }}
+          UUID: ${{ steps.tier.outputs.uuid }}
+        run: |
+          set -euo pipefail
+          api() { curl -sf -m 30 -X "$1" "https://coolify.rheo.ca/api/v1/$2" -H "Authorization: Bearer $CT"; }
+
+          RESP=$(api POST "deploy?uuid=$UUID")
+          echo "$RESP"
+          DEP=$(echo "$RESP" | python3 -c "import sys,json;print(json.load(sys.stdin)['deployments'][0]['deployment_uuid'])")
+          echo "deployment=$DEP"
+
+          for i in $(seq 1 90); do
+            sleep 10
+            # Don't let one flaky poll kill a deploy that is still running.
+            DS=$(api GET "deployments/$DEP" | python3 -c "import sys,json;print(json.load(sys.stdin).get('status','?'))" 2>/dev/null || echo "poll-failed")
+            echo "[$i] status=$DS"
+            case "$DS" in
+              finished)
+                echo "✅ $TIER deployed ($DEP)" >> "$GITHUB_STEP_SUMMARY"
+                exit 0 ;;
+              failed|cancelled*)
+                echo "::error::Deployment $DS — see Coolify deployment $DEP"
+                echo "❌ $TIER deploy $DS ($DEP)" >> "$GITHUB_STEP_SUMMARY"
+                exit 1 ;;
+            esac
+          done
+          echo "::error::Timed out after 15 minutes waiting on deployment $DEP"
+          exit 1
