@@ -5,15 +5,13 @@ primary_region = "lax"
   dockerfile = "Dockerfile"
 
 [env]
+  # Historical deployment example. Supply DATABASE_URL and SECRET_KEY_BASE
+  # through the hosting provider's secret store.
   PORT = "8080"
   RAILS_ENV = "production"
   RAILS_LOG_TO_STDOUT = "true"
   RAILS_SERVE_STATIC_FILES = "true"
   FRONTEND_URL = "https://growoperative.app"
-  DATABASE_HOST = "growoperative-mysql.internal"
-  DATABASE_USERNAME = "buddy"
-  DATABASE_PASSWORD = "Notwito@27b-6"
-  DATABASE_NAME = "growoperative_production"
   COOKIE_DOMAIN = ".growoperative.app"
   # SEED_DATABASE = "true"
   AWS_REGION = "us-west-2"

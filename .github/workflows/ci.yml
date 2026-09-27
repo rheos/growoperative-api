@@ -51,7 +51,9 @@ jobs:
         run: bundle exec rails db:test:prepare
 
       - name: Test FOAF trade harness guards
-        run: python3 scripts/test_trade_test.py
+        run: |
+          python3 -m pip install -r scripts/requirements.txt
+          python3 scripts/test_trade_test.py
 
       - name: Test FOAF demo reset guards
         run: python3 scripts/test_foaf_reset_demo.py
@@ -62,4 +64,4 @@ jobs:
       # legacy specs" premise that narrowed this job to a hand-picked list no longer
       # holds — back to the real suite.
       - name: Run RSpec
-        run: bundle exec rspec
+        run: bin/test

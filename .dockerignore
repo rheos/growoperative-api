@@ -6,6 +6,10 @@
 
 .env
 .env.*
+db/snapshots
+config/application.yml
+config/master.key
+config/credentials/*.key
 
 log/*
 tmp/*
