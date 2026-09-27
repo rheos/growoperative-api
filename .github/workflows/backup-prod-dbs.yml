@@ -1,6 +1,17 @@
 name: Backup prod databases
 
-# Nightly logical backup of the three FOAF prod Neon databases to S3.
+# Nightly logical backup of the three FOAF prod databases to S3.
+#
+# TWO are on Neon (growoperative-api, foaf-protocol) and ONE is on the Contabo
+# box (foaf-auth). Saying "the three Neon databases" is what this file used to
+# say, and that sentence was true when written and silently stopped being true
+# on 2026-09-22 — the same drift that broke the backup itself.
+#
+# NEON_FOAF_AUTH_PROD_URL is now ORPHANED: no workflow references it, and the
+# Neon database behind it is an abandoned pre-migration copy whose contents are
+# fully present in the live Contabo database. Delete the secret (and consider
+# dropping the Neon database) rather than leaving a credential pointing at a
+# stale copy of production data.
 #
 # ⚠️ 2026-09-26: this job dumped a DEAD DATABASE for four days and reported
 # success every time. foaf-auth's Postgres moved off Neon to the Contabo box on
