@@ -69,6 +69,28 @@ jobs:
             expect: 200
 
     steps:
+      # Checked on EVERY run, not only when something is down. Otherwise a
+      # missing key leaves the probe passing green while being unable to page
+      # anyone -- monitoring that looks healthy and cannot alert is the exact
+      # failure this workflow exists to end, just one level up.
+      - name: Preflight — can we actually page?
+        env:
+          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MOT_API_KEY:-}" ]; then
+            echo "::error::MOT_API_KEY is not set. This probe cannot page anyone, so it is not monitoring — it is decoration. Set the secret (key lives in ~/Documents/novadiem/keys/mot-api.md)."
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+                   -H "Authorization: Bearer $MOT_API_KEY" \
+                   "https://rheo.ca/mot/api/tickets?status=open")
+          if [ "$code" != "200" ]; then
+            echo "::error::M.O.T. API returned HTTP $code for a key check — paging would fail during a real outage."
+            exit 1
+          fi
+          echo "M.O.T. reachable and the key works."
+
       - name: Probe
         id: probe
         run: |
