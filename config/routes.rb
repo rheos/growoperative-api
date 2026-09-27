@@ -13,6 +13,10 @@ Rails.application.routes.draw do
     namespace :v1, defaults: { format: :json } do
       # mount_devise_token_auth_for 'User', at: 'auth'
       # devise_for :users
+      # Real liveness: hits the database. "/up" above is a static proc and
+      # cannot detect an outage. See Api::V1::HealthController.
+      get 'health' => 'health#show'
+
       get 'get_chain_limit' => 'global_settings#get_chain_limit'
       post 'set_chain_limit' => 'global_settings#set_chain_limit'
       get 'get_debug_api' => 'global_settings#get_debug_api'
