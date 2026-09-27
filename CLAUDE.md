@@ -116,6 +116,10 @@ Rake tasks: `demo:mark_users`, `demo:snapshot`, `demo:reset`, `user:update_passw
 
 ### Session Controller (`app/controllers/api/v1/sessions_controller.rb`)
 
+- `GET /v1/health` — **real liveness: runs `SELECT 1`, returns 503 when the DB is unreachable.**
+  Use this, not `/up`, for anything that needs to know the service actually works. `/up` is a
+  hardcoded proc (`proc { [200, ..., ["OK"]] }`) and cannot fail — it returned 200 throughout the
+  three-day 2026-09 outage. Unauthenticated by design so a monitor can call it.
 - `POST /v1/sessions` — login (skips auth)
 - `GET /v1/sessions` — current session check
 - `DELETE /v1/sessions` — logout (blacklists jti)
@@ -123,7 +127,13 @@ Rake tasks: `demo:mark_users`, `demo:snapshot`, `demo:reset`, `user:update_passw
 ### Auth Middleware (`app/controllers/api/v1/api_controller.rb`)
 
 - `before_action :authenticate!` on all actions by default
-- Skipped on: sessions#create, registrations#create, home#index/verify, demo#login, debug#*, resources#*
+- Skipped on: sessions#create, registrations#create, home#index/verify, demo#login, resources#*, health#show
+- ⚠️ **`debug#*` is NO LONGER in that list.** It skipped auth unconditionally and was gated only by
+  the `debug_api_enabled` GlobalSetting — a row created 2026-04-20 and never changed, so
+  `GET /v1/debug/requests` served real usernames, trades and prices to anyone on the internet for
+  five months. Since #98 it skips auth **only** when `Rails.env.local?`, and requires
+  `current_user.is_admin?` everywhere else. The settings row is still honoured as a kill switch but
+  is no longer the gate. Do not "fix" a 403 on a deployed tier by flipping it.
 - Password change is self-service via `UsersController#update_password`; superuser password reset lives at `/v1/admin/users/:foaf_id/reset_password` and proxies to auth.foaf.io
 
 ## Key Controllers (Non-Obvious Patterns)
