@@ -27,7 +27,6 @@ gem "foaf_client",
     glob: "gem/*.gemspec"
 
 
-gem 'aws-sdk-s3', '~> 1.130.0', require: false
 
 
 
