@@ -2,6 +2,27 @@ name: Backup prod databases
 
 # Nightly logical backup of the three FOAF prod Neon databases to S3.
 #
+# ⚠️ 2026-09-26: this job dumped a DEAD DATABASE for four days and reported
+# success every time. foaf-auth's Postgres moved off Neon to the Contabo box on
+# 2026-09-22; NEON_FOAF_AUTH_PROD_URL was never repointed, so the job kept
+# dumping the abandoned Neon database. The artifact was structurally perfect -
+# 18 tables, complete-dump marker, right size - and frozen. Live prod had 414
+# audit_logs to 2026-09-25; the "backup" had none past 2026-09-22.
+#
+# None of the gates below could have caught it, and that is worth understanding
+# rather than patching: they all ask "is this a valid dump of A database", and
+# it was. Even the identity count matched (18 = 18), because no new identity
+# had been created since the migration. The only signal was a continuously
+# growing table being frozen.
+#
+# So the fix is not another gate. foaf-auth is now dumped over SSH from the box
+# the application actually runs on, resolving the container from the uuid in the
+# app's own DATABASE_URL. The indirection that went stale - a connection string
+# held as a secret, separate from where the app points - is gone for that
+# service. The Neon-hosted services keep the secret-based path, and carry the
+# same risk if one of them ever migrates: if you move a database, repoint or
+# delete its secret in the same change.
+#
 # Why this exists as a workflow and not a host cron: the previous backup
 # (scripts/backup_dbs.sh) was a cron meant to run on the Lightsail host. It was
 # never installed there, nobody could tell from the repo, and the S3 bucket sat
@@ -47,12 +68,22 @@ jobs:
         # in the same PR as the migration.
         include:
           - service: growoperative-api-prod
+            source: neon
             secret: NEON_GROWOPERATIVE_API_PROD_URL
             min_tables: 20
+          # foaf-auth's database moved OFF Neon to a Coolify-managed Postgres
+          # on the Contabo box (2026-09-22, after a Neon free-tier compute
+          # exhaustion caused a 3-day auth outage). The NEON_FOAF_AUTH_PROD_URL
+          # secret was never repointed, so this job kept dumping the abandoned
+          # Neon database and reporting success. See the header note.
           - service: foaf-auth-prod
-            secret: NEON_FOAF_AUTH_PROD_URL
+            source: contabo
+            pg_container: bmmum4w3d7v4wk37mi4gabeh
+            pg_user: foaf_auth
+            pg_database: foaf_auth_production
             min_tables: 9
           - service: foaf-protocol-prod
+            source: neon
             secret: NEON_FOAF_PROTOCOL_PROD_URL
             min_tables: 5
 
@@ -76,9 +107,24 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-16
           pg_dump --version
 
+      - name: Set up SSH (Contabo-hosted databases only)
+        if: matrix.source == 'contabo'
+        env:
+          KEY: ${{ secrets.CONTABO_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/contabo
+          chmod 600 ~/.ssh/contabo
+          ssh-keyscan -H 144.126.145.4 >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Dump, verify, and upload
         env:
           DATABASE_URL: ${{ secrets[matrix.secret] }}
+          SOURCE: ${{ matrix.source }}
+          PG_CONTAINER: ${{ matrix.pg_container }}
+          PG_USER: ${{ matrix.pg_user }}
+          PG_DATABASE: ${{ matrix.pg_database }}
           AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
           SERVICE: ${{ matrix.service }}
@@ -89,21 +135,36 @@ jobs:
           # valid-looking empty archive.
           set -euo pipefail
 
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::error::secret ${{ matrix.secret }} is empty or unset"
-            exit 1
-          fi
-
           ts="$(date -u +%Y-%m-%dT%H%MZ)"
           out="${RUNNER_TEMP}/${SERVICE}_${ts}.sql.gz"
 
-          echo "Dumping ${SERVICE} ..."
-          pg_dump "$DATABASE_URL" \
-            --format=plain \
-            --no-owner \
-            --no-privileges \
-            --quote-all-identifiers \
-            | gzip -6 > "$out"
+          if [ "${SOURCE}" = "contabo" ]; then
+            # Dump over SSH from the box the application actually runs on,
+            # resolving the Postgres container by the uuid in the app's own
+            # DATABASE_URL. No connection string is stored as a secret here,
+            # which is the point: the previous failure was a STALE SECRET
+            # pointing at a database the app had stopped using, and no gate
+            # below can catch that - a dump of an abandoned database is
+            # structurally perfect.
+            echo "Dumping ${SERVICE} from Contabo container ${PG_CONTAINER} ..."
+            ssh -i ~/.ssh/contabo -o BatchMode=yes root@144.126.145.4 \
+              "docker exec \$(docker ps --format '{{.Names}}' | grep '^${PG_CONTAINER}' | head -1) \
+                 pg_dump -U '${PG_USER}' -d '${PG_DATABASE}' \
+                 --format=plain --no-owner --no-privileges --quote-all-identifiers" \
+              | gzip -6 > "$out"
+          else
+            if [ -z "${DATABASE_URL:-}" ]; then
+              echo "::error::secret ${{ matrix.secret }} is empty or unset"
+              exit 1
+            fi
+            echo "Dumping ${SERVICE} from Neon ..."
+            pg_dump "$DATABASE_URL" \
+              --format=plain \
+              --no-owner \
+              --no-privileges \
+              --quote-all-identifiers \
+              | gzip -6 > "$out"
+          fi
 
           # Integrity gate. pg_dump writes this marker as the final line of a
           # complete dump; a dump truncated by a dropped connection or a killed
