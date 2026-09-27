@@ -50,5 +50,56 @@ RSpec.describe Api::V1::ItemsController, type: :controller do
       expect(response).to have_http_status(:ok)
       expect(Inventory.last.apply_first_hop_markup).to eq(true)
     end
+
+    # A form-encoded client can send the field empty. The Boolean cast turns ""
+    # into nil, which the null: false column rejects after the item is saved.
+    it 'creates an item when apply_first_hop_markup is an empty string' do
+      post :create, params: {
+        item: {
+          quantity: 10,
+          category_id: category.id,
+          name: 'Carrot',
+          grade_id: grade.id,
+          price: 5,
+          item_unit_id: item_unit.id,
+          description: 'Fresh carrots'
+        },
+        apply_first_hop_markup: ''
+      }
+
+      expect(response).to have_http_status(:ok)
+      expect(Inventory.last.apply_first_hop_markup).to eq(false)
+    end
+  end
+
+  describe 'PATCH #update' do
+    let!(:inventory) do
+      post :create, params: {
+        item: {
+          quantity: 10,
+          category_id: category.id,
+          name: 'Carrot',
+          grade_id: grade.id,
+          price: 5,
+          item_unit_id: item_unit.id,
+          description: 'Fresh carrots'
+        },
+        apply_first_hop_markup: true
+      }
+      Inventory.last
+    end
+
+    it 'leaves apply_first_hop_markup unchanged when it is an empty string' do
+      patch :update, params: {
+        id: inventory.id,
+        item: { price: 6, quantity: 12, description: 'Still fresh' },
+        apply_first_hop_markup: ''
+      }
+
+      expect(response).to have_http_status(:ok)
+      inventory.reload
+      expect(inventory.apply_first_hop_markup).to eq(true)
+      expect(inventory.price).to eq(6)
+    end
   end
 end
