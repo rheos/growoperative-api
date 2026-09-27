@@ -6,16 +6,6 @@
 #   movies = Movie.create!([{ name: 'Star Wars' }, { name: 'Lord of the Rings' }])
 #   Character.create!(name: 'Luke', movie: movies.first)
 
-# def generate_admin_user
-#   admin = User.find_or_initialize_by(user_name: "admin")
-#   admin.password = "TestTest"
-#   admin.invite_limit = 1000000
-#   admin.depth= 0
-#   admin.save
-#   admin.user_groups.create!(group_label: "admin")
-# end
-# It will generate Admin user
-# generate_admin_user
 
 # Global settings required for the app to function
 def generate_global_setting
@@ -36,7 +26,10 @@ generate_global_setting
 # Bootstrap admin user
 def generate_admin_user
   admin = User.find_or_initialize_by(user_name: "robin")
-  admin.password = "password"
+  if admin.new_record?
+    admin.password = ENV["SEED_ADMIN_PASSWORD"].presence ||
+      (Rails.env.test? ? "password" : SecureRandom.hex(32))
+  end
   admin.invite_limit = 1000000
   admin.depth = 0
   admin.save!

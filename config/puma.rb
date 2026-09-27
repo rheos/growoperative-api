@@ -33,5 +33,5 @@ preload_app!
 # Allow puma to be restarted by `rails restart` command.
 plugin :tmp_restart
 
-# Explicitly bind to 0.0.0.0 for Fly.io
+# Listen on all container interfaces.
 bind "tcp://0.0.0.0:#{ENV.fetch('PORT') { 8080 }}"

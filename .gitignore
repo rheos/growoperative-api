@@ -30,8 +30,13 @@
 # Ignore master key for decrypting credentials and more.
 #gemset
 .ruby-gemset
-.env.local
-.env.production
+.env
+.env.*
+!.env.example
+/config/application.yml
+/config/master.key
+/config/credentials/*.key
+/db/snapshots/
 /Gemfile.lock
 /config/database.yml
 /private/uploads
