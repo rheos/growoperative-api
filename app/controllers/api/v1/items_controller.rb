@@ -146,10 +146,9 @@ module Api::V1
       @item = current_user.items.new(data_without_description)
       if @item.save
         inventory = @item.inventory.first
-        inventory.update(
-          description: description,
-          apply_first_hop_markup: apply_first_hop_markup_param
-        )
+        inventory_data = { description: description }
+        inventory_data[:apply_first_hop_markup] = apply_first_hop_markup_param unless params[:apply_first_hop_markup].nil?
+        inventory.update(inventory_data)
         
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
