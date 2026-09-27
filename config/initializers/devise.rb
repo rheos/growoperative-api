@@ -8,7 +8,7 @@ Devise.setup do |config|
   # confirmation, reset password and unlock tokens in the database.
   # Devise will use the `secret_key_base` as its `secret_key`
   # by default. You can change it below and use your own secret key.
-  config.secret_key = 'REMOVED_FOR_PUBLICATION'
+  config.secret_key = ENV["DEVISE_SECRET_KEY"].presence || Rails.application.secret_key_base
   
   # ==> Controller configuration
   # Configure the parent class to the devise controllers.
@@ -284,8 +284,7 @@ Devise.setup do |config|
     config.default_strategies(:scope => :user).unshift :jwt
   end
   config.jwt do |jwt|
-    jwt.secret = "REMOVED_FOR_PUBLICATION
-"
+    jwt.secret = ENV["DEVISE_JWT_SECRET_KEY"].presence || Rails.application.secret_key_base
     jwt.dispatch_requests = [
       ['POST', %r{^/api/v1/sign_in$}]
     ]

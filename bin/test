@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+# Test runs must never inherit the development database or FOAF write settings.
+export RAILS_ENV=test
+export FOAF_WRITE_ENABLED=false
+export FOAF_SHADOW_MODE=false
+export FOAF_SHARED_READS=false
+export FOAF_SHARED_WRITES=false
+export FOAF_API_URL=http://127.0.0.1:9
+export FOAF_AUTH_BASE_URL=http://127.0.0.1:9
+export FOAF_AUTH_SERVICE_TOKEN=ci-service-token
+
+exec bundle exec rspec "$@"

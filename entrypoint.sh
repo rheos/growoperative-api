@@ -9,14 +9,9 @@ if [ -f ./bin/wait-for-db.sh ]; then
   ./bin/wait-for-db.sh "${DATABASE_HOST:-db}"
 fi
 
-# Create DB if needed
-if ! bundle exec rails db:version >/dev/null 2>&1; then
-  echo "📦 Database not found — creating..."
-  bundle exec rails db:create
-fi
-
-# Always run migrations
-bundle exec rails db:migrate
+# On a fresh checkout, load the current schema instead of replaying legacy
+# MySQL-era migrations. Existing databases receive pending migrations.
+bundle exec rails db:prepare
 
 # Only seed if SEED_DATABASE=true
 if [ "$SEED_DATABASE" = "true" ]; then

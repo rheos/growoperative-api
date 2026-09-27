@@ -20,10 +20,15 @@ services:
       POSTGRES_USER: postgres          # App DB user (matches config/database.yml)
       POSTGRES_PASSWORD: postgres      # App DB password (dev only)
       POSTGRES_DB: growoperative_development  # Default DB (test DB created via rails db:create)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d growoperative_development"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
     volumes:
       - pg_data:/var/lib/postgresql/data
     ports:
-      - "5544:5432"  # Expose Postgres for local tools (host 5544 avoids collisions)
+      - "127.0.0.1:5544:5432"  # Expose Postgres for local tools (host 5544 avoids collisions)
 
   backend:
     build: .
@@ -32,12 +37,12 @@ services:
       - .:/app
       - bundle_data:/usr/local/bundle
     ports:
-      - "3001:8080"  # Rails API on localhost:3001
+      - "127.0.0.1:3001:8080"  # Rails API on localhost:3001
     env_file:
       - .env
     environment:
       RAILS_ENV: development
-      FRONTEND_URL: ${FRONTEND_URL:-http://10.0.1.6:3000}  # Used for CORS
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}  # Used for CORS
       SEED_DATABASE: "true"  # Auto-seed DB if empty (dev only)
       DATABASE_URL: postgresql://postgres:postgres@db:5432/growoperative_development
       TEST_DATABASE_URL: postgresql://postgres:postgres@db:5432/growoperative_test
@@ -45,18 +50,19 @@ services:
       # the local dev DB, and test runs connect via TEST_DATABASE_URL, so allow it.
       DATABASE_CLEANER_ALLOW_REMOTE_DATABASE_URL: "true"
       DISABLE_SPRING: 1
-      SECRET_KEY_BASE: REMOVED_FOR_PUBLICATION
       COOKIE_DOMAIN: localhost
       # Publish GrowOperative ledger writes to FOAF.
-      FOAF_WRITE_ENABLED: "true"
+      FOAF_WRITE_ENABLED: ${FOAF_WRITE_ENABLED:-false}
       FOAF_API_URL: "http://host.docker.internal:3002"
-      FOAF_SHARED_READS: "true"
-      FOAF_SHARED_WRITES: "true"
+      FOAF_SHARED_READS: ${FOAF_SHARED_READS:-false}
+      FOAF_SHARED_WRITES: ${FOAF_SHARED_WRITES:-false}
       FOAF_SHARED_AUTH_VERIFIER: "false"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
+    profiles: [legacy-frontend]
     build: ../platform
     ports:
       - "3000:3000"  # React dev server on localhost:3000
