@@ -49,7 +49,7 @@ gem 'bootsnap', '>= 1.17.0', require: false
 gem 'active_model_serializers', '~> 0.10.16'
 gem 'devise',           '~> 5.0'
 gem 'devise-jwt'
-gem 'carrierwave', '~> 2.0'
+gem 'carrierwave', '~> 3.1'
 gem 'fog-aws'
 gem "rmagick", '~> 7.1'
 gem 'devise_invitable', '~> 2.0'
