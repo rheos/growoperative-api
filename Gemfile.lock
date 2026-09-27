@@ -380,6 +380,13 @@ GEM
       rexml (~> 3.2, >= 3.2.5)
       rubyzip (>= 1.2.2, < 4.0)
       websocket (~> 1.0)
+    sentry-rails (7.0.0)
+      railties (>= 5.2.0)
+      sentry-ruby (~> 7.0.0)
+    sentry-ruby (7.0.0)
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.0.2)
+      logger
     spring (2.1.1)
     spring-watcher-listen (2.0.1)
       listen (>= 2.7, < 4.0)
@@ -457,6 +464,8 @@ DEPENDENCIES
   rmagick (~> 7.1)
   rspec-rails (~> 8.0)
   selenium-webdriver (>= 4.11, < 5)
+  sentry-rails (~> 7.0)
+  sentry-ruby (~> 7.0)
   spring (~> 2.1)
   spring-watcher-listen (~> 2.0.0)
   sprockets-rails
