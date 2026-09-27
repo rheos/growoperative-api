@@ -1,0 +1,208 @@
+# Scheduled liveness probe for the FOAF fleet.
+#
+# Why this exists: auth.foaf.io was down from 2026-09-19 to 2026-09-22 and
+# nothing noticed. Three days. Every external check was green the whole time,
+# because the health endpoints did not touch the database -- railsbackend's
+# "/up" is a static proc and auth.foaf.io rendered a fixed hash. The only real
+# signal was a backup job failing that nobody was watching.
+#
+# Two rules follow from that, and both are load-bearing here:
+#
+#   1. Probe something that reaches the DATABASE. A 200 from an endpoint that
+#      cannot fail tells you nothing. Every probe below is chosen so that a
+#      dead database produces a non-2xx.
+#
+#   2. Page a human. M.O.T. fires a Telegram to Robin when a ticket is CREATED
+#      with severity "critical" -- on create only, never on a dedup update. So
+#      a sustained outage pings once rather than every 15 minutes, which is the
+#      behaviour we want, but it also means the ticket MUST be closed on
+#      recovery or the next outage is silent. That is what the recovery step
+#      does, and it is the part most likely to be dropped in a rewrite.
+#
+# Lives in a repo rather than a crontab on the box deliberately: hand-installed
+# scripts on Contabo were removed in 2026-08 for bypassing deploy-from-main.
+
+name: Health probe
+
+on:
+  schedule:
+    # Every 15 minutes. GitHub schedules are best-effort and can slip by a few
+    # minutes under load; that is fine for a 3-day-outage class of problem.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # auth.foaf.io — /v1/health runs SELECT 1 and 503s when the database
+          # is unreachable (foaf-auth#33). This is the service that was down.
+          - service: auth.foaf.io
+            url: https://auth.foaf.io/v1/health
+            method: GET
+            expect: 200
+
+          # api.growoperative.app — /v1/health, same shape (#100). NOT "/up",
+          # which is a hardcoded proc and always returns 200.
+          - service: api.growoperative.app
+            url: https://api.growoperative.app/v1/health
+            method: GET
+            expect: 200
+
+          # api.foaf.io — the ledger has no health endpoint yet, so probe a
+          # real read instead: /api/v1/networks queries CurrencyNetwork, so a
+          # dead database gives a 5xx rather than this 200.
+          - service: api.foaf.io
+            url: https://api.foaf.io/api/v1/networks
+            method: GET
+            expect: 200
+
+    steps:
+      # Checked on EVERY run, not only when something is down. Otherwise a
+      # missing key leaves the probe passing green while being unable to page
+      # anyone -- monitoring that looks healthy and cannot alert is the exact
+      # failure this workflow exists to end, just one level up.
+      - name: Preflight — can we actually page?
+        env:
+          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MOT_API_KEY:-}" ]; then
+            echo "::error::MOT_API_KEY is not set. This probe cannot page anyone, so it is not monitoring — it is decoration. Set the secret (key lives in ~/Documents/novadiem/keys/mot-api.md)."
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+                   -H "Authorization: Bearer $MOT_API_KEY" \
+                   "https://rheo.ca/mot/api/tickets?status=open")
+          if [ "$code" != "200" ]; then
+            echo "::error::M.O.T. API returned HTTP $code for a key check — paging would fail during a real outage."
+            exit 1
+          fi
+          echo "M.O.T. reachable and the key works."
+
+      - name: Probe
+        id: probe
+        run: |
+          set -uo pipefail
+
+          # Three attempts before declaring an outage. A single failed request
+          # is usually a network blip on the runner, and a false page teaches
+          # you to ignore the pager.
+          code=000
+          for attempt in 1 2 3; do
+            code=$(curl -s -o /tmp/body.txt -w '%{http_code}' \
+                     --max-time 20 -X "${{ matrix.method }}" "${{ matrix.url }}" || echo 000)
+            echo "attempt $attempt: HTTP $code"
+            [ "$code" = "${{ matrix.expect }}" ] && break
+            [ "$attempt" -lt 3 ] && sleep 10
+          done
+
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "${{ matrix.expect }}" ]; then
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Page via M.O.T. (critical ticket fires Telegram)
+        if: steps.probe.outputs.healthy == 'false'
+        env:
+          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+          SERVICE: ${{ matrix.service }}
+          URL: ${{ matrix.url }}
+          CODE: ${{ steps.probe.outputs.code }}
+          EXPECT: ${{ matrix.expect }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MOT_API_KEY:-}" ]; then
+            echo "::error::MOT_API_KEY is not set — $SERVICE is DOWN and nobody is being paged"
+            exit 1
+          fi
+
+          # The response body goes in via --rawfile rather than interpolation:
+          # it is attacker-adjacent text and may hold quotes or newlines.
+          head -c 400 /tmp/body.txt > /tmp/body-trunc.txt 2>/dev/null || : > /tmp/body-trunc.txt
+
+          body=$(printf '%s\n' \
+            "Probe $URL returned HTTP $CODE, expected $EXPECT, after 3 attempts." \
+            "" \
+            "This probe reaches the database, so a non-2xx means the service cannot serve" \
+            "real traffic — not merely that a static endpoint is missing." \
+            "" \
+            "Run: $RUN_URL")
+
+          # source_ref is the dedup key: same ref + ticket_type updates the
+          # existing ticket (200) instead of creating a new one (201), and only
+          # a create pings Telegram. So a sustained outage pages once.
+          payload=$(jq -nc \
+            --arg title "$SERVICE is DOWN (HTTP $CODE)" \
+            --arg ref "health-probe:$SERVICE" \
+            --arg body "$body" \
+            --rawfile resp /tmp/body-trunc.txt \
+            '{title:$title, ministry:"works", ticket_type:"infra-alert",
+              severity:"critical", provenance:"status-poll",
+              source_ref:$ref,
+              body:($body + "\n\nResponse body (truncated):\n" + $resp)}')
+
+          code=$(curl -sS -o /tmp/mot.json -w '%{http_code}' \
+                   -X POST https://rheo.ca/mot/api/tickets \
+                   -H "Authorization: Bearer $MOT_API_KEY" \
+                   -H "Content-Type: application/json" \
+                   -d "$payload")
+          echo "M.O.T. responded $code (201 = created + Telegram sent, 200 = deduped, no re-ping)"
+          if [ "$code" != "201" ] && [ "$code" != "200" ]; then
+            echo "::error::failed to file M.O.T. ticket"
+            cat /tmp/mot.json || true
+            exit 1
+          fi
+
+      - name: Close the M.O.T. ticket on recovery
+        if: steps.probe.outputs.healthy == 'true'
+        env:
+          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+        run: |
+          set -uo pipefail
+          [ -z "${MOT_API_KEY:-}" ] && { echo "MOT_API_KEY unset; nothing to close"; exit 0; }
+
+          # Without this the first outage leaves an open ticket forever, dedup
+          # keeps matching it, and every LATER outage is silent. Recovery has to
+          # clear the ticket for the pager to work a second time.
+          open=$(curl -sS -H "Authorization: Bearer $MOT_API_KEY" \
+                   "https://rheo.ca/mot/api/tickets?status=open")
+
+          ids=$(echo "$open" | jq -r --arg ref "health-probe:${{ matrix.service }}" \
+                  '(if type == "array" then . else (.tickets // []) end)
+                   | map(select(.source_ref == $ref)) | .[].id' 2>/dev/null || true)
+
+          if [ -z "$ids" ]; then
+            echo "${{ matrix.service }} healthy; no open ticket to close"
+            exit 0
+          fi
+
+          for id in $ids; do
+            # Deliberately NOT combined with add_comment — M.O.T. 422s on that.
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                     -X PATCH "https://rheo.ca/mot/api/tickets/$id" \
+                     -H "Authorization: Bearer $MOT_API_KEY" \
+                     -H "Content-Type: application/json" \
+                     -d '{"status":"done"}')
+            echo "closed ticket $id -> HTTP $code"
+          done
+
+      - name: Fail the run if the service is down
+        if: steps.probe.outputs.healthy == 'false'
+        run: |
+          echo "::error::${{ matrix.service }} returned HTTP ${{ steps.probe.outputs.code }} (expected ${{ matrix.expect }})"
+          exit 1
