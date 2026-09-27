@@ -1,6 +1,17 @@
 class Api::V1::DebugController < Api::V1::ApiController
-  skip_before_action :authenticate!
+  # These endpoints were reachable unauthenticated on production for five
+  # months (the debug_api_enabled row was created 2026-04-20 and never
+  # changed), returning usernames, who traded with whom, item names, prices
+  # and timestamps to anyone who asked. A GlobalSetting is data, not a
+  # permission: one row flip re-opened everything, and nothing in the code
+  # said so.
+  #
+  # Now there are two independent gates, and the data row is the weaker one:
+  # outside development and test a caller must be an authenticated admin,
+  # whatever debug_api_enabled says.
+  skip_before_action :authenticate!, if: -> { Rails.env.local? }
   before_action :check_debug_enabled!
+  before_action :require_debug_admin!
 
   private def parse_foaf_extra_data(data)
     return {} if data.blank?
@@ -196,8 +207,17 @@ class Api::V1::DebugController < Api::V1::ApiController
     }
   end
 
+  # Development and test stay open: the `debug-api` skill and the bin/ dev
+  # scripts call these without a token, and there is no real data to leak.
+  private def require_debug_admin!
+    return if Rails.env.local?
+    return if current_user&.is_admin?
+
+    render json: { error: 'Debug API requires an admin' }, status: :forbidden
+  end
+
   private def check_debug_enabled!
-    return if Rails.env.development? || Rails.env.test?
+    return if Rails.env.local?
     setting = GlobalSetting.find_by(setting: 'debug_api_enabled')
     unless setting&.value == 1
       render json: { error: 'Debug API is disabled' }, status: 403
