@@ -32,5 +32,23 @@ RSpec.describe Api::V1::ItemsController, type: :controller do
       expect(inventory.apply_first_hop_markup).to eq(false)
       expect(inventory.description).to eq('Fresh carrots')
     end
+
+    it 'respects apply_first_hop_markup when provided' do
+      post :create, params: {
+        item: {
+          quantity: 10,
+          category_id: category.id,
+          name: 'Carrot',
+          grade_id: grade.id,
+          price: 5,
+          item_unit_id: item_unit.id,
+          description: 'Fresh carrots'
+        },
+        apply_first_hop_markup: true
+      }
+
+      expect(response).to have_http_status(:ok)
+      expect(Inventory.last.apply_first_hop_markup).to eq(true)
+    end
   end
 end
