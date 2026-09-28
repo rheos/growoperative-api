@@ -146,10 +146,10 @@ module Api::V1
       @item = current_user.items.new(data_without_description)
       if @item.save
         inventory = @item.inventory.first
-        inventory.update(
-          description: description,
-          apply_first_hop_markup: apply_first_hop_markup_param
-        )
+        inventory_data = { description: description }
+        markup = apply_first_hop_markup_param
+        inventory_data[:apply_first_hop_markup] = markup unless markup.nil?
+        inventory.update(inventory_data)
         
         if params[:unit_options].present? && params[:unit_options].length > 0
           params[:unit_options].each do |option|
@@ -195,7 +195,8 @@ module Api::V1
         elsif item_params.keys.length > 1
           change_item_name(@inventory, item_params[:name]) if item_params[:name].present?
           inventory_data = { price: data[:price], quantity: data[:quantity], description: data[:description] }
-          inventory_data[:apply_first_hop_markup] = apply_first_hop_markup_param unless params[:apply_first_hop_markup].nil?
+          markup = apply_first_hop_markup_param
+          inventory_data[:apply_first_hop_markup] = markup unless markup.nil?
           result = @inventory.update(inventory_data) && @inventory.item.update(data_without_description)
         elsif item_params.keys.length == 1 && (data[:price] || data[:quantity])
           result = @inventory.update(data_without_description)
