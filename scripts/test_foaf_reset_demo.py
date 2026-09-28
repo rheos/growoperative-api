@@ -48,7 +48,8 @@ class FoafResetLocalSafetyTest(unittest.TestCase):
         self.assertNotIn("FOREIGN_KEY_CHECKS", LOCAL_SCRIPT)
         self.assertIn('docker_exec_compose exec -T backend printenv DATABASE_URL', LOCAL_SCRIPT)
         self.assertIn('DROP SCHEMA public CASCADE; CREATE SCHEMA public;', LOCAL_SCRIPT)
-        self.assertIn('TRUNCATE TABLE', LOCAL_SCRIPT)
+        self.assertIn('public.login_lockouts', LOCAL_SCRIPT)
+        self.assertIn('RESTART IDENTITY CASCADE;', LOCAL_SCRIPT)
         self.assertIn('PostgreSQL database dump', LOCAL_SCRIPT)
 
     def test_local_script_requires_postgres_snapshots(self) -> None:
