@@ -1,27 +1,180 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Reset the app DB, auth DB, and FOAF DB to a clean synced starting state.
 #
 # Usage (from railsbackend/):
 #   ./bin/foaf-reset [snapshot_date]
 #
-# Default snapshot date: 2026-05-23. The script loads two paired files:
-#   db/snapshots/dev_clean_<date>.sql   → growoperative_development
-#   db/snapshots/auth_clean_<date>.sql  → foaf_auth_development.identities
+# Default snapshot date: 2026-05-23. The script loads two paired PostgreSQL
+# dumps:
+#   db/snapshots/dev_clean_<date>.*   → growoperative_development
+#   db/snapshots/auth_clean_<date>.*  → foaf_auth_development.identities
 # Pairing matters because users.foaf_id (app side) must equal
 # identities.foaf_id (auth side) for token verification to resolve.
 #
 # Auth signing keys, service tokens, and reserved-handle YAML state are
 # left alone — those are infrastructure, not data.
 
-set -e
+set -euo pipefail
 
 SNAPSHOT_DATE="${1:-2026-05-23}"
-APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
-AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
-APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
-AUTH_SNAPSHOT_PATH="db/snapshots/${AUTH_SNAPSHOT}"
 RB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SNAPSHOT_DIR="${RB_DIR}/db/snapshots"
+PGCLIENT_IMAGE="${PGCLIENT_IMAGE:-postgres:16}"
+
+find_snapshot() {
+  local prefix="$1"
+  local date="$2"
+  local ext
+  local path
+
+  for ext in sql sql.gz dump backup tar; do
+    path="${SNAPSHOT_DIR}/${prefix}_${date}.${ext}"
+    if [[ -f "${path}" ]]; then
+      printf '%s\n' "${path}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+postgres_snapshot_header() {
+  local path="$1"
+
+  case "${path}" in
+    *.sql) head -n 20 "${path}" ;;
+    *.sql.gz) gzip -dc "${path}" | head -n 20 ;;
+    *) return 0 ;;
+  esac
+}
+
+assert_postgres_snapshot() {
+  local path="$1"
+
+  case "${path}" in
+    *.sql|*.sql.gz)
+      if ! postgres_snapshot_header "${path}" | grep -q "PostgreSQL database dump"; then
+        echo "ERROR: ${path} does not look like a PostgreSQL dump."
+        echo "       MySQL-era snapshots are not supported. Recreate it with pg_dump."
+        exit 1
+      fi
+      ;;
+    *.dump|*.backup|*.tar)
+      ;;
+    *)
+      echo "ERROR: Unsupported snapshot format: ${path}"
+      echo "       Expected a PostgreSQL dump ending in .sql, .sql.gz, .dump, .backup, or .tar."
+      exit 1
+      ;;
+  esac
+}
+
+docker_exec_compose() {
+  docker compose "$@"
+}
+
+compose_database_url() {
+  docker_exec_compose exec -T backend printenv DATABASE_URL | tr -d '\r'
+}
+
+auth_container_name() {
+  local auth_dir
+  local auth_compose
+  local auth_id
+  local name
+
+  if [[ -n "${FOAF_AUTH_CONTAINER:-}" ]]; then
+    printf '%s\n' "${FOAF_AUTH_CONTAINER}"
+    return 0
+  fi
+
+  if [[ -n "${FOAF_AUTH_DIR:-}" ]]; then
+    auth_dir="${FOAF_AUTH_DIR}"
+  elif [[ -d "${RB_DIR}/../foaf-auth" ]]; then
+    auth_dir="${RB_DIR}/../foaf-auth"
+  elif [[ -d "${RB_DIR}/../../foaf-auth" ]]; then
+    auth_dir="${RB_DIR}/../../foaf-auth"
+  else
+    auth_dir=""
+  fi
+
+  if [[ -n "${auth_dir}" ]]; then
+    auth_compose="${auth_dir}/service/docker-compose.yml"
+    if [[ -f "${auth_compose}" ]]; then
+      auth_id="$(docker compose -f "${auth_compose}" ps -q auth 2>/dev/null || true)"
+      if [[ -n "${auth_id}" ]]; then
+        docker inspect --format '{{.Name}}' "${auth_id}" | sed 's#^/##'
+        return 0
+      fi
+    fi
+  fi
+
+  for name in service-auth-1 foaf-auth-auth-1 foaf-auth-auth-dev-1; do
+    if docker ps --format '{{.Names}}' | grep -qx "${name}"; then
+      printf '%s\n' "${name}"
+      return 0
+    fi
+  done
+
+  echo "ERROR: foaf-auth container not found."
+  echo "       Start foaf-auth locally, or set FOAF_AUTH_CONTAINER."
+  exit 1
+}
+
+container_database_url() {
+  local container="$1"
+  docker exec "${container}" printenv DATABASE_URL 2>/dev/null | tr -d '\r'
+}
+
+psql_with_url() {
+  local network_container="$1"
+  local database_url="$2"
+  shift 2
+
+  docker run --rm -i \
+    --network "container:${network_container}" \
+    -e DATABASE_URL="${database_url}" \
+    "${PGCLIENT_IMAGE}" \
+    sh -lc 'exec psql "$DATABASE_URL" -v ON_ERROR_STOP=1 "$@"' sh "$@"
+}
+
+pg_restore_with_url() {
+  local network_container="$1"
+  local database_url="$2"
+  local snapshot_path="$3"
+
+  docker run --rm \
+    --network "container:${network_container}" \
+    -e DATABASE_URL="${database_url}" \
+    -v "$(dirname "${snapshot_path}"):/snapshots:ro" \
+    "${PGCLIENT_IMAGE}" \
+    sh -lc 'exec pg_restore --clean --if-exists --no-owner --no-privileges -d "$DATABASE_URL" "$1"' sh \
+    "/snapshots/$(basename "${snapshot_path}")"
+}
+
+restore_snapshot_to_url() {
+  local network_container="$1"
+  local database_url="$2"
+  local snapshot_path="$3"
+
+  case "${snapshot_path}" in
+    *.sql)
+      psql_with_url "${network_container}" "${database_url}" < "${snapshot_path}"
+      ;;
+    *.sql.gz)
+      gzip -dc "${snapshot_path}" | psql_with_url "${network_container}" "${database_url}"
+      ;;
+    *.dump|*.backup|*.tar)
+      pg_restore_with_url "${network_container}" "${database_url}" "${snapshot_path}"
+      ;;
+  esac
+}
+
+APP_SNAPSHOT_PATH="$(find_snapshot "dev_clean" "${SNAPSHOT_DATE}" || true)"
+AUTH_SNAPSHOT_PATH="$(find_snapshot "auth_clean" "${SNAPSHOT_DATE}" || true)"
+APP_SNAPSHOT="$(basename "${APP_SNAPSHOT_PATH:-missing}")"
+AUTH_SNAPSHOT="$(basename "${AUTH_SNAPSHOT_PATH:-missing}")"
 
 if [ -n "${FOAF_PROTOCOL_DIR:-}" ]; then
   FOAF_DIR="${FOAF_PROTOCOL_DIR}"
@@ -36,14 +189,40 @@ fi
 
 FOAF_COMPOSE_FILE="${FOAF_DIR}/docker-compose.yml"
 
-if [ ! -f "${APP_SNAPSHOT_PATH}" ]; then
-  echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
+if [[ -z "${APP_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: App snapshot not found for ${SNAPSHOT_DATE} in ${SNAPSHOT_DIR}"
+  echo "       Expected a PostgreSQL dump named dev_clean_${SNAPSHOT_DATE}.{sql,sql.gz,dump,backup,tar}"
   exit 1
 fi
 
-if [ ! -f "${AUTH_SNAPSHOT_PATH}" ]; then
-  echo "ERROR: Auth snapshot not found: ${AUTH_SNAPSHOT_PATH}"
+if [[ -z "${AUTH_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: Auth snapshot not found for ${SNAPSHOT_DATE} in ${SNAPSHOT_DIR}"
   echo "       Both halves are required so users.foaf_id and identities.foaf_id stay aligned."
+  exit 1
+fi
+
+assert_postgres_snapshot "${APP_SNAPSHOT_PATH}"
+assert_postgres_snapshot "${AUTH_SNAPSHOT_PATH}"
+
+BACKEND_CONTAINER_ID="$(docker_exec_compose ps -q backend)"
+if [[ -z "${BACKEND_CONTAINER_ID}" ]]; then
+  echo "ERROR: backend container is not running. Start docker compose first."
+  exit 1
+fi
+BACKEND_CONTAINER_NAME="$(docker inspect --format '{{.Name}}' "${BACKEND_CONTAINER_ID}" | sed 's#^/##')"
+APP_DATABASE_URL="$(compose_database_url)"
+if [[ -z "${APP_DATABASE_URL}" ]]; then
+  echo "ERROR: backend DATABASE_URL is empty."
+  exit 1
+fi
+
+AUTH_CONTAINER_NAME="$(auth_container_name)"
+AUTH_DATABASE_URL="${FOAF_AUTH_DATABASE_URL:-}"
+if [[ -z "${AUTH_DATABASE_URL}" ]]; then
+  AUTH_DATABASE_URL="$(container_database_url "${AUTH_CONTAINER_NAME}")"
+fi
+if [[ -z "${AUTH_DATABASE_URL}" ]]; then
+  echo "ERROR: foaf-auth DATABASE_URL is empty."
   exit 1
 fi
 
@@ -54,19 +233,15 @@ echo "  Auth: ${AUTH_SNAPSHOT}"
 echo ""
 
 # --- Step 1: Restore app DB ---
-# NOTE: when this dev MySQL container is upgraded from 5.7 to 8, this command
-# will fail with "TLS/SSL error: self-signed certificate" because MySQL 8
-# requires TLS by default. Add an SSL-disable flag at that point — the right
-# flag depends on the client: --ssl-mode=DISABLED for Oracle's mysql client,
-# --skip-ssl for MariaDB's. (Prod's bin/foaf-reset-demo already uses --skip-ssl
-# because the foaf-testnet container ships MariaDB.)
 echo "[1/6] Restoring app DB..."
-docker-compose exec -T db sh -c 'mysql -u root -p"rDKftaN-64" growoperative_development 2>/dev/null' < "${APP_SNAPSHOT_PATH}"
+printf 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' | \
+  psql_with_url "${BACKEND_CONTAINER_NAME}" "${APP_DATABASE_URL}"
+restore_snapshot_to_url "${BACKEND_CONTAINER_NAME}" "${APP_DATABASE_URL}" "${APP_SNAPSHOT_PATH}"
 echo "  OK"
 
 # --- Step 2: Run app migrations ---
 echo "[2/6] Running app migrations..."
-MIGRATE_OUTPUT="$(docker-compose exec backend rails db:migrate 2>&1)" || {
+MIGRATE_OUTPUT="$(docker_exec_compose exec backend rails db:migrate 2>&1)" || {
   echo "${MIGRATE_OUTPUT}" | grep -v "warning:" || true
   exit 1
 }
@@ -78,25 +253,25 @@ echo "  OK"
 # silently fails at User.find_by(foaf_id: sub). The paired snapshot guarantees
 # this — both halves were dumped from the same local DB state.
 echo "[3/6] Restoring auth identities + clearing transactional auth state..."
-docker exec -i service-db-1 mysql -u foaf_auth -ppassword foaf_auth_development 2>/dev/null <<SQL
-SET FOREIGN_KEY_CHECKS=0;
-TRUNCATE login_lockouts;
-TRUNCATE recovery_phrases;
-TRUNCATE recovery_attempts;
-TRUNCATE revoked_jtis;
-TRUNCATE invitations;
-TRUNCATE contact_edges;
-TRUNCATE audit_logs;
-SET FOREIGN_KEY_CHECKS=1;
+psql_with_url "${AUTH_CONTAINER_NAME}" "${AUTH_DATABASE_URL}" <<'SQL'
+TRUNCATE TABLE
+  public.login_lockouts,
+  public.recovery_phrases,
+  public.recovery_attempts,
+  public.revoked_jtis,
+  public.invitations,
+  public.contact_edges,
+  public.audit_logs
+RESTART IDENTITY CASCADE;
 SQL
-docker exec -i service-db-1 mysql -u foaf_auth -ppassword foaf_auth_development 2>/dev/null < "${AUTH_SNAPSHOT_PATH}"
+restore_snapshot_to_url "${AUTH_CONTAINER_NAME}" "${AUTH_DATABASE_URL}" "${AUTH_SNAPSHOT_PATH}"
 echo "  OK"
 
 # --- Step 4: Clear FOAF DB ---
 echo "[4/6] Clearing FOAF DB..."
-docker-compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
+docker compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
 # Confirmed pending transfers reference their Operation, so dependants must be
-# removed first or MySQL correctly rejects the reset on the foreign key.
+# removed first or the database correctly rejects the reset on the foreign key.
 [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest, PendingTransfer,
  Operation, CurrencyNetwork].each(&:destroy_all)
 puts "  Cleared."
@@ -105,7 +280,7 @@ echo "  OK"
 
 # --- Step 5: Generate FOAF addresses for app users ---
 echo "[5/6] Generating FOAF addresses..."
-docker-compose exec backend rails runner '
+docker_exec_compose exec backend rails runner '
 user_ids = (Trustline.pluck(:user_a_id) + Trustline.pluck(:user_b_id)).uniq
 user_ids.each { |uid| Foaf::Signer.ensure_keypair!(User.find(uid)) rescue nil }
 count = User.where.not(foaf_address: nil).count
@@ -119,7 +294,7 @@ echo "  OK"
 echo "[6/6] Seeding FOAF..."
 
 # Export trustline data from app, pipe directly into FOAF
-docker-compose exec -T backend rails runner '
+docker_exec_compose exec -T backend rails runner '
 require "json"
 data = Trustline.where(is_active: true).map do |tl|
   a = User.find(tl.user_a_id)
@@ -133,9 +308,9 @@ end
 puts data.to_json
 ' 2>&1 | grep -v "warning:" | grep '^\[' > /tmp/foaf_seed.json
 
-docker cp /tmp/foaf_seed.json "$(docker-compose -f "${FOAF_COMPOSE_FILE}" ps -q foaf)":/tmp/foaf_seed.json 2>/dev/null
+docker cp /tmp/foaf_seed.json "$(docker compose -f "${FOAF_COMPOSE_FILE}" ps -q foaf)":/tmp/foaf_seed.json 2>/dev/null
 
-docker-compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
+docker compose -f "${FOAF_COMPOSE_FILE}" exec -T foaf bundle exec rails runner '
 require "json"
 data = JSON.parse(File.read("/tmp/foaf_seed.json"))
 

@@ -1,28 +1,27 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # wait-for-db.sh
 
-set -e
+set -euo pipefail
 
-host="$1"
-shift
-cmd="$@"
+host="${1:-db}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+cmd=("$@")
 
-# Postgres tiers (Neon/Contabo) use DATABASE_URL and have no mysql client; Neon is
-# always-up, so there is nothing to wait for. Skip straight to the command. MySQL
-# prod/demo (no postgres DATABASE_URL) keep the original wait below.
-case "${DATABASE_URL:-}" in
-  postgres://*|postgresql://*)
-    # entrypoint.prod.sh calls this as a readiness gate with no command, so exit
-    # cleanly; if a command was passed, exec it (never fall through to mysql).
-    [ -n "$cmd" ] && exec $cmd
-    exit 0
-    ;;
-esac
+wait_target=()
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  wait_target=(-d "${DATABASE_URL}")
+else
+  wait_target=(-h "${host}" -U "${DATABASE_USERNAME:-postgres}" -d "${DATABASE_NAME:-postgres}")
+fi
 
-until mysql --skip-ssl -h "$host" -u"$DATABASE_USERNAME" -p"$DATABASE_PASSWORD" -e 'SELECT 1'; do
-  >&2 echo "MySQL is unavailable - sleeping"
+until pg_isready "${wait_target[@]}" >/dev/null 2>&1; do
+  >&2 echo "PostgreSQL is unavailable - sleeping"
   sleep 1
 done
 
->&2 echo "MySQL is up - executing command"
-exec $cmd 
+>&2 echo "PostgreSQL is up"
+if [[ ${#cmd[@]} -gt 0 ]]; then
+  exec "${cmd[@]}"
+fi
