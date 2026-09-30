@@ -32,7 +32,7 @@ on:
   # Demo deploys only after the suite is green on master. A push trigger would
   # deploy red commits, which is the failure this repo's CI exists to prevent.
   workflow_run:
-    workflows: ["Rails upgrade safety"]
+    workflows: ["CI"]
     types: [completed]
     branches: [master]
   workflow_dispatch:

@@ -1,4 +1,4 @@
-name: Rails upgrade safety
+name: CI
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   rspec-upgrade-safety:
-    name: RSpec upgrade safety
+    name: RSpec
     runs-on: ubuntu-latest
 
     services:
