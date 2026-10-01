@@ -172,11 +172,11 @@ GEM
       scrypt (~> 3.0)
     excon (1.7.1)
       logger
-    factory_bot (6.4.5)
-      activesupport (>= 5.0.0)
-    factory_bot_rails (6.4.3)
-      factory_bot (~> 6.4)
-      railties (>= 5.0.0)
+    factory_bot (6.6.0)
+      activesupport (>= 6.1.0)
+    factory_bot_rails (6.5.1)
+      factory_bot (~> 6.5)
+      railties (>= 6.1.0)
     ffi (1.17.4-x86_64-linux-gnu)
     ffi-compiler (1.4.2)
       ffi (>= 1.15.5)
@@ -337,7 +337,7 @@ GEM
       mini_portile2 (~> 2.8)
       pkg-config (~> 1.5)
       rubyzip (~> 2.3)
-    rdoc (8.0.0)
+    rdoc (8.1.0)
       erb
       prism (>= 1.6.0)
       rbs (>= 4.0.0)
@@ -445,7 +445,7 @@ DEPENDENCIES
   devise-jwt
   devise_invitable (~> 2.0)
   dotenv-rails (~> 2.7)
-  factory_bot_rails (~> 6.1)
+  factory_bot_rails (~> 6.5)
   foaf_client!
   fog-aws
   jbuilder (~> 2.15)
