@@ -220,7 +220,8 @@ GEM
       base64
     keccak (1.3.3)
     konstructor (1.0.2)
-    listen (3.9.0)
+    listen (3.10.0)
+      logger
       rb-fsevent (~> 0.10, >= 0.10.3)
       rb-inotify (~> 0.9, >= 0.9.10)
     logger (1.7.0)
@@ -451,7 +452,7 @@ DEPENDENCIES
   jbuilder (~> 2.15)
   jsonapi-serializer
   jwt
-  listen (~> 3.8)
+  listen (~> 3.10)
   mutex_m
   nokogiri (>= 1.15)
   pg (~> 1.5)
