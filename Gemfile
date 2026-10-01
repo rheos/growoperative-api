@@ -87,7 +87,7 @@ end
 group :test do
   # Adds support for Capybara system testing and selenium driver
   gem 'nokogiri', '>= 1.15'
-  gem 'capybara', '~> 3.35'
+  gem 'capybara', '~> 3.40'
   gem 'selenium-webdriver', '>= 4.11', '< 5'
   gem 'database_cleaner', '~> 2.0'
 end
