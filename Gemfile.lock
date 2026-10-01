@@ -418,11 +418,10 @@ GEM
       dry-configurable (>= 0.13, < 2)
       jwt (~> 2.1)
       warden (~> 1.2)
-    web-console (3.7.0)
-      actionview (>= 5.0)
-      activemodel (>= 5.0)
+    web-console (4.3.0)
+      actionview (>= 8.0.0)
       bindex (>= 0.4.0)
-      railties (>= 5.0)
+      railties (>= 8.0.0)
     websocket (1.2.11)
     websocket-driver (0.8.2)
       base64
@@ -472,7 +471,7 @@ DEPENDENCIES
   spring-watcher-listen (~> 2.0.0)
   sprockets-rails
   tzinfo-data (~> 1.2026.4)
-  web-console (~> 3.7)
+  web-console (~> 4.3)
 
 RUBY VERSION
    ruby 3.4.11p137
