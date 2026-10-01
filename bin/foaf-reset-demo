@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Reset the deployed demo to a clean trade-test baseline.
 #
@@ -8,22 +8,20 @@
 # contain DROP statements for tables introduced by newer migrations.
 # Ledger hooks will populate FOAF as the test creates trades.
 #
-# Uses the buddy user — no MySQL root credential needed. buddy has
-# ALL PRIVILEGES on growoperative_demo, which is enough for full
-# table drop/create/insert.
+# Uses PostgreSQL connection URLs from the running demo containers; the script
+# never needs direct host credentials.
 #
-# This is the remote equivalent of bin/foaf-reset, which only works
-# against local Docker. Run it on the Lightsail box.
+# This is the remote equivalent of bin/foaf-reset, run against the deployed
+# demo containers.
 #
 # Usage (ON SERVER, from ~/railsbackend/):
 #   ./bin/foaf-reset-demo [snapshot_file]
 #
-# Usage (FROM LAPTOP):
-#   ssh -i keys/Growoperative-Rails-2gb.pem ubuntu@35.163.185.37 \
-#       'cd ~/railsbackend && git pull && ./bin/foaf-reset-demo'
+# Usage (FROM ANOTHER MACHINE):
+#   ssh <demo-host> 'cd ~/growoperative-api && ./bin/foaf-reset-demo'
 #
-# Snapshot is restricted to dev_clean_* files. The trade test requires
-# a starting state with no pre-existing requests, orders, contracts,
+# Snapshot is restricted to dev_clean_* PostgreSQL SQL dumps. The trade test
+# requires a starting state with no pre-existing requests, orders, contracts,
 # or trustlines — other snapshots would invalidate it.
 #
 # Exit codes:
@@ -34,10 +32,9 @@
 set -euo pipefail
 
 SNAPSHOT_DATE="${1:-2026-05-23}"
-APP_SNAPSHOT="dev_clean_${SNAPSHOT_DATE}.sql"
-AUTH_SNAPSHOT="auth_clean_${SNAPSHOT_DATE}.sql"
-APP_SNAPSHOT_PATH="db/snapshots/${APP_SNAPSHOT}"
-AUTH_SNAPSHOT_PATH="db/snapshots/${AUTH_SNAPSHOT}"
+RB_DIR="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
+SNAPSHOT_DIR="${RB_DIR}/db/snapshots"
+PGCLIENT_IMAGE="${PGCLIENT_IMAGE:-postgres:16}"
 BACKEND_CONTAINER="railsbackend-backend-demo-1"
 AUTH_CONTAINER="foaf-auth-auth-demo-1"
 FOAF_CONTAINER="foaf-testnet"
@@ -49,72 +46,170 @@ EXPECTED_APP_DB="growoperative_demo"
 EXPECTED_AUTH_DB="foaf_auth_demo"
 EXPECTED_FOAF_NETWORK="testnet"
 
-env_value() {
-  local file="$1"
-  local key="$2"
-  local value
+find_snapshot() {
+  local prefix="$1"
+  local date="$2"
+  local ext
+  local path
 
-  value="$(grep -E "^[[:space:]]*${key}=" "${file}" | tail -n 1 | sed -E "s/^[[:space:]]*${key}=//" || true)"
-  value="${value%$'\r'}"
-  value="${value#\"}"
-  value="${value%\"}"
-  value="${value#\'}"
-  value="${value%\'}"
+  for ext in sql sql.gz dump backup tar; do
+    path="${SNAPSHOT_DIR}/${prefix}_${date}.${ext}"
+    if [[ -f "${path}" ]]; then
+      printf '%s\n' "${path}"
+      return 0
+    fi
+  done
 
-  if [[ -z "${value}" ]]; then
-    echo "ERROR: ${key} not in ${file}"
-    exit 1
-  fi
-
-  printf '%s' "${value}"
+  return 1
 }
 
+postgres_snapshot_header() {
+  local path="$1"
+
+  case "${path}" in
+    *.sql) head -n 20 "${path}" ;;
+    *.sql.gz) gzip -dc "${path}" | head -n 20 ;;
+    *) return 0 ;;
+  esac
+}
+
+assert_postgres_snapshot() {
+  local path="$1"
+
+  case "${path}" in
+    *.sql|*.sql.gz)
+      if ! postgres_snapshot_header "${path}" | grep -q "PostgreSQL database dump"; then
+        echo "ERROR: ${path} does not look like a PostgreSQL dump."
+        echo "       MySQL-era snapshots are not supported. Recreate it with pg_dump."
+        exit 1
+      fi
+      ;;
+    *.dump|*.backup|*.tar)
+      ;;
+    *)
+      echo "ERROR: Unsupported snapshot format: ${path}"
+      echo "       Expected a PostgreSQL dump ending in .sql, .sql.gz, .dump, .backup, or .tar."
+      exit 1
+      ;;
+  esac
+}
+
+container_database_url() {
+  local container="$1"
+  docker exec "${container}" printenv DATABASE_URL 2>/dev/null | tr -d '\r'
+}
+
+database_name_from_url() {
+  local url="$1"
+  local no_query="${url%%\?*}"
+  printf '%s\n' "${no_query##*/}"
+}
+
+psql_with_url() {
+  local network_container="$1"
+  local database_url="$2"
+  shift 2
+
+  docker run --rm -i \
+    --network "container:${network_container}" \
+    -e DATABASE_URL="${database_url}" \
+    "${PGCLIENT_IMAGE}" \
+    sh -lc 'exec psql "$DATABASE_URL" -v ON_ERROR_STOP=1 "$@"' sh "$@"
+}
+
+pg_restore_with_url() {
+  local network_container="$1"
+  local database_url="$2"
+  local snapshot_path="$3"
+
+  docker run --rm \
+    --network "container:${network_container}" \
+    -e DATABASE_URL="${database_url}" \
+    -v "$(dirname "${snapshot_path}"):/snapshots:ro" \
+    "${PGCLIENT_IMAGE}" \
+    sh -lc 'exec pg_restore --clean --if-exists --no-owner --no-privileges -d "$DATABASE_URL" "$1"' sh \
+    "/snapshots/$(basename "${snapshot_path}")"
+}
+
+restore_snapshot_to_url() {
+  local network_container="$1"
+  local database_url="$2"
+  local snapshot_path="$3"
+
+  case "${snapshot_path}" in
+    *.sql)
+      psql_with_url "${network_container}" "${database_url}" < "${snapshot_path}"
+      ;;
+    *.sql.gz)
+      gzip -dc "${snapshot_path}" | psql_with_url "${network_container}" "${database_url}"
+      ;;
+    *.dump|*.backup|*.tar)
+      pg_restore_with_url "${network_container}" "${database_url}" "${snapshot_path}"
+      ;;
+  esac
+}
+
+APP_SNAPSHOT_PATH="$(find_snapshot "dev_clean" "${SNAPSHOT_DATE}" || true)"
+AUTH_SNAPSHOT_PATH="$(find_snapshot "auth_clean" "${SNAPSHOT_DATE}" || true)"
+APP_SNAPSHOT="$(basename "${APP_SNAPSHOT_PATH:-missing}")"
+AUTH_SNAPSHOT="$(basename "${AUTH_SNAPSHOT_PATH:-missing}")"
+
 # --- Safety: snapshots must be a clean baseline ----------------------------
-if [[ ! -f "${APP_SNAPSHOT_PATH}" ]]; then
-  echo "ERROR: App snapshot not found: ${APP_SNAPSHOT_PATH}"
+if [[ -z "${APP_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: App snapshot not found for ${SNAPSHOT_DATE} in ${SNAPSHOT_DIR}"
+  echo "       Expected a PostgreSQL dump named dev_clean_${SNAPSHOT_DATE}.{sql,sql.gz,dump,backup,tar}"
   exit 1
 fi
 
-if [[ ! -f "${AUTH_SNAPSHOT_PATH}" ]]; then
-  echo "ERROR: Auth snapshot not found: ${AUTH_SNAPSHOT_PATH}"
+if [[ -z "${AUTH_SNAPSHOT_PATH}" ]]; then
+  echo "ERROR: Auth snapshot not found for ${SNAPSHOT_DATE} in ${SNAPSHOT_DIR}"
   echo "       Both halves are required so users.foaf_id and identities.foaf_id stay aligned."
   exit 1
 fi
 
+assert_postgres_snapshot "${APP_SNAPSHOT_PATH}"
+assert_postgres_snapshot "${AUTH_SNAPSHOT_PATH}"
+
 # Snapshot must be transactionally empty. The dev_clean_* prefix is a name
 # convention; this check is the actual contract. If a snapshot somehow ended
 # up with orders/trustlines/etc baked in, refuse rather than silently load it.
+case "${APP_SNAPSHOT_PATH}" in
+  *.sql) SNAPSHOT_STREAM=(cat "${APP_SNAPSHOT_PATH}") ;;
+  *.sql.gz) SNAPSHOT_STREAM=(gzip -dc "${APP_SNAPSHOT_PATH}") ;;
+  *)
+    echo "REFUSED: ${APP_SNAPSHOT_PATH} is not a plain PostgreSQL SQL dump."
+    echo "         Demo resets inspect the snapshot before loading it, so use .sql or .sql.gz here."
+    exit 1
+    ;;
+esac
+
 TRANSACTIONAL_TABLES=(trustlines trustline_transactions orders item_requests request_contracts pending_payments)
 for tbl in "${TRANSACTIONAL_TABLES[@]}"; do
-  if grep -q "INSERT INTO \`${tbl}\`" "${APP_SNAPSHOT_PATH}"; then
-    echo "REFUSED: ${APP_SNAPSHOT_PATH} contains INSERT INTO \`${tbl}\`."
+  if "${SNAPSHOT_STREAM[@]}" | grep -Eq "COPY public\\.${tbl}\\b|INSERT INTO public\\.${tbl}\\b"; then
+    echo "REFUSED: ${APP_SNAPSHOT_PATH} contains rows for ${tbl}."
     echo "         Trade-test snapshots must have zero transactional rows."
-    echo "         Strip the INSERTs from the dump and retry."
+    echo "         Recreate the dump after clearing transactional data and retry."
     exit 1
   fi
 done
 
-# --- Load app DB creds from railsbackend/.env.demo -------------------------
-APP_ENV_FILE="$(dirname "$(realpath "$0")")/../.env.demo"
-if [[ ! -f "${APP_ENV_FILE}" ]]; then
-  echo "ERROR: .env.demo not found at ${APP_ENV_FILE}"
-  exit 1
-fi
-APP_DB_HOST="$(env_value "${APP_ENV_FILE}" DATABASE_HOST)"
-APP_DB_USER="$(env_value "${APP_ENV_FILE}" DATABASE_USERNAME)"
-APP_DB_PASS="$(env_value "${APP_ENV_FILE}" DATABASE_PASSWORD)"
-APP_DB_NAME="$(env_value "${APP_ENV_FILE}" DATABASE_NAME)"
+# --- Sanity: required containers running -----------------------------------
+for c in "${BACKEND_CONTAINER}" "${AUTH_CONTAINER}" "${FOAF_CONTAINER}"; do
+  if ! docker ps --format '{{.Names}}' | grep -qx "${c}"; then
+    echo "ERROR: container ${c} not running. Can't proceed."
+    exit 2
+  fi
+done
 
-# --- Load auth DB creds from foaf-auth/service/.env.demo -------------------
-AUTH_ENV_FILE="$(dirname "$(realpath "$0")")/../../foaf-auth/service/.env.demo"
-if [[ ! -f "${AUTH_ENV_FILE}" ]]; then
-  echo "ERROR: auth .env.demo not found at ${AUTH_ENV_FILE}"
-  exit 1
+APP_DATABASE_URL="$(container_database_url "${BACKEND_CONTAINER}")"
+AUTH_DATABASE_URL="$(container_database_url "${AUTH_CONTAINER}")"
+APP_DB_NAME="$(database_name_from_url "${APP_DATABASE_URL}")"
+AUTH_DB_NAME="$(database_name_from_url "${AUTH_DATABASE_URL}")"
+
+if [[ -z "${APP_DATABASE_URL}" || -z "${AUTH_DATABASE_URL}" ]]; then
+  echo "ERROR: unable to read DATABASE_URL from ${BACKEND_CONTAINER} / ${AUTH_CONTAINER}"
+  exit 2
 fi
-AUTH_DB_HOST="$(env_value "${AUTH_ENV_FILE}" DATABASE_HOST)"
-AUTH_DB_USER="$(env_value "${AUTH_ENV_FILE}" DATABASE_USERNAME)"
-AUTH_DB_PASS="$(env_value "${AUTH_ENV_FILE}" DATABASE_PASSWORD)"
-AUTH_DB_NAME="$(env_value "${AUTH_ENV_FILE}" DATABASE_NAME)"
 
 # --- Allowlist guards: both DBs must be the demo ones ---------------------
 if [[ "${APP_DB_NAME}" != "${EXPECTED_APP_DB}" ]]; then
@@ -128,14 +223,6 @@ if [[ "${AUTH_DB_NAME}" != "${EXPECTED_AUTH_DB}" ]]; then
   exit 1
 fi
 
-# --- Sanity: required containers running -----------------------------------
-for c in "${BACKEND_CONTAINER}" "${AUTH_CONTAINER}" "${FOAF_CONTAINER}"; do
-  if ! docker ps --format '{{.Names}}' | grep -qx "${c}"; then
-    echo "ERROR: container ${c} not running. Can't proceed."
-    exit 2
-  fi
-done
-
 # --- Allowlist guard: foaf container must be running as testnet -----------
 FOAF_NETWORK_ACTUAL="$(docker exec "${FOAF_CONTAINER}" sh -c 'echo $FOAF_NETWORK' 2>/dev/null || echo '')"
 if [[ "${FOAF_NETWORK_ACTUAL}" != "${EXPECTED_FOAF_NETWORK}" ]]; then
@@ -148,49 +235,22 @@ echo "=== FOAF Demo Reset ==="
 echo "  Snapshot date: ${SNAPSHOT_DATE}"
 echo "  App snapshot:  ${APP_SNAPSHOT}"
 echo "  Auth snapshot: ${AUTH_SNAPSHOT}"
-echo "  App DB:   ${APP_DB_NAME}   (@ ${APP_DB_HOST}, as ${APP_DB_USER})"
-echo "  Auth DB:  ${AUTH_DB_NAME}  (@ ${AUTH_DB_HOST}, as ${AUTH_DB_USER})"
+echo "  App DB:   ${APP_DB_NAME}"
+echo "  Auth DB:  ${AUTH_DB_NAME}"
 echo "  FOAF DB:  foaf_testnet     (via ${FOAF_CONTAINER})"
 echo
 
 # --- Step 1: rebuild app schema from snapshot ------------------------------
-# Drop every existing base table first. Snapshot-local DROP statements cannot
+# Drop the whole public schema first. Snapshot-local DROP statements cannot
 # remove tables that were introduced after the snapshot was created; leaving
 # one behind while schema_migrations is restored from the older snapshot makes
 # the next migration fail with "table already exists".
 #
 # APP_DB_NAME has already passed the exact growoperative_demo allowlist above.
-# We pipe the dump through foaf-testnet's mysql client (the rails-box host
-# doesn't have one installed, but the foaf-testnet image does).
 echo "[1/5] Rebuilding ${APP_DB_NAME} from ${APP_SNAPSHOT}..."
-# --skip-ssl: MySQL 8's self-signed cert fails MariaDB client's TLS handshake,
-# but the connection is over private VPC so TLS is not needed for security.
-# (foaf-testnet's mysql client is MariaDB 11.8 from Debian default-mysql-client;
-# its SSL-disable flag is --skip-ssl, not --ssl-mode=DISABLED like upstream MySQL.)
-docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql --skip-ssl -h ${APP_DB_HOST} -u ${APP_DB_USER} -p'${APP_DB_PASS}' ${APP_DB_NAME}" \
-  <<SQL 2>&1 | { grep -v "Using a password" || true; }
-SET FOREIGN_KEY_CHECKS=0;
-SET SESSION group_concat_max_len = 1000000;
-SELECT GROUP_CONCAT(CONCAT('\`', REPLACE(TABLE_NAME, '\`', '\`\`'), '\`') SEPARATOR ',')
-  INTO @demo_tables
-  FROM information_schema.tables
-  WHERE TABLE_SCHEMA = '${APP_DB_NAME}'
-    AND TABLE_TYPE = 'BASE TABLE';
-SET @drop_sql = IF(
-  @demo_tables IS NULL,
-  'SELECT 1',
-  CONCAT('DROP TABLE IF EXISTS ', @demo_tables)
-);
-PREPARE drop_demo_tables FROM @drop_sql;
-EXECUTE drop_demo_tables;
-DEALLOCATE PREPARE drop_demo_tables;
-SET FOREIGN_KEY_CHECKS=1;
-SQL
-docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql --skip-ssl -h ${APP_DB_HOST} -u ${APP_DB_USER} -p'${APP_DB_PASS}' ${APP_DB_NAME}" \
-  < "${APP_SNAPSHOT_PATH}" \
-  2>&1 | { grep -v "Using a password" || true; }
+printf 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;' | \
+  psql_with_url "${BACKEND_CONTAINER}" "${APP_DATABASE_URL}"
+restore_snapshot_to_url "${BACKEND_CONTAINER}" "${APP_DATABASE_URL}" "${APP_SNAPSHOT_PATH}"
 echo "  OK"
 
 # --- Step 2: restore auth identities + clear transactional auth state ------
@@ -200,30 +260,25 @@ echo "  OK"
 # auth_signing_keys, service_tokens, and reserved_handles are env-specific
 # infrastructure and intentionally left alone.
 echo "[2/5] Loading ${AUTH_SNAPSHOT} into ${AUTH_DB_NAME} + clearing transactional auth state..."
-docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql --skip-ssl -h ${AUTH_DB_HOST} -u ${AUTH_DB_USER} -p'${AUTH_DB_PASS}' ${AUTH_DB_NAME}" \
-  <<SQL 2>&1 | { grep -v "Using a password" || true; }
-SET FOREIGN_KEY_CHECKS=0;
-TRUNCATE login_lockouts;
-TRUNCATE recovery_phrases;
-TRUNCATE recovery_attempts;
-TRUNCATE revoked_jtis;
-TRUNCATE invitations;
-TRUNCATE contact_edges;
-TRUNCATE audit_logs;
-SET FOREIGN_KEY_CHECKS=1;
+psql_with_url "${AUTH_CONTAINER}" "${AUTH_DATABASE_URL}" <<'SQL'
+TRUNCATE TABLE
+  public.login_lockouts,
+  public.recovery_phrases,
+  public.recovery_attempts,
+  public.revoked_jtis,
+  public.invitations,
+  public.contact_edges,
+  public.audit_logs
+RESTART IDENTITY CASCADE;
 SQL
-docker exec -i "${FOAF_CONTAINER}" \
-  sh -c "mysql --skip-ssl -h ${AUTH_DB_HOST} -u ${AUTH_DB_USER} -p'${AUTH_DB_PASS}' ${AUTH_DB_NAME}" \
-  < "${AUTH_SNAPSHOT_PATH}" \
-  2>&1 | { grep -v "Using a password" || true; }
+restore_snapshot_to_url "${AUTH_CONTAINER}" "${AUTH_DATABASE_URL}" "${AUTH_SNAPSHOT_PATH}"
 echo "  OK"
 
 # --- Step 3: clear foaf-testnet data ---------------------------------------
 echo "[3/5] Clearing foaf_testnet tables..."
 docker exec "${FOAF_CONTAINER}" bundle exec rails runner '
 # Confirmed pending transfers reference their Operation, so dependants must be
-# removed first or MySQL correctly rejects the reset on the foreign key.
+# removed first or the database correctly rejects the reset on the foreign key.
 models = [Foaf::TrustlineRecord, TrustlineEvent, TrustlineUpdateRequest,
           PendingTransfer, Operation, CurrencyNetwork]
 models.each { |m| m.delete_all if defined?(m) }
