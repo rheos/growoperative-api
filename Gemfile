@@ -93,7 +93,7 @@ group :test do
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
-gem 'tzinfo-data', '~> 1.2026.4'
+gem 'tzinfo-data', '~> 1.2026.5'
 gem 'rack-cors', '~> 3.0'
 
 # Error tracking. Inert without SENTRY_DSN, which is set only on production.
