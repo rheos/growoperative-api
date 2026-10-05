@@ -264,7 +264,7 @@ GEM
     observer (0.1.2)
     openssl (3.3.3)
     orm_adapter (0.5.0)
-    pg (1.6.3-x86_64-linux)
+    pg (1.7.0-x86_64-linux)
     pkg-config (1.6.5)
     pp (0.6.4)
       prettyprint
@@ -455,7 +455,7 @@ DEPENDENCIES
   listen (~> 3.10)
   mutex_m
   nokogiri (>= 1.15)
-  pg (~> 1.5)
+  pg (~> 1.7)
   pry-byebug (~> 3.10)
   pry-rails (~> 0.3)
   pry-stack_explorer (~> 0.6)
