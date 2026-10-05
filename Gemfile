@@ -6,7 +6,7 @@ ruby '3.4.11'
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 8.1.4'
 # Use sqlite3 as the database for Active Record
-gem 'pg', '~> 1.5'
+gem 'pg', '~> 1.7'
 # csv stopped being a default gem in Ruby 3.4, so `require "csv"` no longer
 # resolves without declaring it. Used by lib/tasks/foaf_custody.rake. That is
 # a rake task, which the suite never loads, so a green suite would NOT have
