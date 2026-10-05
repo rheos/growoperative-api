@@ -389,10 +389,10 @@ GEM
       bigdecimal
       concurrent-ruby (~> 1.0, >= 1.0.2)
       logger
-    spring (2.1.1)
-    spring-watcher-listen (2.0.1)
+    spring (4.7.0)
+    spring-watcher-listen (2.1.0)
       listen (>= 2.7, < 4.0)
-      spring (>= 1.2, < 3.0)
+      spring (>= 4)
     sprockets (4.4.1)
       concurrent-ruby (~> 1.1)
       logger
@@ -467,8 +467,8 @@ DEPENDENCIES
   selenium-webdriver (>= 4.11, < 5)
   sentry-rails (~> 7.0)
   sentry-ruby (~> 7.0)
-  spring (~> 2.1)
-  spring-watcher-listen (~> 2.0.0)
+  spring (~> 4.7)
+  spring-watcher-listen (~> 2.1.0)
   sprockets-rails
   tzinfo-data (~> 1.2026.4)
   web-console (~> 4.3)
