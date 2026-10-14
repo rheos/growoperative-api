@@ -8,6 +8,7 @@ RUN apt-get update -qq && apt-get install -y \
     automake \
     build-essential \
     libpq-dev \
+    postgresql-client \
     imagemagick \
     git \
     libmagickwand-dev \
