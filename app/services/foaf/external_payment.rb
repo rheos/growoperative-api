@@ -20,9 +20,10 @@ module Foaf
     ].freeze
 
     # The lookbehind keeps testnet subdomains (sepolia.etherscan.io,
-    # amoy.polygonscan.com) from matching as mainnet.
+    # amoy.polygonscan.com) from matching as mainnet. The lookahead rejects a
+    # hash longer than 64 hex chars instead of storing its first 64.
     EXPLORER_TX = %r{
-      (?<![\w.-])(?:https?://)?(?:www\.|m\.)?(#{EXPLORERS.map { |e| Regexp.escape(e[:host]) }.join("|")})/tx/(0x[a-fA-F0-9]{64})
+      (?<![\w.-])(?:https?://)?(?:www\.|m\.)?(#{EXPLORERS.map { |e| Regexp.escape(e[:host]) }.join("|")})/tx/(0x[a-fA-F0-9]{64})(?![a-fA-F0-9])
     }ix
 
     def self.parse(text)

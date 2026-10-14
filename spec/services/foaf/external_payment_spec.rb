@@ -59,6 +59,11 @@ RSpec.describe Foaf::ExternalPayment do
       expect(described_class.parse("https://polygonscan.com/tx/0xabc")).to eq([])
     end
 
+    it "rejects a hash longer than 64 hex characters" do
+      expect(described_class.parse("https://polygonscan.com/tx/#{hash}a")).to eq([])
+      expect(described_class.parse("https://etherscan.io/tx/#{hash}a")).to eq([])
+    end
+
     it "dedupes the same hash pasted twice" do
       text = "#{canonical} and again #{canonical.upcase.sub('POLYGONSCAN', 'polygonscan')}"
       expect(described_class.parse(text).size).to eq(1)
