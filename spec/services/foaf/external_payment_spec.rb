@@ -59,6 +59,11 @@ RSpec.describe Foaf::ExternalPayment do
       expect(described_class.parse("https://polygonscan.com/tx/0xabc")).to eq([])
     end
 
+    it "rejects a hash longer than 64 hex characters" do
+      expect(described_class.parse("https://polygonscan.com/tx/#{hash}a")).to eq([])
+      expect(described_class.parse("https://etherscan.io/tx/#{hash}a")).to eq([])
+    end
+
     it "dedupes the same hash pasted twice" do
       text = "#{canonical} and again #{canonical.upcase.sub('POLYGONSCAN', 'polygonscan')}"
       expect(described_class.parse(text).size).to eq(1)
@@ -75,6 +80,52 @@ RSpec.describe Foaf::ExternalPayment do
       expect(described_class.parse("USDC #{canonical}").first["token_symbol"]).to eq("USDC")
       expect(described_class.parse("BTC #{canonical}").first["token_symbol"]).to eq("USDT")
       expect(described_class.parse("paid in ethereum #{canonical}").first["token_symbol"]).to eq("USDT")
+    end
+  end
+
+  describe ".parse with Etherscan" do
+    let(:etherscan) { "https://etherscan.io/tx/#{hash}" }
+
+    it "extracts an Etherscan transaction URL without guessing a token" do
+      expect(described_class.parse("Paid #{etherscan}")).to eq([
+        {
+          "chain" => "ethereum",
+          "tx_hash" => hash,
+          "explorer_url" => etherscan
+        }
+      ])
+    end
+
+    it "accepts http, www, trailing junk, a missing scheme, and an uppercase host" do
+      [
+        "http://etherscan.io/tx/#{hash}",
+        "https://www.etherscan.io/tx/#{hash}/",
+        "https://etherscan.io/tx/#{hash}?utm=1",
+        "etherscan.io/tx/#{hash}#eventlog",
+        "https://ETHERSCAN.IO/tx/#{hash}"
+      ].each do |text|
+        expect(described_class.parse(text).map { |p| p["explorer_url"] }).to eq([etherscan]), text
+      end
+    end
+
+    it "takes ETH or a stable from the note" do
+      expect(described_class.parse("0.05 ETH #{etherscan}").first["token_symbol"]).to eq("ETH")
+      expect(described_class.parse("paid in usdc #{etherscan}").first["token_symbol"]).to eq("USDC")
+      expect(described_class.parse("paid in ethereum #{etherscan}").first).not_to have_key("token_symbol")
+    end
+
+    it "ignores testnet subdomains instead of calling them mainnet" do
+      expect(described_class.parse("https://sepolia.etherscan.io/tx/#{hash}")).to eq([])
+      expect(described_class.parse("https://amoy.polygonscan.com/tx/#{hash}")).to eq([])
+    end
+
+    it "keeps links on both chains in the order they appear" do
+      other = "0x#{'cd' * 32}"
+      parsed = described_class.parse("https://etherscan.io/tx/#{other} then #{canonical}")
+      expect(parsed.map { |p| p.values_at("chain", "tx_hash") }).to eq([
+        ["ethereum", other],
+        ["polygon", hash]
+      ])
     end
   end
 
