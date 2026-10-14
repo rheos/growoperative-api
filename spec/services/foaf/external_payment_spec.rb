@@ -78,6 +78,52 @@ RSpec.describe Foaf::ExternalPayment do
     end
   end
 
+  describe ".parse with Etherscan" do
+    let(:etherscan) { "https://etherscan.io/tx/#{hash}" }
+
+    it "extracts an Etherscan transaction URL without guessing a token" do
+      expect(described_class.parse("Paid #{etherscan}")).to eq([
+        {
+          "chain" => "ethereum",
+          "tx_hash" => hash,
+          "explorer_url" => etherscan
+        }
+      ])
+    end
+
+    it "accepts http, www, trailing junk, a missing scheme, and an uppercase host" do
+      [
+        "http://etherscan.io/tx/#{hash}",
+        "https://www.etherscan.io/tx/#{hash}/",
+        "https://etherscan.io/tx/#{hash}?utm=1",
+        "etherscan.io/tx/#{hash}#eventlog",
+        "https://ETHERSCAN.IO/tx/#{hash}"
+      ].each do |text|
+        expect(described_class.parse(text).map { |p| p["explorer_url"] }).to eq([etherscan]), text
+      end
+    end
+
+    it "takes ETH or a stable from the note" do
+      expect(described_class.parse("0.05 ETH #{etherscan}").first["token_symbol"]).to eq("ETH")
+      expect(described_class.parse("paid in usdc #{etherscan}").first["token_symbol"]).to eq("USDC")
+      expect(described_class.parse("paid in ethereum #{etherscan}").first).not_to have_key("token_symbol")
+    end
+
+    it "ignores testnet subdomains instead of calling them mainnet" do
+      expect(described_class.parse("https://sepolia.etherscan.io/tx/#{hash}")).to eq([])
+      expect(described_class.parse("https://amoy.polygonscan.com/tx/#{hash}")).to eq([])
+    end
+
+    it "keeps links on both chains in the order they appear" do
+      other = "0x#{'cd' * 32}"
+      parsed = described_class.parse("https://etherscan.io/tx/#{other} then #{canonical}")
+      expect(parsed.map { |p| p.values_at("chain", "tx_hash") }).to eq([
+        ["ethereum", other],
+        ["polygon", hash]
+      ])
+    end
+  end
+
   describe ".metadata_for" do
     it "returns an empty hash when nothing matched" do
       expect(described_class.metadata_for("cash")).to eq({})
