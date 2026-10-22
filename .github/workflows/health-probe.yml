@@ -12,15 +12,23 @@
 #      cannot fail tells you nothing. Every probe below is chosen so that a
 #      dead database produces a non-2xx.
 #
-#   2. Page a human. M.O.T. fires a Telegram to Robin when a ticket is CREATED
-#      with severity "critical" -- on create only, never on a dedup update. So
-#      a sustained outage pings once rather than every 15 minutes, which is the
-#      behaviour we want, but it also means the ticket MUST be closed on
-#      recovery or the next outage is silent. That is what the recovery step
-#      does, and it is the part most likely to be dropped in a rewrite.
+#   2. Page a human. The page is a critical alert item in the alert service:
+#      the page step creates it, or reopens it if it was closed, and that is
+#      what pages. A repeat while the item is open sends the same fingerprint
+#      and only groups onto it, so a sustained outage pages once rather than
+#      every 15 minutes. That also means recovery MUST close the item. Closing
+#      clears its fingerprints, so the next outage reopens it and pages again.
+#      Without the recovery step every later outage is silent, and it is the
+#      part most likely to be dropped in a rewrite.
+#
+# The alert service URL and token are repo secrets (CURRENT_API_URL and
+# CURRENT_ALERT_TOKEN), read by name. The URL is a secret on purpose, so this
+# public file names no host. Every call to the alert service uses curl -s,
+# never -sS or -v, whose error text can print the host, and logs only HTTP
+# codes and our own messages. No shell tracing anywhere in this file.
 #
 # Lives in a repo rather than a crontab on the box deliberately: hand-installed
-# scripts on Contabo were removed in 2026-08 for bypassing deploy-from-main.
+# scripts on the server were removed in 2026-08 for bypassing deploy-from-main.
 
 name: Health probe
 
@@ -39,8 +47,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Checked on EVERY run, not only when something is down. Otherwise a missing
+  # secret or a lapsed token leaves the probe passing green while it cannot
+  # page anyone: monitoring that looks healthy and cannot alert is the exact
+  # failure this workflow exists to end, one level up.
+  #
+  # Its own job, once per run rather than once per matrix entry, because every
+  # close by source writes an audit record in the alert service, a no-op
+  # included. The close names a source_ref that is never filed, so it proves
+  # the URL, the token and its scope without changing any item.
+  preflight:
+    name: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight, can we actually page?
+        env:
+          CURRENT_API_URL: ${{ secrets.CURRENT_API_URL }}
+          CURRENT_ALERT_TOKEN: ${{ secrets.CURRENT_ALERT_TOKEN }}
+        run: |
+          set -uo pipefail
+          missing=0
+          for name in CURRENT_API_URL CURRENT_ALERT_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::The $name repo secret is not set. This probe cannot page anyone, so it is not monitoring. Set the secret."
+              missing=1
+            fi
+          done
+          [ "$missing" = 0 ] || exit 1
+
+          # Steps run under bash -e. A failed connection makes curl exit non-zero
+          # after -w has printed 000, so "|| true" keeps that code and lets the
+          # ::error:: line below run. The same holds for every alert call here.
+          code=$(curl -s -o /tmp/preflight.json -w '%{http_code}' --max-time 20 \
+                   -X POST "${CURRENT_API_URL%/}/api/v1/operations/current.item.close_by_source" \
+                   -H "Authorization: Bearer $CURRENT_ALERT_TOKEN" \
+                   -H "Content-Type: application/json" \
+                   -d '{"source_kind":"health-probe","source_ref":"preflight:never-filed"}') || true
+          if [ "$code" != "200" ] || ! jq -e '.state == "succeeded"' /tmp/preflight.json >/dev/null 2>&1; then
+            echo "::error::The alert service answered HTTP $code to the preflight close. Paging would fail during a real outage."
+            exit 1
+          fi
+          echo "The alert service is reachable and accepts the token for closing alert items."
+
   probe:
     name: ${{ matrix.service }}
+    needs: preflight
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -69,28 +120,6 @@ jobs:
             expect: 200
 
     steps:
-      # Checked on EVERY run, not only when something is down. Otherwise a
-      # missing key leaves the probe passing green while being unable to page
-      # anyone -- monitoring that looks healthy and cannot alert is the exact
-      # failure this workflow exists to end, just one level up.
-      - name: Preflight — can we actually page?
-        env:
-          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
-        run: |
-          set -uo pipefail
-          if [ -z "${MOT_API_KEY:-}" ]; then
-            echo "::error::MOT_API_KEY is not set. This probe cannot page anyone, so it is not monitoring — it is decoration. Set the secret (key lives in ~/Documents/novadiem/keys/mot-api.md)."
-            exit 1
-          fi
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-                   -H "Authorization: Bearer $MOT_API_KEY" \
-                   "https://rheo.ca/mot/api/tickets?status=open")
-          if [ "$code" != "200" ]; then
-            echo "::error::M.O.T. API returned HTTP $code for a key check — paging would fail during a real outage."
-            exit 1
-          fi
-          echo "M.O.T. reachable and the key works."
-
       - name: Probe
         id: probe
         run: |
@@ -115,10 +144,11 @@ jobs:
             echo "healthy=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Page via M.O.T. (critical ticket fires Telegram)
+      - name: Page, create or reopen the critical alert item
         if: steps.probe.outputs.healthy == 'false'
         env:
-          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+          CURRENT_API_URL: ${{ secrets.CURRENT_API_URL }}
+          CURRENT_ALERT_TOKEN: ${{ secrets.CURRENT_ALERT_TOKEN }}
           SERVICE: ${{ matrix.service }}
           URL: ${{ matrix.url }}
           CODE: ${{ steps.probe.outputs.code }}
@@ -126,80 +156,84 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
-          if [ -z "${MOT_API_KEY:-}" ]; then
-            echo "::error::MOT_API_KEY is not set — $SERVICE is DOWN and nobody is being paged"
-            exit 1
-          fi
 
           # The response body goes in via --rawfile rather than interpolation:
-          # it is attacker-adjacent text and may hold quotes or newlines.
+          # it is attacker-adjacent text and may hold quotes or newlines. It is
+          # cut to 400 bytes and appended last, so the body stays far below the
+          # alert service's 20000 limit and the "Type:" first line is never cut.
           head -c 400 /tmp/body.txt > /tmp/body-trunc.txt 2>/dev/null || : > /tmp/body-trunc.txt
 
           body=$(printf '%s\n' \
+            "Type: infra-alert" \
+            "" \
             "Probe $URL returned HTTP $CODE, expected $EXPECT, after 3 attempts." \
             "" \
             "This probe reaches the database, so a non-2xx means the service cannot serve" \
-            "real traffic — not merely that a static endpoint is missing." \
+            "real traffic, not merely that a static endpoint is missing." \
             "" \
             "Run: $RUN_URL")
 
-          # source_ref is the dedup key: same ref + ticket_type updates the
-          # existing ticket (200) instead of creating a new one (201), and only
-          # a create pings Telegram. So a sustained outage pages once.
+          # source_kind + source_ref name the item, and the fixed fingerprint
+          # "down" makes a repeat while it is open group silently instead of
+          # paging again. So a sustained outage pages once.
           payload=$(jq -nc \
             --arg title "$SERVICE is DOWN (HTTP $CODE)" \
             --arg ref "health-probe:$SERVICE" \
             --arg body "$body" \
             --rawfile resp /tmp/body-trunc.txt \
-            '{title:$title, ministry:"works", ticket_type:"infra-alert",
-              severity:"critical", provenance:"status-poll",
-              source_ref:$ref,
-              body:($body + "\n\nResponse body (truncated):\n" + $resp)}')
+            '{title:$title,
+              body:($body + "\n\nResponse body (truncated):\n" + $resp),
+              priority:"critical", area:"dev", provenance:"alert",
+              source_kind:"health-probe", source_ref:$ref, fingerprint:"down"}')
 
-          code=$(curl -sS -o /tmp/mot.json -w '%{http_code}' \
-                   -X POST https://rheo.ca/mot/api/tickets \
-                   -H "Authorization: Bearer $MOT_API_KEY" \
+          code=$(curl -s -o /tmp/alert-create.json -w '%{http_code}' --max-time 20 \
+                   -X POST "${CURRENT_API_URL%/}/api/v1/operations/current.item.create" \
+                   -H "Authorization: Bearer $CURRENT_ALERT_TOKEN" \
                    -H "Content-Type: application/json" \
-                   -d "$payload")
-          echo "M.O.T. responded $code (201 = created + Telegram sent, 200 = deduped, no re-ping)"
-          if [ "$code" != "201" ] && [ "$code" != "200" ]; then
-            echo "::error::failed to file M.O.T. ticket"
-            cat /tmp/mot.json || true
+                   -d "$payload") || true
+          if [ "$code" != "200" ] || ! jq -e '.state == "succeeded"' /tmp/alert-create.json >/dev/null 2>&1; then
+            echo "::error::The alert service answered HTTP $code. $SERVICE is DOWN and the alert item was not filed."
             exit 1
           fi
 
-      - name: Close the M.O.T. ticket on recovery
+          action=$(jq -r '.result.action // ""' /tmp/alert-create.json 2>/dev/null)
+          case "$action" in
+            created|reopened|woke) echo "$SERVICE is down: alert item $action." ;;
+            grouped) echo "$SERVICE is still down: grouped onto the open alert item, no new page." ;;
+            *) echo "$SERVICE is down: alert item filed (HTTP $code)." ;;
+          esac
+
+      # Without this the first outage leaves an open item forever, every repeat
+      # groups onto it, and every LATER outage is silent. One close per service
+      # per run, by source, with no list and no patch. The close also clears the
+      # item's fingerprints, even when someone already closed it by hand, so the
+      # next outage reopens it and pages.
+      - name: Close the alert item on recovery
         if: steps.probe.outputs.healthy == 'true'
         env:
-          MOT_API_KEY: ${{ secrets.MOT_API_KEY }}
+          CURRENT_API_URL: ${{ secrets.CURRENT_API_URL }}
+          CURRENT_ALERT_TOKEN: ${{ secrets.CURRENT_ALERT_TOKEN }}
+          SERVICE: ${{ matrix.service }}
         run: |
           set -uo pipefail
-          [ -z "${MOT_API_KEY:-}" ] && { echo "MOT_API_KEY unset; nothing to close"; exit 0; }
+          payload=$(jq -nc --arg ref "health-probe:$SERVICE" \
+                      '{source_kind:"health-probe", source_ref:$ref}')
 
-          # Without this the first outage leaves an open ticket forever, dedup
-          # keeps matching it, and every LATER outage is silent. Recovery has to
-          # clear the ticket for the pager to work a second time.
-          open=$(curl -sS -H "Authorization: Bearer $MOT_API_KEY" \
-                   "https://rheo.ca/mot/api/tickets?status=open")
-
-          ids=$(echo "$open" | jq -r --arg ref "health-probe:${{ matrix.service }}" \
-                  '(if type == "array" then . else (.tickets // []) end)
-                   | map(select(.source_ref == $ref)) | .[].id' 2>/dev/null || true)
-
-          if [ -z "$ids" ]; then
-            echo "${{ matrix.service }} healthy; no open ticket to close"
-            exit 0
+          code=$(curl -s -o /tmp/alert-close.json -w '%{http_code}' --max-time 20 \
+                   -X POST "${CURRENT_API_URL%/}/api/v1/operations/current.item.close_by_source" \
+                   -H "Authorization: Bearer $CURRENT_ALERT_TOKEN" \
+                   -H "Content-Type: application/json" \
+                   -d "$payload") || true
+          if [ "$code" != "200" ] || ! jq -e '.state == "succeeded"' /tmp/alert-close.json >/dev/null 2>&1; then
+            echo "::error::The alert service answered HTTP $code to the recovery close for $SERVICE. Until a close succeeds, the next outage of $SERVICE may not page."
+            exit 1
           fi
 
-          for id in $ids; do
-            # Deliberately NOT combined with add_comment — M.O.T. 422s on that.
-            code=$(curl -sS -o /dev/null -w '%{http_code}' \
-                     -X PATCH "https://rheo.ca/mot/api/tickets/$id" \
-                     -H "Authorization: Bearer $MOT_API_KEY" \
-                     -H "Content-Type: application/json" \
-                     -d '{"status":"done"}')
-            echo "closed ticket $id -> HTTP $code"
-          done
+          if [ "$(jq -r '.result.closed' /tmp/alert-close.json)" = "true" ]; then
+            echo "$SERVICE healthy; closed its alert item"
+          else
+            echo "$SERVICE healthy; nothing to close"
+          fi
 
       - name: Fail the run if the service is down
         if: steps.probe.outputs.healthy == 'false'
