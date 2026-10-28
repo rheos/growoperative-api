@@ -407,7 +407,7 @@ GEM
     tsort (0.2.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    tzinfo-data (1.2026.4)
+    tzinfo-data (1.2026.5)
       tzinfo (>= 1.0.0)
     uri (1.1.1)
     useragent (0.16.11)
@@ -470,7 +470,7 @@ DEPENDENCIES
   spring (~> 4.7)
   spring-watcher-listen (~> 2.1.0)
   sprockets-rails
-  tzinfo-data (~> 1.2026.4)
+  tzinfo-data (~> 1.2026.5)
   web-console (~> 4.3)
 
 RUBY VERSION
