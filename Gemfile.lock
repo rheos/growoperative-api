@@ -147,10 +147,10 @@ GEM
       actionmailer (>= 5.0)
       devise (>= 4.6)
     diff-lcs (1.6.2)
-    dotenv (2.8.1)
-    dotenv-rails (2.8.1)
-      dotenv (= 2.8.1)
-      railties (>= 3.2)
+    dotenv (3.2.0)
+    dotenv-rails (3.2.0)
+      dotenv (= 3.2.0)
+      railties (>= 6.1)
     drb (2.2.3)
     dry-auto_inject (1.0.1)
       dry-core (~> 1.0)
@@ -445,7 +445,7 @@ DEPENDENCIES
   devise (~> 5.0)
   devise-jwt
   devise_invitable (~> 2.0)
-  dotenv-rails (~> 2.7)
+  dotenv-rails (~> 3.2)
   factory_bot_rails (~> 6.5)
   foaf_client!
   fog-aws
