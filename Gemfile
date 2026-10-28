@@ -80,8 +80,8 @@ group :development do
   # only, so RAILS_ENV=test never loads it. It broke `bin/rails` in
   # development while 735 examples stayed green.
   gem 'mutex_m'
-  gem 'spring', '~> 2.1'
-  gem 'spring-watcher-listen', '~> 2.0.0'
+  gem 'spring', '~> 4.7'
+  gem 'spring-watcher-listen', '~> 2.1.0'
 end
 
 group :test do
