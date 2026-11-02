@@ -98,4 +98,4 @@ gem 'rack-cors', '~> 3.0'
 
 # Error tracking. Inert without SENTRY_DSN, which is set only on production.
 gem 'sentry-ruby', '~> 7.0'
-gem 'sentry-rails', '~> 7.0'
+gem 'sentry-rails', '~> 7.2'
