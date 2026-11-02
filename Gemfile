@@ -51,7 +51,7 @@ gem 'devise-jwt'
 gem 'carrierwave', '~> 3.1'
 gem 'fog-aws'
 gem "rmagick", '~> 7.1'
-gem 'devise_invitable', '~> 2.0'
+gem 'devise_invitable', '~> 3.0'
 
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
